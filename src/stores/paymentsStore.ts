@@ -4,6 +4,19 @@ import type { Payment, InstallmentPlan } from '@/types';
 import { mockPayments, mockInstallments } from '@/constants/mockData';
 import { generateId } from '@/lib/utils';
 
+export interface PendingPlanEdit {
+  id: string;
+  planId: string;
+  studentId: string;
+  studentName: string;
+  oldTotal: number;
+  newTotal: number;
+  oldInstallments: any[];
+  newInstallments: any[];
+  requestDate: string;
+  requestedBy: string;
+}
+
 interface PaymentsState {
   payments: Payment[];
   isLoading: boolean;
@@ -13,7 +26,12 @@ interface PaymentsState {
   installmentPlans: InstallmentPlan[];
   addInstallmentPlan: (plan: Omit<InstallmentPlan, 'id'>) => void;
   getStudentInstallments: (studentId: string) => InstallmentPlan[];
-  payInstallment: (planId: string, installmentId: string) => void;
+  updateInstallmentPlan: (planId: string, updates: Partial<InstallmentPlan>) => void;
+  payInstallment: (planId: string, installmentId: string, amount: number) => void;
+  pendingPlanEdits: PendingPlanEdit[];
+  addPendingPlanEdit: (edit: Omit<PendingPlanEdit, 'id'>) => void;
+  approvePlanEdit: (editId: string) => void;
+  rejectPlanEdit: (editId: string) => void;
 }
 
 export const usePaymentsStore = create<PaymentsState>()(
@@ -22,10 +40,11 @@ export const usePaymentsStore = create<PaymentsState>()(
       payments: [],
       isLoading: false,
       installmentPlans: mockInstallments,
+      pendingPlanEdits: [],
       fetchPayments: async () => {
         set({ isLoading: true });
         try {
-          const response = await fetch('http://127.0.0.1:4000/api/payments');
+          const response = await fetch('/api/payments');
           const data = await response.json();
           set({ payments: data, isLoading: false });
         } catch (error) {
@@ -35,7 +54,7 @@ export const usePaymentsStore = create<PaymentsState>()(
       },
       addPayment: async (payment) => {
         try {
-          const response = await fetch('http://127.0.0.1:4000/api/payments', {
+          const response = await fetch('/api/payments', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify(payment),
@@ -52,17 +71,46 @@ export const usePaymentsStore = create<PaymentsState>()(
       addInstallmentPlan: (plan) => set((state) => ({
         installmentPlans: [...state.installmentPlans, { ...plan, id: generateId() }],
       })),
+      updateInstallmentPlan: (planId, updates) => set((state) => ({
+        installmentPlans: state.installmentPlans.map((plan) => 
+          plan.id === planId ? { ...plan, ...updates } : plan
+        ),
+      })),
+      addPendingPlanEdit: (edit) => set((state) => ({
+        pendingPlanEdits: [...state.pendingPlanEdits, { ...edit, id: generateId() }]
+      })),
+      approvePlanEdit: (editId) => set((state) => {
+        const edit = state.pendingPlanEdits.find(e => e.id === editId);
+        if (!edit) return state;
+        return {
+          installmentPlans: state.installmentPlans.map((plan) => 
+            plan.id === edit.planId ? { ...plan, totalAmount: edit.newTotal, installments: edit.newInstallments } : plan
+          ),
+          pendingPlanEdits: state.pendingPlanEdits.filter(e => e.id !== editId)
+        };
+      }),
+      rejectPlanEdit: (editId) => set((state) => ({
+        pendingPlanEdits: state.pendingPlanEdits.filter(e => e.id !== editId)
+      })),
       getStudentInstallments: (studentId) => get().installmentPlans.filter((p) => p.studentId === studentId),
-      payInstallment: (planId, installmentId) => set((state) => ({
+      payInstallment: (planId, installmentId, amount) => set((state) => ({
         installmentPlans: state.installmentPlans.map((plan) =>
           plan.id === planId
             ? {
               ...plan,
-              installments: plan.installments.map((inst) =>
-                inst.id === installmentId
-                  ? { ...inst, status: 'paid' as const, paidDate: new Date().toISOString().split('T')[0] }
-                  : inst
-              ),
+              installments: plan.installments.map((inst) => {
+                if (inst.id === installmentId) {
+                  const newPaidAmount = (inst.paidAmount || 0) + amount;
+                  const newStatus = newPaidAmount >= inst.amount ? 'paid' : 'pending';
+                  return { 
+                    ...inst, 
+                    paidAmount: newPaidAmount, 
+                    status: newStatus, 
+                    paidDate: newStatus === 'paid' ? new Date().toISOString().split('T')[0] : inst.paidDate 
+                  };
+                }
+                return inst;
+              }),
             }
             : plan
         ),

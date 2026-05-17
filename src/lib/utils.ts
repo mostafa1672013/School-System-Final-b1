@@ -18,20 +18,28 @@ export function formatCurrency(amount: number | undefined | null): string {
   }).format(value);
 }
 
-export function formatDate(dateStr: string): string {
+export function formatDate(dateStr: string | undefined | null): string {
+  if (!dateStr) return '-';
+  const date = new Date(dateStr);
+  if (isNaN(date.getTime())) return '-';
+  
   return new Intl.DateTimeFormat('ar-EG', {
     year: 'numeric',
     month: 'long',
     day: 'numeric',
-  }).format(new Date(dateStr));
+  }).format(date);
 }
 
-export function formatDateShort(dateStr: string): string {
+export function formatDateShort(dateStr: string | undefined | null): string {
+  if (!dateStr) return '-';
+  const date = new Date(dateStr);
+  if (isNaN(date.getTime())) return '-';
+
   return new Intl.DateTimeFormat('ar-EG', {
     year: 'numeric',
     month: '2-digit',
     day: '2-digit',
-  }).format(new Date(dateStr));
+  }).format(date);
 }
 
 export function generateId(): string {
@@ -59,7 +67,7 @@ export const paymentTypeLabels: Record<string, string> = {
 export const paymentMethodLabels: Record<string, string> = {
   cash: 'نقدي',
   bank_transfer: 'تحويل بنكي',
-  check: 'شيك',
+  wallet: 'محفظة إلكترونية',
 };
 
 export const categoryLabels: Record<string, string> = {
@@ -89,6 +97,7 @@ export const statusLabels: Record<string, string> = {
   fee_setup: 'إعداد الرسوم',
   pending_approval: 'بانتظار الاعتماد',
   admitted: 'مقبول / طالب نشط',
+  pending_discount: 'طلب خصم معلق',
   inactive: 'غير نشط',
   graduated: 'متخرج',
   transferred: 'منقول',
@@ -104,7 +113,4 @@ export const gradeOptions: Record<string, string[]> = {
 export const academicYears = ['2023-2024', '2024-2025', '2025-2026', '2026-2027'];
 export const currentAcademicYear = '2024-2025';
 
-export const discountLimits: Record<string, { maxPercentage: number, maxAmount: number }> = {
-  accountant: { maxPercentage: 2, maxAmount: 1000 },
-  head_accountant: { maxPercentage: 5, maxAmount: 5000 },
-};
+

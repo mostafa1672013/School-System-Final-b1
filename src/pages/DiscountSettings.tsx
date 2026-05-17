@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { Shield, Save, User as UserIcon, Lock, Percent } from 'lucide-react';
+import { Shield, Save, User as UserIcon, Lock, Percent, Search } from 'lucide-react';
 import { toast } from 'sonner';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -7,12 +7,14 @@ import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/com
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Badge } from '@/components/ui/badge';
 import { useAuthStore } from '@/stores/authStore';
+import { roleLabels } from '@/lib/utils';
 import type { User } from '@/types';
 
 export default function DiscountSettings() {
     const { user: currentUser } = useAuthStore();
     const [users, setUsers] = useState<User[]>([]);
     const [loading, setLoading] = useState(true);
+    const [searchTerm, setSearchTerm] = useState('');
 
     useEffect(() => {
         fetchUsers();
@@ -20,24 +22,33 @@ export default function DiscountSettings() {
 
     const fetchUsers = async () => {
         try {
-            const response = await fetch('http://127.0.0.1:4000/api/users');
+            const response = await fetch('/api/users');
+            if (!response.ok) throw new Error();
             const data = await response.json();
             setUsers(data);
             setLoading(false);
         } catch (error) {
             toast.error('فشل في تحميل قائمة المستخدمين');
+            setLoading(false);
         }
     };
 
-    const handleUpdateLimit = async (userId: string, limit: number) => {
+    const handleUpdateUserLimit = async (userId: string, limit: number) => {
         try {
-            const response = await fetch(`http://127.0.0.1:4000/api/users/${userId}`, {
+            const response = await fetch(`/api/users/${userId}`, {
                 method: 'PATCH',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ discountLimitPercent: limit }),
             });
             if (response.ok) {
-                toast.success('تم تحديث صلاحية الخصم بنجاح');
+                const updatedUser = await response.json();
+                toast.success('تم تحديث صلاحية المستخدم بنجاح');
+                
+                // If we updated the current user, update the auth store too
+                if (currentUser && userId === currentUser.id) {
+                    useAuthStore.getState().updateProfile(updatedUser);
+                }
+                
                 fetchUsers();
             }
         } catch (error) {
@@ -55,84 +66,126 @@ export default function DiscountSettings() {
         );
     }
 
+    const filteredUsers = users.filter(u => 
+        u.name.includes(searchTerm) || u.email.includes(searchTerm)
+    );
+
     return (
         <div className="space-y-6">
-            <div>
-                <h1 className="text-2xl font-bold font-[Noto_Kufi_Arabic]">إعدادات صلاحيات الخصم</h1>
-                <p className="text-muted-foreground">تحديد الحد الأقصى لنسبة الخصم التي يمكن لكل مستخدم اعتمادها</p>
+            <div className="flex justify-between items-center">
+                <div>
+                    <h1 className="text-2xl font-bold font-[Noto_Kufi_Arabic]">إعدادات صلاحيات الخصم</h1>
+                    <p className="text-muted-foreground">تحديد النسبة المئوية المسموح بها لكل مستخدم لاعتماد الخصومات</p>
+                </div>
             </div>
 
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-                <Card className="md:col-span-2">
-                    <CardHeader>
-                        <CardTitle className="text-lg font-bold flex items-center gap-2">
-                            <Lock className="size-5 text-primary" /> صلاحيات المستخدمين
-                        </CardTitle>
-                        <CardDescription>المستخدم س (2%)، المستخدم ص (5%)، أو أي نسبة أخرى</CardDescription>
-                    </CardHeader>
-                    <CardContent>
-                        <Table>
-                            <TableHeader>
-                                <TableRow>
-                                    <TableHead>المستخدم</TableHead>
-                                    <TableHead>الدور</TableHead>
-                                    <TableHead>حد الخصم (%)</TableHead>
-                                    <TableHead className="text-left">تحديث</TableHead>
+            <Card className="shadow-sm border-primary/10">
+                <CardHeader className="pb-4">
+                    <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
+                        <div>
+                            <CardTitle className="text-lg font-bold flex items-center gap-2">
+                                <Lock className="size-5 text-primary" /> صلاحيات المستخدمين
+                            </CardTitle>
+                            <CardDescription>تحديد حد الخصم الأقصى لكل موظف بشكل فردي</CardDescription>
+                        </div>
+                        <div className="relative w-full md:w-64">
+                            <Search className="absolute right-3 top-1/2 -translate-y-1/2 size-4 text-muted-foreground" />
+                            <Input 
+                                placeholder="ابحث عن موظف..." 
+                                className="pr-9"
+                                value={searchTerm}
+                                onChange={e => setSearchTerm(e.target.value)}
+                            />
+                        </div>
+                    </div>
+                </CardHeader>
+                <CardContent className="p-0">
+                    <Table>
+                        <TableHeader>
+                            <TableRow className="bg-muted/30">
+                                <TableHead className="pr-6 w-1/3">الموظف</TableHead>
+                                <TableHead className="w-1/4">الدور الوظيفي</TableHead>
+                                <TableHead className="text-center w-1/4">حد الخصم (%)</TableHead>
+                                <TableHead className="text-left pl-6">الإجراء</TableHead>
+                            </TableRow>
+                        </TableHeader>
+                        <TableBody>
+                            {loading ? (
+                                <TableRow><TableCell colSpan={4} className="text-center py-8">جاري التحميل...</TableCell></TableRow>
+                            ) : filteredUsers.map((u) => (
+                                <TableRow key={u.id} className="hover:bg-muted/20 transition-colors">
+                                    <TableCell className="pr-6">
+                                        <div className="flex items-center gap-3">
+                                            <div className="size-9 rounded-full bg-primary/10 flex items-center justify-center text-primary font-bold">
+                                                {u.name.charAt(0)}
+                                            </div>
+                                            <div className="flex flex-col">
+                                                <span className="font-bold">{u.name}</span>
+                                                <span className="text-[10px] text-muted-foreground">{u.email}</span>
+                                            </div>
+                                        </div>
+                                    </TableCell>
+                                    <TableCell>
+                                        <Badge variant="outline" className="font-normal border-primary/20 text-primary">
+                                            {roleLabels[u.role] || u.role}
+                                        </Badge>
+                                    </TableCell>
+                                    <TableCell>
+                                        <div className="flex items-center justify-center gap-2">
+                                            <Input 
+                                                type="number" 
+                                                defaultValue={u.discountLimitPercent} 
+                                                id={`user-limit-${u.id}`}
+                                                className="h-8 w-20 text-center font-bold border-primary/20 focus:border-primary"
+                                            />
+                                            <Percent className="size-4 text-muted-foreground" />
+                                        </div>
+                                    </TableCell>
+                                    <TableCell className="pl-6">
+                                        <Button 
+                                            variant="secondary"
+                                            size="sm" 
+                                            className="h-9"
+                                            onClick={() => {
+                                                const input = document.getElementById(`user-limit-${u.id}`) as HTMLInputElement;
+                                                handleUpdateUserLimit(u.id, Number(input.value));
+                                            }}
+                                        >
+                                            <Save className="size-4 ml-2" /> حفظ التعديل
+                                        </Button>
+                                    </TableCell>
                                 </TableRow>
-                            </TableHeader>
-                            <TableBody>
-                                {users.map((u) => (
-                                    <TableRow key={u.id}>
-                                        <TableCell>
-                                            <div className="flex items-center gap-2">
-                                                <UserIcon className="size-4 text-muted-foreground" />
-                                                <span className="font-medium">{u.name}</span>
-                                            </div>
-                                        </TableCell>
-                                        <TableCell>
-                                            <Badge variant="outline">{u.role}</Badge>
-                                        </TableCell>
-                                        <TableCell>
-                                            <div className="flex items-center gap-2 max-w-[120px]">
-                                                <Input 
-                                                    type="number" 
-                                                    defaultValue={u.discountLimitPercent} 
-                                                    id={`limit-${u.id}`}
-                                                    className="h-8 text-center font-bold"
-                                                />
-                                                <Percent className="size-4 text-muted-foreground" />
-                                            </div>
-                                        </TableCell>
-                                        <TableCell>
-                                            <Button 
-                                                size="sm" 
-                                                className="h-8"
-                                                onClick={() => {
-                                                    const input = document.getElementById(`limit-${u.id}`) as HTMLInputElement;
-                                                    handleUpdateLimit(u.id, Number(input.value));
-                                                }}
-                                            >
-                                                <Save className="size-4 ml-1" /> حفظ
-                                            </Button>
-                                        </TableCell>
-                                    </TableRow>
-                                ))}
-                            </TableBody>
-                        </Table>
+                            ))}
+                            {!loading && filteredUsers.length === 0 && (
+                                <TableRow><TableCell colSpan={4} className="text-center py-8 text-muted-foreground italic">لا يوجد مستخدمين بهذا الاسم</TableCell></TableRow>
+                            )}
+                        </TableBody>
+                    </Table>
+                </CardContent>
+            </Card>
+
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                <Card className="bg-blue-50 border-blue-200">
+                    <CardHeader className="pb-2">
+                        <CardTitle className="text-sm font-bold flex items-center gap-2 text-blue-800">
+                            <Shield className="size-4" /> كيف يتم تطبيق هذه الصلاحية؟
+                        </CardTitle>
+                    </CardHeader>
+                    <CardContent className="text-xs space-y-2 text-blue-900 leading-relaxed">
+                        <p>1. عند قيام الموظف بطلب خصم، يقوم النظام بمقارنة النسبة المطلوبة مع الحد المسجل له هنا.</p>
+                        <p>2. إذا تجاوزت النسبة الحد المسموح، لن يتمكن الموظف من اعتماد الخصم وسيتطلب تدخل المدير.</p>
+                        <p>3. يتم تخزين اسم الموظف الذي قام بالخصم تلقائياً في خانة "بموافقة".</p>
                     </CardContent>
                 </Card>
 
-                <Card className="bg-blue-50/50 border-blue-100">
-                    <CardHeader>
-                        <CardTitle className="text-sm font-bold flex items-center gap-2">
-                            <Shield className="size-4 text-blue-600" /> كيف تعمل هذه الصلاحية؟
+                <Card className="bg-amber-50 border-amber-200">
+                    <CardHeader className="pb-2">
+                        <CardTitle className="text-sm font-bold flex items-center gap-2 text-amber-800">
+                            <Lock className="size-4" /> تنبيه أمني
                         </CardTitle>
                     </CardHeader>
-                    <CardContent className="text-xs space-y-3 text-blue-800 leading-relaxed">
-                        <p>1. يتم حساب نسبة الخصم بناءً على إجمالي المصاريف قبل الخصم.</p>
-                        <p>2. إذا كانت نسبة الخصم المطلوبة <strong>أقل من أو تساوي</strong> حد المستخدم، يمكنه الضغط على "اعتماد" مباشرة.</p>
-                        <p>3. إذا كانت النسبة <strong>أكبر</strong> من حده، سيظهر له تنبيه بأن الطلب يحتاج لاعتماد من مستوى أعلى (مثل مدير المدرسة).</p>
-                        <p>4. مدير المدرسة لديه صلاحية مفتوحة دائماً (يمكن ضبط حده على 100%).</p>
+                    <CardContent className="text-xs space-y-2 text-amber-900 leading-relaxed">
+                        <p>تغيير هذه الإعدادات يؤثر مباشرة على قدرة الموظفين على منح خصومات مالية. يرجى التأكد من دقة النسب الممنوحة لكل مستخدم.</p>
                     </CardContent>
                 </Card>
             </div>

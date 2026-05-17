@@ -17,7 +17,7 @@ export const useUsersStore = create<UsersState>((set) => ({
   fetchUsers: async () => {
     set({ isLoading: true });
     try {
-      const response = await fetch('http://127.0.0.1:4000/api/users');
+      const response = await fetch('/api/users');
       const data = await response.json();
       set({ users: data, isLoading: false });
     } catch (error) {
@@ -27,7 +27,7 @@ export const useUsersStore = create<UsersState>((set) => ({
   },
   addUser: async (user) => {
     try {
-      const response = await fetch('http://127.0.0.1:4000/api/users', {
+      const response = await fetch('/api/users', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ ...user, active: true }),
@@ -42,7 +42,7 @@ export const useUsersStore = create<UsersState>((set) => ({
   },
   updateUser: async (id, data) => {
     try {
-      const response = await fetch(`http://127.0.0.1:4000/api/users/${id}`, {
+      const response = await fetch(`/api/users/${id}`, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(data),
@@ -60,7 +60,7 @@ export const useUsersStore = create<UsersState>((set) => ({
   },
   toggleUserActive: async (id, currentStatus) => {
     try {
-      const response = await fetch(`http://127.0.0.1:4000/api/users/${id}`, {
+      const response = await fetch(`/api/users/${id}`, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ active: !currentStatus }),

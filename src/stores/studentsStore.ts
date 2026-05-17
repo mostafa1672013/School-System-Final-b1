@@ -23,7 +23,7 @@ export const useStudentsStore = create<StudentsState>()(
       fetchStudents: async () => {
         set({ isLoading: true });
         try {
-          const response = await fetch('http://127.0.0.1:4000/api/students');
+          const response = await fetch('/api/students');
           const data = await response.json();
           set({ students: data, isLoading: false });
         } catch (error) {
@@ -33,7 +33,7 @@ export const useStudentsStore = create<StudentsState>()(
       },
       addStudent: async (student) => {
         try {
-          const response = await fetch('http://127.0.0.1:4000/api/students', {
+          const response = await fetch('/api/students', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify(student),
@@ -46,7 +46,7 @@ export const useStudentsStore = create<StudentsState>()(
       },
       updateStudent: async (id, data) => {
         try {
-          const response = await fetch(`http://127.0.0.1:4000/api/students/${id}`, {
+          const response = await fetch(`/api/students/${id}`, {
             method: 'PATCH',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify(data),
@@ -63,7 +63,7 @@ export const useStudentsStore = create<StudentsState>()(
       },
       deleteStudent: async (id) => {
         try {
-          await fetch(`http://127.0.0.1:4000/api/students/${id}`, {
+          await fetch(`/api/students/${id}`, {
             method: 'DELETE',
           });
           set((state) => ({

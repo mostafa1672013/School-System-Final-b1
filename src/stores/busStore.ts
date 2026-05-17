@@ -27,7 +27,7 @@ export const useBusStore = create<BusState>()(
       fetchRoutes: async () => {
         set({ isLoading: true });
         try {
-          const response = await fetch('http://127.0.0.1:4000/api/bus-routes');
+          const response = await fetch('/api/bus-routes');
           const data = await response.json();
           set({ routes: data, isLoading: false });
         } catch (error) {
@@ -37,7 +37,7 @@ export const useBusStore = create<BusState>()(
       },
       addRoute: async (route) => {
         try {
-          const response = await fetch('http://127.0.0.1:4000/api/bus-routes', {
+          const response = await fetch('/api/bus-routes', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify(route),
@@ -52,7 +52,7 @@ export const useBusStore = create<BusState>()(
       },
       updateRoute: async (id, data) => {
         try {
-          const response = await fetch(`http://127.0.0.1:4000/api/bus-routes/${id}`, {
+          const response = await fetch(`/api/bus-routes/${id}`, {
             method: 'PATCH',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify(data),

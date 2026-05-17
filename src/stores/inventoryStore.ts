@@ -25,7 +25,7 @@ export const useInventoryStore = create<InventoryState>()(
       fetchItems: async () => {
         set({ isLoading: true });
         try {
-          const response = await fetch('http://127.0.0.1:4000/api/inventory');
+          const response = await fetch('/api/inventory');
           const data = await response.json();
           set({ items: data, isLoading: false });
         } catch (error) {

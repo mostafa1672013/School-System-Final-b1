@@ -63,7 +63,8 @@ app.patch('/api/students/:id', async (req, res) => {
     });
     res.json(student);
   } catch (error) {
-    res.status(400).json({ error: 'Failed to update student' });
+    console.error('Update student error:', error);
+    res.status(400).json({ error: 'Failed to update student', details: String(error) });
   }
 });
 
@@ -135,6 +136,18 @@ app.get('/api/users', async (req, res) => {
   }
 });
 
+// Get single user
+app.get('/api/users/:id', async (req, res) => {
+  const { id } = req.params;
+  try {
+    const user = await prisma.user.findUnique({ where: { id } });
+    if (!user) return res.status(404).json({ error: 'User not found' });
+    res.json(user);
+  } catch (error) {
+    res.status(500).json({ error: 'Failed to fetch user' });
+  }
+});
+
 // Create user
 app.post('/api/users', async (req, res) => {
   try {
@@ -175,7 +188,7 @@ app.get('/api/payments', async (req, res) => {
 });
 
 app.post('/api/payments', async (req, res) => {
-  const { studentId, studentName, amount, type, method, date, receiptNumber, collectedBy, notes, academicYear } = req.body;
+  const { studentId, studentName, amount, type, method, date, receiptNumber, collectedBy, notes, academicYear, walletPhoneNumber } = req.body;
   
   try {
     // 1. Fetch student's yearly finance records ordered by year (oldest first)
@@ -187,45 +200,51 @@ app.post('/api/payments', async (req, res) => {
     let remainingAmount = amount;
     const updates = [];
 
-    // 2. Allocate payment to oldest years first
-    for (const finance of yearlyFinances) {
-      if (remainingAmount <= 0) break;
-      
-      const balance = finance.totalFees - finance.paidAmount;
-      if (balance > 0) {
-        const paymentToThisYear = Math.min(remainingAmount, balance);
-        updates.push(
-          prisma.studentYearlyFinance.update({
-            where: { id: finance.id },
-            data: { paidAmount: { increment: paymentToThisYear } }
-          })
-        );
-        remainingAmount -= paymentToThisYear;
+    // 2. Allocate payment to oldest years first (if not application fee)
+    if (type !== 'application_fee') {
+      for (const finance of yearlyFinances) {
+        if (remainingAmount <= 0) break;
+        
+        const balance = finance.totalFees - finance.paidAmount;
+        if (balance > 0) {
+          const paymentToThisYear = Math.min(remainingAmount, balance);
+          updates.push(
+            prisma.studentYearlyFinance.update({
+              where: { id: finance.id },
+              data: { paidAmount: { increment: paymentToThisYear } }
+            })
+          );
+          remainingAmount -= paymentToThisYear;
+        }
       }
     }
 
     // 3. Execute transaction: Create payment, update yearly records, update student summary
     const [payment] = await prisma.$transaction([
       prisma.payment.create({
-        data: { studentId, studentName, amount, type, method, date, receiptNumber, collectedBy, notes, academicYear }
+        data: { studentId, studentName, amount, type, method, date, receiptNumber, collectedBy, notes, academicYear, walletPhoneNumber }
       }),
       ...updates,
       prisma.student.update({
         where: { id: studentId },
         data: { 
-          paidAmount: { increment: amount },
+          ...(type !== 'application_fee' && { paidAmount: { increment: amount } }),
           // If all remaining is used, clear any pending request
           pendingPaymentAmount: null,
           pendingPaymentType: null,
+          pendingPaymentMethod: null,
+          pendingWalletPhoneNumber: null,
+          pendingInstallmentPlanId: null,
+          pendingInstallmentId: null,
           paymentRequestStatus: null
         }
       })
     ]);
 
     res.status(201).json(payment);
-  } catch (error) {
-    console.error('Payment error:', error);
-    res.status(400).json({ error: 'Failed to record payment' });
+  } catch (error: any) {
+    console.error('Payment error:', error?.message || error);
+    res.status(400).json({ error: 'Failed to record payment', details: String(error) });
   }
 });
 
@@ -367,6 +386,7 @@ app.post('/api/admission/apply', async (req, res) => {
     });
     res.status(201).json(student);
   } catch (error) {
+    console.error('❌ Admission apply error:', error);
     res.status(400).json({ error: 'Failed to apply' });
   }
 });
@@ -392,21 +412,35 @@ app.patch('/api/admission/test-result/:id', async (req, res) => {
 // 3. Setup Fees & Discount
 app.patch('/api/admission/setup-fees/:id', async (req, res) => {
   const { id } = req.params;
-  const { tuitionFees, tuitionMandatory, booksFees, booksMandatory, uniformFees, uniformMandatory, otherFees, discountAmount, discountApprovedBy, busFees, busRouteId, additionalFees } = req.body;
-  
-  const totalFees = Number(tuitionFees || 0) + Number(booksFees || 0) + Number(uniformFees || 0) + Number(busFees || 0) + Number(otherFees || 0) + (additionalFees || []).reduce((s: number, f: any) => s + (f.selected ? f.amount : 0), 0) - Number(discountAmount || 0);
+  const { 
+    tuitionFees, tuitionMandatory, booksFees, booksMandatory, uniformFees, uniformMandatory, busFees, busRouteId, otherFees, 
+    discountAmount, discountPercentage, discountApprovedBy, discountStatus, discountApproverId, discountRequesterId,
+    additionalFees 
+  } = req.body;
 
   try {
+    const totalFees = Number(tuitionFees || 0) + Number(booksFees || 0) + Number(uniformFees || 0) + Number(busFees || 0) + Number(otherFees || 0) + (additionalFees || []).reduce((s: number, f: any) => s + (f.selected ? f.amount : 0), 0) - Number(discountAmount || 0);
+
+    // Server-side safety: check requester's limit
+    const requester = await prisma.user.findUnique({ where: { id: discountRequesterId || '' } });
+    const userLimit = requester?.discountLimitPercent || 0;
+    const finalDiscountStatus = (Number(discountPercentage || 0) > userLimit) ? 'pending' : (discountStatus || 'approved');
+    const finalStudentStatus = (finalDiscountStatus === 'pending') ? 'pending_discount' : 'pending_approval';
+
     const student = await prisma.student.update({
       where: { id },
       data: {
         tuitionFees, tuitionMandatory,
         booksFees, booksMandatory,
         uniformFees, uniformMandatory,
-        busFees, busRouteId, otherFees, discountAmount, discountApprovedBy,
+        busFees, busRouteId, otherFees, 
+        discountAmount, discountPercentage, 
+        discountApprovedBy: (finalDiscountStatus === 'pending') ? '' : (discountApprovedBy || ''),
+        discountStatus: finalDiscountStatus,
+        discountApproverId, discountRequesterId,
         totalFees,
         additionalFees,
-        status: 'pending_approval'
+        status: finalStudentStatus
       }
     });
     res.json(student);
@@ -415,10 +449,147 @@ app.patch('/api/admission/setup-fees/:id', async (req, res) => {
   }
 });
 
+// Get pending discounts for an approver
+app.get('/api/admission/pending-discounts', async (req, res) => {
+  const { approverId } = req.query;
+  try {
+    const user = approverId ? await prisma.user.findUnique({ where: { id: approverId as string } }) : null;
+    
+    let whereClause: any = { discountStatus: 'pending' };
+    
+    // If not a high-level manager, only show assigned ones
+    if (user && !['school_director', 'head_accountant', 'system_admin'].includes(user.role)) {
+      whereClause.discountApproverId = approverId as string;
+    }
+
+    console.log('🔍 Searching pending discounts with:', JSON.stringify(whereClause), 'User role:', user?.role);
+
+    const students = await prisma.student.findMany({
+      where: whereClause,
+      orderBy: { updatedAt: 'desc' }
+    });
+    
+    console.log(`📋 Found ${students.length} pending discount requests`);
+    res.json(students);
+  } catch (error) {
+    console.error('❌ pending-discounts error:', error);
+    res.status(500).json({ error: 'Failed to fetch pending discounts' });
+  }
+});
+
+// Fix existing students that have discounts but wrong discountStatus
+app.patch('/api/admission/fix-discount-status', async (req, res) => {
+  try {
+    // Find students who have a discount amount but discountStatus is not 'pending' 
+    // and their status is 'pending_approval' — these likely bypassed the workflow
+    const studentsWithDiscount = await prisma.student.findMany({
+      where: {
+        discountAmount: { gt: 0 },
+        discountStatus: { not: 'pending' },
+        status: 'pending_approval'
+      }
+    });
+
+    let fixed = 0;
+    for (const s of studentsWithDiscount) {
+      // Check if the requester had permission
+      if (s.discountRequesterId) {
+        const requester = await prisma.user.findUnique({ where: { id: s.discountRequesterId } });
+        const userLimit = requester?.discountLimitPercent || 0;
+        if (s.discountPercentage > userLimit) {
+          await prisma.student.update({
+            where: { id: s.id },
+            data: { discountStatus: 'pending', status: 'pending_discount' }
+          });
+          fixed++;
+          console.log(`🔧 Fixed student ${s.name}: discountStatus -> pending, status -> pending_discount`);
+        }
+      }
+    }
+
+    res.json({ message: `Fixed ${fixed} students`, total: studentsWithDiscount.length });
+  } catch (error) {
+    console.error('Fix error:', error);
+    res.status(500).json({ error: 'Failed to fix' });
+  }
+});
+
+// Action discount (approve/reject)
+app.patch('/api/admission/action-discount/:id', async (req, res) => {
+  const { id } = req.params;
+  const { status, approvedBy, approverId } = req.body; // status: 'approved' | 'rejected'
+  try {
+    // CRITICAL: If approving, verify the approver has sufficient discount limit
+    if (status === 'approved' && approverId) {
+      const approver = await prisma.user.findUnique({ where: { id: approverId } });
+      const student = await prisma.student.findUnique({ where: { id } });
+      
+      if (!approver || !student) {
+        return res.status(404).json({ error: 'بيانات غير صالحة' });
+      }
+
+      const discountPct = student.discountPercentage || 
+        (student.totalFees + student.discountAmount > 0 
+          ? (student.discountAmount / (student.totalFees + student.discountAmount)) * 100 
+          : 0);
+
+      if (discountPct > approver.discountLimitPercent) {
+        return res.status(403).json({ 
+          error: `لا يمكنك اعتماد هذا الخصم. صلاحيتك ${approver.discountLimitPercent}% والخصم المطلوب ${discountPct.toFixed(1)}%` 
+        });
+      }
+    }
+
+    const updatedStudent = await prisma.student.update({
+      where: { id },
+      data: { 
+        discountStatus: status,
+        discountApprovedBy: status === 'approved' ? approvedBy : null,
+        status: status === 'approved' ? 'pending_approval' : 'fee_setup'
+      }
+    });
+    res.json(updatedStudent);
+  } catch (error) {
+    res.status(400).json({ error: 'Failed to action discount' });
+  }
+});
+
 // 4. Final Approval
 app.patch('/api/admission/approve/:id', async (req, res) => {
   const { id } = req.params;
+  const { approverId } = req.body;
   try {
+    // Fetch the student
+    const existing = await prisma.student.findUnique({ where: { id } });
+    if (!existing) return res.status(404).json({ error: 'الطالب غير موجود' });
+    
+    // CRITICAL: Only pending_approval students can be approved
+    if (existing.status !== 'pending_approval') {
+      return res.status(403).json({ error: `لا يمكن اعتماد الطالب - الحالة الحالية: ${existing.status}. يجب أن يكون في مرحلة "بانتظار الاعتماد"` });
+    }
+
+    // CRITICAL: Check if there's a pending discount
+    if (existing.discountStatus === 'pending') {
+      return res.status(403).json({ error: 'لا يمكن اعتماد الطالب - يوجد طلب خصم معلق يجب البت فيه أولاً' });
+    }
+
+    // CRITICAL: Check approver's discount limit if student has a discount
+    if (approverId && existing.discountAmount > 0) {
+      const approver = await prisma.user.findUnique({ where: { id: approverId } });
+      if (approver) {
+        const discountPct = existing.discountPercentage || 
+          ((existing.totalFees + existing.discountAmount) > 0 
+            ? (existing.discountAmount / (existing.totalFees + existing.discountAmount)) * 100 
+            : 0);
+        
+        if (discountPct > approver.discountLimitPercent) {
+          return res.status(403).json({ 
+            error: `لا يمكنك اعتماد هذا الطالب. صلاحيتك للخصم ${approver.discountLimitPercent}% والخصم المطبق ${discountPct.toFixed(1)}%` 
+          });
+        }
+      }
+    }
+
     const student = await prisma.student.update({
       where: { id },
       data: {
@@ -428,9 +599,11 @@ app.patch('/api/admission/approve/:id', async (req, res) => {
     });
     res.json(student);
   } catch (error) {
-    res.status(400).json({ error: 'Failed to approve' });
+    console.error('Approve error:', error);
+    res.status(400).json({ error: 'فشل في اعتماد الطالب' });
   }
 });
+
 
 app.listen(Number(PORT), '0.0.0.0', () => {
   console.log(`🚀 Server ready at: http://0.0.0.0:${PORT}`);

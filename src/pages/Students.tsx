@@ -35,10 +35,9 @@ const statusColors: Record<string, string> = {
 };
 
 export default function Students() {
-    const { students, isLoading, fetchStudents, addStudent, updateStudent, deleteStudent } = useStudentsStore();
+    const { students, isLoading, fetchStudents, updateStudent, deleteStudent } = useStudentsStore();
     const [search, setSearch] = useState('');
     const [stageFilter, setStageFilter] = useState<string>('all');
-    const [addDialogOpen, setAddDialogOpen] = useState(false);
     const [editDialogOpen, setEditDialogOpen] = useState(false);
     const [editingStudent, setEditingStudent] = useState<Student | null>(null);
 
@@ -51,21 +50,25 @@ export default function Students() {
         guardianName: '', guardianPhone: '', address: '', totalFees: 0, status: 'active' as StudentStatus
     });
 
+    const enrolledStudents = useMemo(() => {
+        return students.filter(s => s && ['active', 'admitted', 'inactive', 'graduated', 'transferred'].includes(s.status));
+    }, [students]);
+
     const stats = useMemo(() => {
-        const validStudents = students.filter(s => s && s.id && s.name);
-        const active = validStudents.filter(s => s.status === 'active').length;
+        const validStudents = enrolledStudents.filter(s => s && s.id && s.name);
+        const active = validStudents.filter(s => s.status === 'active' || s.status === 'admitted').length;
         const totalFees = validStudents.reduce((sum, s) => sum + (s.totalFees || 0), 0);
         const totalPaid = validStudents.reduce((sum, s) => sum + (s.paidAmount || 0), 0);
         const debt = totalFees - totalPaid;
         return { active, totalFees, totalPaid, debt };
-    }, [students]);
+    }, [enrolledStudents]);
 
     const rejectedRequests = useMemo(() => {
-        return students.filter(s => s && s.paymentRequestStatus === 'rejected');
-    }, [students]);
+        return enrolledStudents.filter(s => s && s.paymentRequestStatus === 'rejected');
+    }, [enrolledStudents]);
 
     const filtered = useMemo(() => {
-        return students.filter((s) => {
+        return enrolledStudents.filter((s) => {
             if (!s || !s.name || !s.nationalId) return false;
             const matchSearch = (s.name || '').toLowerCase().includes(search.toLowerCase()) || 
                               (s.nationalId || '').includes(search) || 
@@ -73,19 +76,7 @@ export default function Students() {
             const matchStage = stageFilter === 'all' || s.stage === stageFilter;
             return matchSearch && matchStage;
         });
-    }, [students, search, stageFilter]);
-
-    const handleAdd = async (e: React.FormEvent) => {
-        e.preventDefault();
-        await addStudent({
-            ...form,
-            enrollmentDate: new Date().toISOString().split('T')[0],
-            paidAmount: 0,
-        });
-        toast.success('تم تسجيل الطالب بنجاح');
-        setAddDialogOpen(false);
-        resetForm();
-    };
+    }, [enrolledStudents, search, stageFilter]);
 
     const handleEdit = async (e: React.FormEvent) => {
         e.preventDefault();
@@ -152,7 +143,7 @@ export default function Students() {
 
             {/* Stats */}
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-                <StatCard title="إجمالي الطلاب" value={students.length.toString()} icon={Users} colorClass="teal" />
+                <StatCard title="إجمالي الطلاب" value={enrolledStudents.length.toString()} icon={Users} colorClass="teal" />
                 <StatCard title="الطلاب النشطين" value={stats.active.toString()} icon={GraduationCap} colorClass="sky" />
                 <StatCard title="إجمالي المحصل" value={formatCurrency(stats.totalPaid)} icon={TrendingUp} colorClass="emerald" />
                 <StatCard title="المستحقات المتأخرة" value={formatCurrency(stats.debt)} icon={AlertCircle} colorClass="rose" />
@@ -179,23 +170,7 @@ export default function Students() {
                     </Select>
                 </div>
 
-                <div className="flex gap-2">
-                    <Dialog open={addDialogOpen} onOpenChange={setAddDialogOpen}>
-                        <DialogTrigger asChild>
-                            <Button onClick={resetForm}><Plus className="size-4 ml-2" />تسجيل طالب جديد</Button>
-                        </DialogTrigger>
-                        <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
-                            <DialogHeader><DialogTitle className="font-[Noto_Kufi_Arabic]">تسجيل طالب جديد</DialogTitle></DialogHeader>
-                            <form onSubmit={handleAdd} className="space-y-4">
-                                <StudentFormFields form={form} setForm={setForm} />
-                                <div className="flex justify-end gap-3 pt-2">
-                                    <Button type="button" variant="outline" onClick={() => setAddDialogOpen(false)}>إلغاء</Button>
-                                    <Button type="submit">تسجيل الطالب</Button>
-                                </div>
-                            </form>
-                        </DialogContent>
-                    </Dialog>
-                </div>
+
             </div>
 
             {/* Edit Dialog */}

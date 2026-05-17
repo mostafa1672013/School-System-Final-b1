@@ -19,13 +19,19 @@ export default function Dashboard() {
   const { subscriptions } = useBusStore();
 
   const stats = useMemo(() => {
-    const totalStudents = students.filter((s) => s.status === 'active').length;
-    const totalFees = students.reduce((sum, s) => sum + s.totalFees, 0);
-    const totalPaid = students.reduce((sum, s) => sum + s.paidAmount, 0);
+    const validStudents = students.filter(s => s && ['active', 'admitted', 'inactive', 'graduated', 'transferred'].includes(s.status));
+    const validItems = items.filter(i => i);
+    const validSubs = subscriptions.filter(sub => sub);
+
+    const totalStudents = validStudents.filter((s) => s.status === 'active' || s.status === 'admitted').length;
+    const allEnrolledCount = validStudents.length;
+    const totalFees = validStudents.reduce((sum, s) => sum + (s.totalFees || 0), 0);
+    const totalPaid = validStudents.reduce((sum, s) => sum + (s.paidAmount || 0), 0);
     const outstanding = totalFees - totalPaid;
-    const lowStockCount = items.filter((i) => i.quantity <= i.minQuantity).length;
-    const activeBusSubs = subscriptions.filter((s) => s.status === 'active').length;
-    return { totalStudents, totalFees, totalPaid, outstanding, lowStockCount, activeBusSubs };
+    const lowStockCount = validItems.filter((i) => i.quantity <= i.minQuantity).length;
+    const activeBusSubs = validSubs.filter((s) => s.status === 'active').length;
+    
+    return { totalStudents, allEnrolledCount, totalFees, totalPaid, outstanding, lowStockCount, activeBusSubs };
   }, [students, items, subscriptions]);
 
   const overdueInstallments = useMemo(() => {
@@ -42,7 +48,10 @@ export default function Dashboard() {
     const months: Record<string, number> = {};
     const monthNames = ['سبتمبر', 'أكتوبر', 'نوفمبر', 'ديسمبر', 'يناير', 'فبراير'];
     payments.forEach((p) => {
+      if (!p.date) return;
       const d = new Date(p.date);
+      if (isNaN(d.getTime())) return;
+      
       const key = `${d.getFullYear()}-${d.getMonth()}`;
       months[key] = (months[key] || 0) + p.amount;
     });
@@ -57,7 +66,8 @@ export default function Dashboard() {
   const paymentTypeData = useMemo(() => {
     const types: Record<string, number> = {};
     payments.forEach((p) => {
-      types[p.type] = (types[p.type] || 0) + p.amount;
+      if (!p || !p.type) return;
+      types[p.type] = (types[p.type] || 0) + (p.amount || 0);
     });
     return Object.entries(types).map(([type, amount]) => ({
       name: paymentTypeLabels[type] || type,
@@ -69,7 +79,7 @@ export default function Dashboard() {
     <div className="space-y-6">
       {/* Stat Cards */}
       <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-4">
-        <StatCard title="إجمالي الطلاب النشطين" value={stats.totalStudents.toString()} icon={GraduationCap} colorClass="teal" trend={`من أصل ${students.length} طالب`} trendUp />
+        <StatCard title="إجمالي الطلاب النشطين" value={stats.totalStudents.toString()} icon={GraduationCap} colorClass="teal" trend={`من أصل ${stats.allEnrolledCount} طالب معتمد`} trendUp />
         <StatCard title="إجمالي المحصّل" value={formatCurrency(stats.totalPaid)} icon={TrendingUp} colorClass="emerald" trend={`${((stats.totalPaid / stats.totalFees) * 100).toFixed(0)}% من الإجمالي`} trendUp />
         <StatCard title="المتأخرات" value={formatCurrency(stats.outstanding)} icon={AlertTriangle} colorClass="rose" trend={`${overdueInstallments.length} قسط متأخر`} />
         <StatCard title="تنبيهات المخزن" value={stats.lowStockCount.toString()} icon={Package} colorClass="amber" trend={`${stats.activeBusSubs} اشتراك باص نشط`} />

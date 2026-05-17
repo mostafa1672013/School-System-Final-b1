@@ -48,6 +48,7 @@ export interface Student {
   guardianName: string;
   guardianPhone: string;
   address?: string;
+  birthDate?: string;
   enrollmentDate?: string;
   status: StudentStatus;
   hasSiblings: boolean;
@@ -60,12 +61,21 @@ export interface Student {
   totalFees: number;
   paidAmount: number;
   discountAmount: number;
+  discountPercentage: number;
   discountApprovedBy?: string;
+  discountStatus: 'approved' | 'pending' | 'rejected';
+  requestedDiscountAmount?: number;
+  requestedDiscountPercentage?: number;
+  discountRequesterId?: string;
+  discountApproverId?: string;
   busRouteId?: string;
-  documents?: Record<string, string>;
+  documents?: Record<string, { name: string, url: string, label: string }>;
+  extraFields?: { label: string, value: string }[];
   additionalFees?: AdditionalFee[];
   pendingPaymentAmount?: number;
   pendingPaymentType?: string;
+  pendingPaymentMethod?: string;
+  pendingWalletPhoneNumber?: string;
   paymentRequestStatus?: string;
   yearlyFinance?: StudentYearlyFinance[];
 }
@@ -83,8 +93,8 @@ export interface StageFee {
   additionalFees?: AdditionalFee[];
 }
 
-export type PaymentType = 'tuition' | 'books' | 'uniform' | 'bus' | 'activities' | 'other';
-export type PaymentMethod = 'cash' | 'bank_transfer' | 'check';
+export type PaymentType = 'tuition' | 'books' | 'uniform' | 'bus' | 'activities' | 'other' | 'application_fee';
+export type PaymentMethod = 'cash' | 'bank_transfer' | 'wallet';
 
 export interface Payment {
   id: string;
@@ -97,6 +107,7 @@ export interface Payment {
   receiptNumber: string;
   collectedBy: string;
   notes?: string;
+  walletPhoneNumber?: string;
 }
 
 export type InstallmentStatus = 'paid' | 'pending' | 'overdue';
@@ -105,6 +116,7 @@ export interface InstallmentItem {
   id: string;
   dueDate: string;
   amount: number;
+  paidAmount?: number;
   status: InstallmentStatus;
   paidDate?: string;
 }

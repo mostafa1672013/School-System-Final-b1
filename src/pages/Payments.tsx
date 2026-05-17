@@ -15,19 +15,21 @@ import { useStudentsStore } from '@/stores/studentsStore';
 import { useAdmissionStore } from '@/stores/admissionStore';
 import { formatCurrency, formatDateShort, paymentTypeLabels, paymentMethodLabels, stageLabels, statusLabels } from '@/lib/utils';
 import type { PaymentType, PaymentMethod } from '@/types';
-import { TrendingUp, Clock, CreditCard } from 'lucide-react';
+import { TrendingUp, Clock, CreditCard, ShieldCheck } from 'lucide-react';
 import { printPaymentReceipt } from '@/hooks/usePrintReceipt';
+import { useAuthStore } from '@/stores/authStore';
 
 export default function Payments() {
     const location = useLocation();
-    const { payments, addPayment } = usePaymentsStore();
+    const { payments, addPayment, fetchPayments } = usePaymentsStore();
     const { students, addPaymentToStudent, fetchStudents } = useStudentsStore();
     const { stageFees } = useAdmissionStore();
+    const { user } = useAuthStore();
     const [search, setSearch] = useState('');
     const [typeFilter, setTypeFilter] = useState('all');
     const [dialogOpen, setDialogOpen] = useState(false);
     const [form, setForm] = useState({
-        studentId: '', amount: 0, type: 'tuition' as PaymentType, method: 'cash' as PaymentMethod, notes: '',
+        studentId: '', amount: 0, type: 'tuition' as PaymentType, method: 'cash' as PaymentMethod, notes: '', walletPhoneNumber: ''
     });
 
     // Check for incoming state from Student Detail page
@@ -38,7 +40,9 @@ export default function Payments() {
                 ...prev,
                 studentId,
                 amount: amount || 0,
-                type: type || 'tuition'
+                type: type || 'tuition',
+                method: location.state.method || 'cash',
+                walletPhoneNumber: location.state.walletPhoneNumber || ''
             }));
             setDialogOpen(true);
             // Clear state after reading it
@@ -49,20 +53,25 @@ export default function Payments() {
     // Fetch latest data on mount to ensure we see new pending requests
     useEffect(() => {
         fetchStudents();
-        usePaymentsStore.getState().fetchPayments?.();
-    }, [fetchStudents]);
+        fetchPayments();
+    }, [fetchStudents, fetchPayments]);
 
     const pendingApplicationFees = useMemo(() => {
         return students.filter(s => s.status === 'applied' || s.status === 'failed');
     }, [students]);
 
     const pendingTuitionFees = useMemo(() => {
-        return students.filter(s => s.paymentRequestStatus === 'pending' && s.pendingPaymentAmount && s.pendingPaymentAmount > 0);
+        return students.filter(s => s.paymentRequestStatus === 'pending_treasury' && s.pendingPaymentAmount && s.pendingPaymentAmount > 0);
     }, [students]);
+
 
     const filtered = useMemo(() => {
         return payments.filter((p) => {
-            const matchSearch = p.studentName.includes(search) || p.receiptNumber.includes(search);
+            if (!p) return false;
+            const studentName = p.studentName || '';
+            const receiptNumber = p.receiptNumber || '';
+            
+            const matchSearch = studentName.includes(search) || receiptNumber.includes(search);
             const matchType = typeFilter === 'all' || p.type === typeFilter;
             return matchSearch && matchType;
         });
@@ -70,64 +79,89 @@ export default function Payments() {
 
     const stats = useMemo(() => {
         const today = new Date().toISOString().split('T')[0];
-        const todayPayments = payments.filter((p) => p.date === today);
-        const totalCollected = payments.reduce((s, p) => s + p.amount, 0);
+        const validPayments = payments.filter(p => p && typeof p.amount === 'number');
+        const todayPayments = validPayments.filter((p) => p.date === today);
+        const totalCollected = validPayments.reduce((s, p) => s + p.amount, 0);
         const todayTotal = todayPayments.reduce((s, p) => s + p.amount, 0);
-        return { totalCollected, todayTotal, todayCount: todayPayments.length, totalCount: payments.length };
+        return { totalCollected, todayTotal, todayCount: todayPayments.length, totalCount: validPayments.length };
     }, [payments]);
 
-    const handleAdd = (e: React.FormEvent) => {
+    const handleAdd = async (e: React.FormEvent) => {
         e.preventDefault();
-        const student = students.find((s) => s.id === form.studentId);
-        if (!student) { toast.error('يرجى اختيار طالب'); return; }
-        const receiptNumber = `REC-${Date.now().toString().slice(-6)}`;
-        const date = new Date().toISOString().split('T')[0];
-        const newPayment = {
-            studentId: form.studentId,
-            studentName: student.name,
-            amount: form.amount,
-            type: form.type,
-            method: form.method,
-            date,
-            receiptNumber,
-            collectedBy: 'المستخدم الحالي',
-            notes: form.notes || undefined,
-        };
-        addPayment(newPayment);
-        addPaymentToStudent(form.studentId, form.amount);
-        
-        // Auto-transition if it's an application fee
-        if (form.type === 'other' && (student.status === 'applied' || student.status === 'failed')) {
-            // Move to under_testing (reset for new try)
-            fetch(`http://127.0.0.1:4000/api/admission/test-result/${student.id}`, {
-                method: 'PATCH',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ result: 'pending' }), 
-            }).then(() => fetchStudents());
-        }
+        try {
+            const student = students.find((s) => s.id === form.studentId);
+            if (!student) { toast.error('يرجى اختيار طالب'); return; }
+            const receiptNumber = `REC-${Date.now().toString().slice(-6)}`;
+            const date = new Date().toISOString().split('T')[0];
+            const newPayment = {
+                studentId: form.studentId,
+                studentName: student.name,
+                amount: form.amount,
+                type: form.type,
+                method: form.method,
+                date,
+                receiptNumber,
+                collectedBy: 'المستخدم الحالي',
+                notes: form.notes || undefined,
+                walletPhoneNumber: form.method === 'wallet' ? form.walletPhoneNumber : undefined,
+            };
+            
+            const paymentId = await addPayment(newPayment);
+            await addPaymentToStudent(form.studentId, form.amount);
+            
+            if (student.pendingInstallmentPlanId && student.pendingInstallmentId) {
+                const { payInstallment } = usePaymentsStore.getState();
+                payInstallment(student.pendingInstallmentPlanId, student.pendingInstallmentId, form.amount);
+            }
+            
+            // Auto-transition if it's an application fee
+            if (form.type === 'other' && (student.status === 'applied' || student.status === 'failed')) {
+                await fetch(`/api/admission/test-result/${student.id}`, {
+                    method: 'PATCH',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ result: 'pending' }), 
+                });
+                await fetchStudents();
+            }
 
-        // Clear the pending request if it was one
-        if (student.pendingPaymentAmount && student.pendingPaymentAmount > 0) {
-            fetch(`http://127.0.0.1:4000/api/students/${student.id}`, {
-                method: 'PATCH',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ pendingPaymentAmount: null, pendingPaymentType: null, paymentRequestStatus: null }),
-            });
-        }
+            // Clear the pending request if it was one
+            if (student.pendingPaymentAmount && student.pendingPaymentAmount > 0) {
+                await fetch(`/api/students/${student.id}`, {
+                    method: 'PATCH',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ pendingPaymentAmount: null, pendingPaymentType: null, pendingPaymentMethod: null, pendingWalletPhoneNumber: null, paymentRequestStatus: null }),
+                });
+                await fetchStudents();
+            }
 
-        toast.success(`تم تسجيل دفعة ${formatCurrency(form.amount)} للطالب ${student.name}`);
-        printPaymentReceipt(
-            { id: '', ...newPayment },
-            { grade: student.grade, guardianName: student.guardianName }
-        );
-        setDialogOpen(false);
-        setForm({ studentId: '', amount: 0, type: 'tuition', method: 'cash', notes: '' });
+            toast.success(`تم تسجيل دفعة ${formatCurrency(form.amount)} للطالب ${student.name}`);
+            
+            // Safe print call
+            try {
+                printPaymentReceipt(
+                    { id: paymentId || '', ...newPayment },
+                    { grade: student.grade, guardianName: student.guardianName }
+                );
+            } catch (printErr) {
+                console.error('Print failed:', printErr);
+            }
+
+            // Small delay before clearing UI to prevent clashing with print window focus
+            setTimeout(() => {
+                setDialogOpen(false);
+                setForm({ studentId: '', amount: 0, type: 'tuition', method: 'cash', notes: '' });
+            }, 100);
+
+        } catch (error) {
+            console.error('Payment handler failed:', error);
+            toast.error('حدث خطأ تقني أثناء معالجة الطلب');
+        }
     };
 
     const handleRejectFee = async () => {
         if (!form.studentId) return;
         try {
-            await fetch(`http://127.0.0.1:4000/api/students/${form.studentId}`, {
+            await fetch(`/api/students/${form.studentId}`, {
                 method: 'PATCH',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ paymentRequestStatus: 'rejected' }),
@@ -145,12 +179,14 @@ export default function Payments() {
         setForm({
             studentId: student.id,
             amount: fee,
-            type: 'other',
+            type: 'application_fee',
             method: 'cash',
+            walletPhoneNumber: '',
             notes: 'رسوم فتح ملف'
         });
         setDialogOpen(true);
     };
+
 
     return (
         <div className="space-y-6">
@@ -204,7 +240,14 @@ export default function Payments() {
                                         <p className="text-muted-foreground">المبلغ المطلوب تحصيله: {formatCurrency(s.pendingPaymentAmount || 0)}</p>
                                     </div>
                                     <Button size="sm" className="h-8 text-xs bg-emerald-600 hover:bg-emerald-700" onClick={() => {
-                                        setForm({ studentId: s.id, amount: s.pendingPaymentAmount || 0, type: (s.pendingPaymentType as PaymentType) || 'tuition', method: 'cash', notes: '' });
+                                        setForm({ 
+                                            studentId: s.id, 
+                                            amount: s.pendingPaymentAmount || 0, 
+                                            type: (s.pendingPaymentType as PaymentType) || 'tuition', 
+                                            method: (s.pendingPaymentMethod as PaymentMethod) || 'cash', 
+                                            walletPhoneNumber: s.pendingWalletPhoneNumber || '',
+                                            notes: '' 
+                                        });
                                         setDialogOpen(true);
                                     }}>تحصيل</Button>
                                 </div>
@@ -214,6 +257,7 @@ export default function Payments() {
                         </div>
                     </CardContent>
                 </Card>
+
             </div>
 
             {/* Toolbar */}
@@ -246,7 +290,7 @@ export default function Payments() {
                         <form onSubmit={handleAdd} className="space-y-4">
                             <div className="space-y-2">
                                 <Label>الطالب</Label>
-                                <Select value={form.studentId} onValueChange={(v) => setForm({ ...form, studentId: v })}>
+                                <Select value={form.studentId} onValueChange={(v) => setForm({ ...form, studentId: v })} disabled>
                                     <SelectTrigger><SelectValue placeholder="اختر الطالب" /></SelectTrigger>
                                     <SelectContent>
                                         {students.filter((s) => ['admitted', 'applied', 'fee_setup'].includes(s.status)).map((s) => (
@@ -267,19 +311,31 @@ export default function Payments() {
                                 </div>
                                 <div className="space-y-2">
                                     <Label>النوع</Label>
-                                    <Select value={form.type} onValueChange={(v) => setForm({ ...form, type: v as PaymentType })}>
-                                        <SelectTrigger><SelectValue /></SelectTrigger>
+                                    <Select value={form.type} disabled>
+                                        <SelectTrigger className="bg-muted cursor-not-allowed"><SelectValue /></SelectTrigger>
                                         <SelectContent>{Object.entries(paymentTypeLabels).map(([k, v]) => <SelectItem key={k} value={k}>{v}</SelectItem>)}</SelectContent>
                                     </Select>
                                 </div>
                             </div>
                             <div className="space-y-2">
                                 <Label>طريقة الدفع</Label>
-                                <Select value={form.method} onValueChange={(v) => setForm({ ...form, method: v as PaymentMethod })}>
-                                    <SelectTrigger><SelectValue /></SelectTrigger>
+                                <Select value={form.method} disabled>
+                                    <SelectTrigger className="bg-muted cursor-not-allowed"><SelectValue /></SelectTrigger>
                                     <SelectContent>{Object.entries(paymentMethodLabels).map(([k, v]) => <SelectItem key={k} value={k}>{v}</SelectItem>)}</SelectContent>
                                 </Select>
                             </div>
+                            {form.method === 'wallet' && (
+                                <div className="space-y-2 border p-3 rounded-lg bg-slate-50">
+                                    <Label className="text-primary font-bold">رقم المحفظة المحول منها</Label>
+                                    <Input 
+                                        type="tel" 
+                                        dir="ltr"
+                                        value={form.walletPhoneNumber} 
+                                        readOnly
+                                        className="font-mono text-right bg-muted cursor-not-allowed"
+                                    />
+                                </div>
+                            )}
                             <div className="space-y-2">
                                 <Label>ملاحظات (اختياري)</Label>
                                 <Input value={form.notes} onChange={(e) => setForm({ ...form, notes: e.target.value })} />

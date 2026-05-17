@@ -1,3 +1,4 @@
+import { useState } from 'react';
 import { Link, useLocation } from 'react-router-dom';
 import {
   LayoutDashboard,
@@ -11,10 +12,12 @@ import {
   LogOut,
   ChevronRight,
   ChevronLeft,
+  ChevronDown,
   X,
   UserCheck,
   Settings,
   ShieldAlert,
+  Plus,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { useAuthStore } from '@/stores/authStore';
@@ -28,25 +31,119 @@ interface SidebarProps {
 
 interface NavItem {
   label: string;
-  path: string;
+  path?: string;
   icon: React.ElementType;
   roles: UserRole[];
+  subItems?: {
+    label: string;
+    path: string;
+    icon: React.ElementType;
+    roles: UserRole[];
+  }[];
 }
 
 const navItems: NavItem[] = [
   { label: 'لوحة التحكم', path: '/dashboard', icon: LayoutDashboard, roles: ['system_admin', 'school_director', 'head_accountant', 'accountant', 'warehouse_keeper', 'bus_supervisor'] },
-  { label: 'إدارة الطلاب', path: '/students', icon: GraduationCap, roles: ['system_admin', 'school_director', 'head_accountant', 'accountant'] },
+  { 
+    label: 'إدارة الطلاب', 
+    icon: GraduationCap, 
+    roles: ['system_admin', 'school_director', 'head_accountant', 'accountant'],
+    subItems: [
+      { label: 'قائمة الطلاب', path: '/students', icon: GraduationCap, roles: ['system_admin', 'school_director', 'head_accountant', 'accountant'] },
+      { label: 'القبول والتسجيل', path: '/admission', icon: UserCheck, roles: ['system_admin', 'school_director', 'head_accountant', 'accountant'] },
+      { label: 'طلب التحاق جديد', path: '/admission/new', icon: UserCheck, roles: ['system_admin', 'school_director', 'head_accountant', 'accountant'] },
+    ]
+  },
   { label: 'المدفوعات والخزينة', path: '/payments', icon: Banknote, roles: ['system_admin', 'school_director', 'head_accountant', 'accountant'] },
   { label: 'المخزن', path: '/inventory', icon: Package, roles: ['system_admin', 'school_director', 'warehouse_keeper'] },
   { label: 'الباصات', path: '/bus', icon: Bus, roles: ['system_admin', 'school_director', 'bus_supervisor'] },
   { label: 'التقارير', path: '/reports', icon: BarChart3, roles: ['system_admin', 'school_director', 'head_accountant'] },
-  { label: 'القبول والتسجيل', path: '/admission', icon: UserCheck, roles: ['system_admin', 'school_director', 'head_accountant', 'accountant'] },
-  { label: 'إعدادات الرسوم', path: '/stage-fees', icon: Settings, roles: ['system_admin', 'school_director'] },
-  { label: 'إعدادات صلاحيات الخصم', path: '/discount-settings', icon: UserCog, roles: ['system_admin', 'school_director'] },
+  { 
+    label: 'إعدادات الرسوم', 
+    icon: Settings, 
+    roles: ['system_admin', 'school_director'],
+    subItems: [
+      { label: 'سجل الهياكل المالية', path: '/stage-fees', icon: Settings, roles: ['system_admin', 'school_director'] },
+      { label: 'بناء هيكل جديد', path: '/stage-fees/new', icon: Plus, roles: ['system_admin', 'school_director'] },
+      { label: 'صلاحيات الخصم', path: '/discount-settings', icon: UserCog, roles: ['system_admin', 'school_director'] },
+    ]
+  },
   { label: 'اعتمادات الخصومات', path: '/discount-approvals', icon: ShieldAlert, roles: ['system_admin', 'school_director', 'head_accountant', 'accountant'] },
+  { label: 'اعتمادات التحويلات', path: '/payment-approvals', icon: ShieldAlert, roles: ['system_admin', 'school_director'] },
   { label: 'المستخدمين', path: '/users', icon: UserCog, roles: ['system_admin'] },
   { label: 'الملف الشخصي', path: '/profile', icon: User, roles: ['system_admin', 'school_director', 'head_accountant', 'accountant', 'warehouse_keeper', 'bus_supervisor'] },
 ];
+
+function NavItemRenderer({ item, onClose, location }: { item: NavItem; onClose: () => void; location: any }) {
+  const hasSubItems = item.subItems && item.subItems.length > 0;
+  
+  const isChildActive = hasSubItems && item.subItems!.some(sub => location.pathname === sub.path || location.pathname.startsWith(sub.path + '/'));
+  const isSelfActive = item.path ? (location.pathname === item.path || location.pathname.startsWith(item.path + '/')) : false;
+  const isActive = isSelfActive || isChildActive;
+
+  const [isOpen, setIsOpen] = useState(isActive);
+
+  if (hasSubItems) {
+    return (
+      <div className="space-y-1">
+        <button
+          onClick={() => setIsOpen(!isOpen)}
+          className={cn(
+            'flex items-center gap-3 px-4 py-3 rounded-lg text-sm font-medium transition-colors w-full',
+            isActive && !isOpen
+              ? 'bg-sidebar-primary/10 text-sidebar-primary'
+              : 'text-sidebar-foreground/70 hover:bg-sidebar-accent hover:text-sidebar-foreground'
+          )}
+        >
+          <item.icon className="size-5 shrink-0" />
+          <span>{item.label}</span>
+          {isOpen ? <ChevronDown className="size-4 mr-auto" /> : <ChevronLeft className="size-4 mr-auto" />}
+        </button>
+        
+        {isOpen && (
+          <div className="pl-4 pr-6 space-y-1 mt-1 border-r-2 border-sidebar-border mr-2">
+            {item.subItems!.map(sub => {
+              const isSubActive = location.pathname === sub.path || location.pathname.startsWith(sub.path + '/');
+              return (
+                <Link
+                  key={sub.path}
+                  to={sub.path}
+                  onClick={onClose}
+                  className={cn(
+                    'flex items-center gap-3 px-4 py-2.5 rounded-lg text-sm font-medium transition-colors',
+                    isSubActive
+                      ? 'bg-sidebar-primary text-sidebar-primary-foreground'
+                      : 'text-sidebar-foreground/70 hover:bg-sidebar-accent hover:text-sidebar-foreground'
+                  )}
+                >
+                  <sub.icon className="size-4 shrink-0 opacity-70" />
+                  <span>{sub.label}</span>
+                </Link>
+              );
+            })}
+          </div>
+        )}
+      </div>
+    );
+  }
+
+  return (
+    <Link
+      to={item.path!}
+      onClick={onClose}
+      className={cn(
+        'flex items-center gap-3 px-4 py-3 rounded-lg text-sm font-medium transition-colors',
+        isActive
+          ? 'bg-sidebar-primary text-sidebar-primary-foreground'
+          : 'text-sidebar-foreground/70 hover:bg-sidebar-accent hover:text-sidebar-foreground'
+      )}
+    >
+      <item.icon className="size-5 shrink-0" />
+      <span>{item.label}</span>
+      {isActive && <ChevronLeft className="size-4 mr-auto" />}
+    </Link>
+  );
+}
 
 export default function Sidebar({ isOpen, onClose }: SidebarProps) {
   const location = useLocation();
@@ -75,26 +172,9 @@ export default function Sidebar({ isOpen, onClose }: SidebarProps) {
         </div>
 
         <nav className="flex-1 overflow-y-auto p-3 space-y-1">
-          {filteredItems.map((item) => {
-            const isActive = location.pathname === item.path || location.pathname.startsWith(item.path + '/');
-            return (
-              <Link
-                key={item.path}
-                to={item.path}
-                onClick={onClose}
-                className={cn(
-                  'flex items-center gap-3 px-4 py-3 rounded-lg text-sm font-medium transition-colors',
-                  isActive
-                    ? 'bg-sidebar-primary text-sidebar-primary-foreground'
-                    : 'text-sidebar-foreground/70 hover:bg-sidebar-accent hover:text-sidebar-foreground'
-                )}
-              >
-                <item.icon className="size-5 shrink-0" />
-                <span>{item.label}</span>
-                {isActive && <ChevronLeft className="size-4 mr-auto" />}
-              </Link>
-            );
-          })}
+          {filteredItems.map((item) => (
+            <NavItemRenderer key={item.label} item={item} onClose={onClose} location={location} />
+          ))}
         </nav>
 
         <div className="p-3 border-t border-sidebar-border">

@@ -1,5 +1,5 @@
 import { create } from 'zustand';
-import { persist } from 'zustand/middleware';
+import { persist, createJSONStorage } from 'zustand/middleware';
 import type { User } from '@/types';
 import { mockUsers } from '@/constants/mockData';
 
@@ -18,7 +18,7 @@ export const useAuthStore = create<AuthState>()(
       isAuthenticated: false,
       login: async (email, password) => {
         try {
-          const response = await fetch('http://127.0.0.1:4000/api/auth/login', {
+          const response = await fetch('/api/auth/login', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ email, password }),
@@ -48,7 +48,7 @@ export const useAuthStore = create<AuthState>()(
         const currentUser = get().user;
         if (!currentUser) return false;
         try {
-          const response = await fetch(`http://127.0.0.1:4000/api/users/${currentUser.id}`, {
+          const response = await fetch(`/api/users/${currentUser.id}`, {
             method: 'PATCH',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify(data),
@@ -64,6 +64,10 @@ export const useAuthStore = create<AuthState>()(
       },
       logout: () => set({ user: null, isAuthenticated: false }),
     }),
-    { name: 'school-auth' }
+    { 
+      name: 'school-auth',
+      // sessionStorage: session ends when browser/tab is closed
+      storage: createJSONStorage(() => sessionStorage)
+    }
   )
 );

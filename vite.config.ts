@@ -4,10 +4,17 @@ import path from "path";
 
 // https://vitejs.dev/config/
 export default defineConfig({
-  base: "/School-Education/",
+  base: "/",
   server: {
     host: "::",
     port: 8080,
+    allowedHosts: true,
+    proxy: {
+      '/api': {
+        target: 'http://127.0.0.1:4000',
+        changeOrigin: true,
+      }
+    }
   },
   plugins: [
     react(),

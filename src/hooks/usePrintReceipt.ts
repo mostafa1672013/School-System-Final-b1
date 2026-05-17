@@ -15,256 +15,380 @@ interface ReceiptData {
 }
 
 export function printReceipt(data: ReceiptData) {
-  const printWindow = window.open('', '_blank', 'width=420,height=600');
-  if (!printWindow) return;
-
-  const html = `
-<!DOCTYPE html>
+  const html = `<!DOCTYPE html>
 <html lang="ar" dir="rtl">
 <head>
   <meta charset="UTF-8" />
-  <title>إيصال دفع - ${data.receiptNumber}</title>
-  <link href="https://fonts.googleapis.com/css2?family=Noto+Kufi+Arabic:wght@400;600;700&family=Tajawal:wght@400;500;700&display=swap" rel="stylesheet">
+  <title>سند قبض - ${data.receiptNumber}</title>
   <style>
     * { margin: 0; padding: 0; box-sizing: border-box; }
     body {
-      font-family: 'Tajawal', sans-serif;
-      background: #fff;
-      color: #1a1a2e;
-      padding: 0;
+      font-family: system-ui, -apple-system, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+      background: #e5e7eb;
+      color: #1f2937;
+      padding: 20px;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      min-height: 100vh;
     }
-    .receipt {
-      width: 380px;
-      margin: 0 auto;
-      padding: 24px 20px;
+    .receipt-card {
+      background: #ffffff;
+      width: 100%;
+      max-width: 800px;
+      padding: 40px 50px;
+      box-shadow: 0 10px 25px rgba(0, 0, 0, 0.1);
+      position: relative;
+      border-top: 8px solid #0f766e;
+      border-radius: 4px;
     }
+    /* Header Area */
     .header {
-      text-align: center;
-      padding-bottom: 16px;
-      border-bottom: 3px double #0d9488;
-      margin-bottom: 16px;
+      display: flex;
+      justify-content: space-between;
+      align-items: flex-start;
+      border-bottom: 2px solid #e5e7eb;
+      padding-bottom: 20px;
+      margin-bottom: 30px;
     }
-    .logo-circle {
-      width: 56px; height: 56px;
-      background: linear-gradient(135deg, #0d9488, #115e59);
-      border-radius: 50%;
-      margin: 0 auto 10px;
-      display: flex; align-items: center; justify-content: center;
-      color: #fff; font-size: 22px; font-weight: 700;
-      font-family: 'Noto Kufi Arabic', sans-serif;
+    .school-info {
+      display: flex;
+      align-items: center;
+      gap: 15px;
     }
-    .school-name {
-      font-family: 'Noto Kufi Arabic', sans-serif;
-      font-size: 20px; font-weight: 700;
-      color: #0d9488;
+    .logo {
+      width: 65px;
+      height: 65px;
+      background: #0f766e;
+      color: white;
+      border-radius: 12px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 32px;
+      font-weight: bold;
+    }
+    .school-details h1 {
+      font-size: 24px;
+      color: #0f766e;
+      margin-bottom: 6px;
+    }
+    .school-details p {
+      font-size: 13px;
+      color: #6b7280;
       margin-bottom: 2px;
     }
-    .school-sub {
-      font-size: 11px; color: #6b7280;
+    .receipt-meta {
+      text-align: left;
     }
-    .receipt-title {
-      text-align: center;
-      background: #f0fdfa;
-      border: 1px solid #ccfbf1;
-      border-radius: 8px;
-      padding: 8px;
-      margin-bottom: 16px;
+    .receipt-meta h2 {
+      font-size: 28px;
+      color: #374151;
+      margin-bottom: 12px;
+      letter-spacing: -0.5px;
     }
-    .receipt-title h2 {
-      font-family: 'Noto Kufi Arabic', sans-serif;
-      font-size: 16px; font-weight: 700;
-      color: #115e59;
+    .meta-item {
+      font-size: 14px;
+      color: #4b5563;
+      margin-bottom: 6px;
     }
-    .receipt-title .rec-num {
-      font-size: 13px; color: #0d9488;
-      font-weight: 600;
-      margin-top: 2px;
-      direction: ltr; display: inline-block;
+    .meta-item strong {
+      color: #111827;
+      display: inline-block;
+      width: 80px;
     }
-    .info-grid {
-      display: grid;
-      grid-template-columns: 1fr 1fr;
-      gap: 10px;
-      margin-bottom: 16px;
-    }
-    .info-item {
+
+    /* Student Info Box */
+    .info-section {
       background: #f8fafc;
-      border-radius: 6px;
-      padding: 10px;
+      border: 1px solid #e2e8f0;
+      border-radius: 8px;
+      padding: 24px;
+      margin-bottom: 30px;
+      display: grid;
+      grid-template-columns: repeat(2, 1fr);
+      gap: 20px;
     }
-    .info-item.full { grid-column: 1 / -1; }
+    .info-group {
+      display: flex;
+      flex-direction: column;
+    }
     .info-label {
-      font-size: 10px; color: #9ca3af;
-      font-weight: 500;
-      margin-bottom: 3px;
+      font-size: 12px;
+      color: #64748b;
+      margin-bottom: 6px;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
     }
     .info-value {
-      font-size: 13px; font-weight: 600;
-      color: #1a1a2e;
+      font-size: 16px;
+      font-weight: 600;
+      color: #0f172a;
     }
-    .amount-box {
-      text-align: center;
-      background: linear-gradient(135deg, #f0fdfa, #ccfbf1);
-      border: 2px solid #0d9488;
-      border-radius: 10px;
+
+    /* Payment Details Table */
+    .details-table {
+      width: 100%;
+      border-collapse: collapse;
+      margin-bottom: 30px;
+    }
+    .details-table th {
+      background: #f1f5f9;
+      color: #334155;
+      font-size: 14px;
+      font-weight: 600;
+      text-align: right;
+      padding: 14px 16px;
+      border-bottom: 2px solid #cbd5e1;
+    }
+    .details-table td {
       padding: 16px;
-      margin-bottom: 16px;
+      border-bottom: 1px solid #e2e8f0;
+      font-size: 15px;
+      color: #1e293b;
     }
-    .amount-label {
-      font-size: 12px; color: #115e59;
-      font-weight: 500;
-      margin-bottom: 4px;
+    .details-table td.amount-col {
+      font-weight: 700;
+      font-family: monospace;
+      font-size: 18px;
     }
-    .amount-value {
-      font-family: 'Noto Kufi Arabic', sans-serif;
-      font-size: 28px; font-weight: 700;
-      color: #0d9488;
-      direction: ltr; display: inline-block;
+
+    /* Totals Area */
+    .totals-area {
+      display: flex;
+      justify-content: flex-end;
+      margin-bottom: 40px;
     }
-    .notes {
-      background: #fffbeb;
-      border-radius: 6px;
-      padding: 10px;
-      font-size: 12px;
-      color: #92400e;
-      margin-bottom: 16px;
+    .total-box {
+      background: #0f766e;
+      color: white;
+      padding: 20px 30px;
+      border-radius: 8px;
+      text-align: center;
+      min-width: 280px;
     }
-    .notes strong { font-weight: 600; }
-    .divider {
-      border: none;
-      border-top: 1px dashed #d1d5db;
-      margin: 16px 0;
+    .total-label {
+      font-size: 15px;
+      margin-bottom: 8px;
+      opacity: 0.9;
     }
+    .total-amount {
+      font-size: 36px;
+      font-weight: bold;
+      direction: ltr;
+      display: inline-block;
+    }
+
+    /* Notes */
+    .notes-section {
+      margin-bottom: 40px;
+      padding-right: 16px;
+      border-right: 4px solid #cbd5e1;
+      background: #f8fafc;
+      padding: 16px;
+      border-radius: 4px;
+    }
+    .notes-section h4 {
+      font-size: 15px;
+      color: #475569;
+      margin-bottom: 8px;
+    }
+    .notes-section p {
+      font-size: 14px;
+      color: #64748b;
+      line-height: 1.6;
+    }
+
+    /* Signatures */
     .signatures {
       display: flex;
       justify-content: space-between;
-      margin-top: 24px;
-      padding-top: 8px;
+      margin-top: 60px;
+      padding-top: 30px;
+      border-top: 1px dashed #cbd5e1;
     }
-    .sig-block {
+    .sig-box {
       text-align: center;
-      width: 45%;
+      width: 30%;
     }
     .sig-line {
-      border-top: 1px solid #9ca3af;
-      margin-bottom: 4px;
-      margin-top: 32px;
+      height: 1px;
+      background: #94a3b8;
+      margin-bottom: 12px;
+      margin-top: 50px;
     }
-    .sig-label {
-      font-size: 11px; color: #6b7280;
-    }
-    .footer {
-      text-align: center;
-      margin-top: 20px;
-      padding-top: 12px;
-      border-top: 3px double #0d9488;
-    }
-    .footer p {
-      font-size: 10px; color: #9ca3af;
-    }
-    .footer .stamp {
-      font-size: 11px;
-      color: #0d9488;
+    .sig-title {
+      font-size: 14px;
+      color: #475569;
       font-weight: 600;
-      margin-bottom: 4px;
     }
+
+    /* Footer */
+    .footer {
+      margin-top: 50px;
+      text-align: center;
+      font-size: 12px;
+      color: #94a3b8;
+    }
+
+    /* Print Styles */
+    .no-print {
+      margin-top: 24px;
+      display: flex;
+      gap: 12px;
+      justify-content: center;
+      width: 100%;
+      max-width: 800px;
+    }
+    .btn {
+      padding: 12px 28px;
+      border: none;
+      border-radius: 8px;
+      font-size: 15px;
+      font-weight: 600;
+      cursor: pointer;
+      transition: all 0.2s;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      font-family: inherit;
+    }
+    .btn-print { background: #0f766e; color: white; box-shadow: 0 4px 6px -1px rgba(15, 118, 110, 0.2); }
+    .btn-close { background: #e2e8f0; color: #475569; }
+    .btn:hover { opacity: 0.9; transform: translateY(-1px); }
+
     @media print {
-      body { padding: 0; }
-      .receipt { width: 100%; }
+      body { background: white; padding: 0; display: block; }
+      .receipt-card { box-shadow: none; max-width: 100%; padding: 0; border-top: 0; }
+      /* We recreate the top border for print */
+      .receipt-card::before {
+        content: '';
+        display: block;
+        height: 8px;
+        background: #0f766e !important;
+        margin-bottom: 30px;
+      }
       .no-print { display: none !important; }
+      .total-box { border: 2px solid #0f766e; color: #0f766e; background: transparent !important; }
+      .total-label { color: #0f766e; }
+      * { -webkit-print-color-adjust: exact !important; print-color-adjust: exact !important; }
     }
   </style>
 </head>
 <body>
-  <div class="receipt">
+  <div class="receipt-card">
     <div class="header">
-      <div class="logo-circle">م</div>
-      <div class="school-name">مدرسة مدرستي</div>
-      <div class="school-sub">نظام الإدارة المدرسية المتكامل</div>
-    </div>
-
-    <div class="receipt-title">
-      <h2>إيصال دفع</h2>
-      <div class="rec-num">${data.receiptNumber}</div>
-    </div>
-
-    <div class="info-grid">
-      <div class="info-item full">
-        <div class="info-label">اسم الطالب</div>
-        <div class="info-value">${data.studentName}</div>
+      <div class="school-info">
+        <div class="logo">ش</div>
+        <div class="school-details">
+          <h1>مدرسة الشروق</h1>
+          <p>نظام الإدارة المدرسية المتكامل</p>
+          <p>إدارة الحسابات والخزينة</p>
+        </div>
       </div>
-      ${data.grade ? `
-      <div class="info-item">
-        <div class="info-label">الصف</div>
-        <div class="info-value">${data.grade}</div>
-      </div>` : ''}
+      <div class="receipt-meta">
+        <h2>سند قبض</h2>
+        <div class="meta-item"><strong>رقم السند:</strong> <span dir="ltr">${data.receiptNumber}</span></div>
+        <div class="meta-item"><strong>التاريخ:</strong> ${formatDate(data.date)}</div>
+        <div class="meta-item"><strong>المُحصل:</strong> ${data.collectedBy}</div>
+      </div>
+    </div>
+
+    <div class="info-section">
+      <div class="info-group">
+        <span class="info-label">اسم الطالب / الطالبة</span>
+        <span class="info-value">${data.studentName}</span>
+      </div>
       ${data.guardianName ? `
-      <div class="info-item">
-        <div class="info-label">ولي الأمر</div>
-        <div class="info-value">${data.guardianName}</div>
+      <div class="info-group">
+        <span class="info-label">ولي الأمر</span>
+        <span class="info-value">${data.guardianName}</span>
       </div>` : ''}
-      <div class="info-item">
-        <div class="info-label">التاريخ</div>
-        <div class="info-value">${formatDate(data.date)}</div>
-      </div>
-      <div class="info-item">
-        <div class="info-label">نوع الدفع</div>
-        <div class="info-value">${paymentTypeLabels[data.type] || data.type}</div>
-      </div>
-      <div class="info-item">
-        <div class="info-label">طريقة الدفع</div>
-        <div class="info-value">${paymentMethodLabels[data.method] || data.method}</div>
-      </div>
-      <div class="info-item">
-        <div class="info-label">المحصّل</div>
-        <div class="info-value">${data.collectedBy}</div>
-      </div>
+      ${data.grade ? `
+      <div class="info-group" style="grid-column: span 2;">
+        <span class="info-label">المرحلة / الصف الدراسي</span>
+        <span class="info-value">${data.grade}</span>
+      </div>` : ''}
     </div>
 
-    <div class="amount-box">
-      <div class="amount-label">المبلغ المدفوع</div>
-      <div class="amount-value">${formatCurrency(data.amount)}</div>
+    <table class="details-table">
+      <thead>
+        <tr>
+          <th>البيان (نوع الرسوم)</th>
+          <th>طريقة الدفع</th>
+          <th style="text-align: left;">المبلغ</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td>${paymentTypeLabels[data.type] || data.type}</td>
+          <td>${paymentMethodLabels[data.method] || data.method}</td>
+          <td class="amount-col" style="text-align: left;">${formatCurrency(data.amount)}</td>
+        </tr>
+      </tbody>
+    </table>
+
+    <div class="totals-area">
+      <div class="total-box">
+        <div class="total-label">إجمالي المبلغ المدفوع</div>
+        <div class="total-amount">${formatCurrency(data.amount)}</div>
+      </div>
     </div>
 
     ${data.notes ? `
-    <div class="notes">
-      <strong>ملاحظات:</strong> ${data.notes}
+    <div class="notes-section">
+      <h4>ملاحظات هامة:</h4>
+      <p>${data.notes}</p>
     </div>` : ''}
 
     <div class="signatures">
-      <div class="sig-block">
+      <div class="sig-box">
+        <div class="sig-title">توقيع المستلم (الخزينة)</div>
         <div class="sig-line"></div>
-        <div class="sig-label">توقيع المحصّل</div>
       </div>
-      <div class="sig-block">
+      <div class="sig-box">
+        <div class="sig-title">ختم المدرسة</div>
+        <div class="sig-line" style="background: transparent; border-bottom: 1px dotted #94a3b8;"></div>
+      </div>
+      <div class="sig-box">
+        <div class="sig-title">توقيع ولي الأمر / المُسدد</div>
         <div class="sig-line"></div>
-        <div class="sig-label">توقيع ولي الأمر</div>
       </div>
     </div>
 
     <div class="footer">
-      <p class="stamp">هذا الإيصال صادر إلكترونياً من نظام مدرستي</p>
-      <p>تاريخ الطباعة: ${new Date().toLocaleDateString('ar-EG', { year: 'numeric', month: 'long', day: 'numeric', hour: '2-digit', minute: '2-digit' })}</p>
+      <p>تم إصدار هذا الإيصال إلكترونياً من خلال نظام إدارة مدرسة الشروق</p>
+      <p>تاريخ ووقت الطباعة: ${new Date().toLocaleDateString('ar-EG', { year: 'numeric', month: 'long', day: 'numeric', hour: '2-digit', minute: '2-digit' })}</p>
     </div>
   </div>
 
-  <div class="no-print" style="text-align:center; margin-top:16px;">
-    <button onclick="window.print()" style="background:#0d9488; color:#fff; border:none; padding:10px 32px; border-radius:8px; font-size:14px; font-family:Tajawal; cursor:pointer; font-weight:600;">
-      🖨️ طباعة الإيصال
-    </button>
-    <button onclick="window.close()" style="background:#e5e7eb; color:#374151; border:none; padding:10px 32px; border-radius:8px; font-size:14px; font-family:Tajawal; cursor:pointer; margin-right:8px; font-weight:600;">
-      إغلاق
-    </button>
+  <div class="no-print">
+    <button class="btn btn-print" onclick="window.print()">طباعة الإيصال</button>
+    <button class="btn btn-close" onclick="window.close()">إغلاق</button>
   </div>
-
   <script>
-    window.onafterprint = function() {};
+    window.onafterprint = function() { setTimeout(function(){ window.close(); }, 500); };
   </script>
 </body>
 </html>`;
 
-  printWindow.document.write(html);
-  printWindow.document.close();
+  // Use Blob URL instead of document.write to prevent browser crashes
+  try {
+    const blob = new Blob([html], { type: 'text/html;charset=utf-8' });
+    const url = URL.createObjectURL(blob);
+    const printWindow = window.open(url, '_blank', 'width=460,height=700');
+    if (!printWindow) {
+      URL.revokeObjectURL(url);
+      alert('يرجى السماح للمتصفح بفتح النوافذ المنبثقة لإتمام الطباعة');
+      return;
+    }
+    printWindow.addEventListener('load', () => {
+      URL.revokeObjectURL(url);
+      printWindow.focus();
+    });
+  } catch (e) {
+    console.error('Print error:', e);
+  }
 }
 
 export function printPaymentReceipt(payment: Payment, extra?: { grade?: string; guardianName?: string }) {
