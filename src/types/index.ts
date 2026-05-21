@@ -116,7 +116,7 @@ export interface StageFee {
   additionalFees?: AdditionalFee[];
 }
 
-export type PaymentType = 'tuition' | 'books' | 'uniform' | 'bus' | 'activities' | 'other' | 'application_fee';
+export type PaymentType = 'tuition' | 'books' | 'uniform' | 'bus' | 'activities' | 'other' | 'application_fee' | 'arrears';
 export type PaymentMethod = 'cash' | 'bank_transfer' | 'wallet';
 
 export interface Payment {

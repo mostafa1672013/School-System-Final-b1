@@ -62,6 +62,7 @@ export const paymentTypeLabels: Record<string, string> = {
   bus: 'باص',
   activities: 'أنشطة',
   other: 'أخرى',
+  arrears: 'سداد متأخرات',
 };
 
 export const paymentMethodLabels: Record<string, string> = {
