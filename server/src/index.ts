@@ -177,9 +177,9 @@ app.delete('/api/students/:id', async (req, res) => {
   const id = Array.isArray(req.params.id) ? req.params.id[0] : req.params.id;
   try {
     await prisma.student.delete({ where: { id } });
-    res.status(204).send();
+    res.json({ message: 'تم حذف الطالب بنجاح. المدفوعات المسجلة محفوظة في الخزينة.' });
   } catch (error) {
-    res.status(400).json({ error: 'Failed to delete student' });
+    res.status(400).json({ error: 'فشل حذف الطالب' });
   }
 });
 
@@ -508,6 +508,10 @@ app.post('/api/payments', requireOpenTreasury, async (req, res) => {
   const { studentId, studentName, amount, type, method, date, receiptNumber, collectedBy, notes, academicYear, walletPhoneNumber, userId } = req.body;
   const session = (req as any).treasurySession;
 
+  if (!studentId) {
+    return res.status(400).json({ error: 'معرف الطالب مطلوب' });
+  }
+
   // Validation: Amount must be greater than zero
   if (!amount || Number(amount) <= 0) {
     return res.status(400).json({ error: 'المبلغ يجب أن يكون أكبر من صفر', code: 'INVALID_AMOUNT' });
@@ -518,6 +522,15 @@ app.post('/api/payments', requireOpenTreasury, async (req, res) => {
     if (!currentStudent) return res.status(404).json({ error: 'الطالب غير موجود' });
     if (amount > currentStudent.arrearsFees) {
       return res.status(400).json({ error: 'مبلغ السداد أكبر من المتأخرات المستحقة' });
+    }
+  }
+
+  // CRITICAL: Prevent duplicate application fee payments
+  if (type === 'application_fee') {
+    const currentStudent = await prisma.student.findUnique({ where: { id: studentId }, select: { status: true } });
+    if (!currentStudent) return res.status(404).json({ error: 'الطالب غير موجود' });
+    if (currentStudent.status !== 'applied' && currentStudent.status !== 'failed') {
+      return res.status(400).json({ error: 'رسوم الملف مدفوعة بالفعل أو الطالب في مرحلة متقدمة' });
     }
   }
 
@@ -588,6 +601,8 @@ app.post('/api/payments', requireOpenTreasury, async (req, res) => {
         data: { 
           ...(type !== 'application_fee' && { paidAmount: { increment: amount } }),
           ...(type === 'arrears' && { arrearsFees: { decrement: amount } }),
+          // Atomically update status for application_fee to prevent race conditions
+          ...(type === 'application_fee' && { status: 'under_testing', testResult: 'pending' }),
           // If all remaining is used, clear any pending request
           pendingPaymentAmount: null,
           pendingPaymentType: null,
