@@ -23,6 +23,9 @@ interface StudentsState {
     uniformFees: number;
     busFees: number;
     otherFees: number;
+    arrearsFees: number;
+    discountAmount: number;
+    discountPercentage: number;
     totalFees: number;
   }) => Promise<void>;
   bulkPromoteStudents: (promotions: Array<{
@@ -35,6 +38,9 @@ interface StudentsState {
     uniformFees: number;
     busFees: number;
     otherFees: number;
+    arrearsFees: number;
+    discountAmount: number;
+    discountPercentage: number;
     totalFees: number;
   }>) => Promise<{ succeeded: number; failed: number }>;
 }
@@ -107,8 +113,8 @@ export const useStudentsStore = create<StudentsState>()(
       promoteStudent: async (id, data) => {
         let response: Response;
         try {
-          response = await fetch(`/api/students/${id}`, {
-            method: 'PATCH',
+          response = await fetch(`/api/students/${id}/promote`, {
+            method: 'POST',
             headers: getAuthHeaders(),
             body: JSON.stringify({
               stage: data.toStage,
@@ -119,8 +125,10 @@ export const useStudentsStore = create<StudentsState>()(
               uniformFees: data.uniformFees,
               busFees: data.busFees,
               otherFees: data.otherFees,
+              arrearsFees: data.arrearsFees,
+              discountAmount: data.discountAmount,
+              discountPercentage: data.discountPercentage,
               totalFees: data.totalFees,
-              paidAmount: 0,
             }),
           });
         } catch {
