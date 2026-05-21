@@ -176,10 +176,175 @@ async function seedAdmittedStudents() {
   console.log(`✅ تم إضافة ${students.length} طالب مُقبَّل.`);
 }
 
+async function seedPendingStudents() {
+  console.log('📋 جاري إضافة طلاب التقديم...');
+  const year = '2024-2025';
+  const students = [
+    { nationalId: '31005010000201', name: 'إسلام محمود السيد', stage: 'kg', grade: 'KG1', track: 'local', guardianName: 'محمود السيد عبدالله', guardianPhone: '01055555201', status: 'applied', hasSiblings: false },
+    { nationalId: '31005010000202', name: 'مروة سعيد الديب', stage: 'kg', grade: 'KG2', track: 'local', guardianName: 'سعيد الديب طاهر', guardianPhone: '01055555202', status: 'applied', hasSiblings: false },
+    { nationalId: '31005010000203', name: 'حازم عصام الأمير', stage: 'primary', grade: 'الصف الأول الابتدائي', track: 'local', guardianName: 'عصام الأمير رشاد', guardianPhone: '01055555203', status: 'applied', hasSiblings: false },
+    { nationalId: '31005010000204', name: 'إيمان تامر الكردي', stage: 'primary', grade: 'الصف الثاني الابتدائي', track: 'local', guardianName: 'تامر الكردي وليد', guardianPhone: '01055555204', status: 'applied', hasSiblings: false },
+    { nationalId: '31005010000205', name: 'سعد يوسف البدوي', stage: 'kg', grade: 'KG1', track: 'international', guardianName: 'يوسف البدوي سامر', guardianPhone: '01055555205', status: 'applied', hasSiblings: false },
+    { nationalId: '31005010000211', name: 'نادية حسن الجمال', stage: 'kg', grade: 'KG1', track: 'local', guardianName: 'حسن الجمال علي', guardianPhone: '01055555211', status: 'under_testing', hasSiblings: false },
+    { nationalId: '31005010000212', name: 'طارق فتحي النخيلي', stage: 'primary', grade: 'الصف الأول الابتدائي', track: 'local', guardianName: 'فتحي النخيلي أحمد', guardianPhone: '01055555212', status: 'under_testing', hasSiblings: false },
+    { nationalId: '31005010000213', name: 'أميرة خليل السبكي', stage: 'primary', grade: 'الصف الثالث الابتدائي', track: 'local', guardianName: 'خليل السبكي عمر', guardianPhone: '01055555213', status: 'under_testing', hasSiblings: false },
+    { nationalId: '31005010000214', name: 'ياسر محمد الفندي', stage: 'kg', grade: 'KG2', track: 'local', guardianName: 'محمد الفندي طلعت', guardianPhone: '01055555214', status: 'under_testing', hasSiblings: false },
+    { nationalId: '31005010000215', name: 'ربا سمير مرقس', stage: 'primary', grade: 'الصف الثاني الابتدائي', track: 'local', guardianName: 'سمير مرقس ميلاد', guardianPhone: '01055555215', status: 'under_testing', hasSiblings: false },
+  ];
+  for (const s of students) {
+    await prisma.student.upsert({
+      where: { nationalId: s.nationalId },
+      update: { ...s, academicYear: year },
+      create: { ...s, academicYear: year, tuitionFees: 0, booksFees: 0, uniformFees: 0, totalFees: 0 },
+    });
+  }
+  console.log(`✅ تم إضافة ${students.length} طالب في مرحلة التقديم.`);
+}
+
+async function seedPromotedStudents() {
+  console.log('🔄 جاري إضافة الطلاب المُرقَّين من 2023-2024...');
+  const year = '2024-2025';
+  const oldYear = '2023-2024';
+  const promoted = [
+    { nationalId: '31006010000301', name: 'ثابت محمود الزهراني', stage: 'primary', grade: 'الصف الثالث الابتدائي', track: 'local', guardianName: 'محمود الزهراني يوسف', guardianPhone: '01066666301', tuitionFees: 16000, booksFees: 2200, uniformFees: 1200, totalFees: 19400, arrearsFees: 5000, paidAmount: 0, status: 'admitted', hasSiblings: false, oldStage: 'primary', oldGrade: 'الصف الثاني الابتدائي', oldTuitionFees: 15500, oldBooksFees: 2000, oldUniformFees: 1200, oldTotalFees: 18700, oldPaidAmount: 13700 },
+    { nationalId: '31006010000302', name: 'مسرة علي الحكيم', stage: 'primary', grade: 'الصف الخامس الابتدائي', track: 'local', guardianName: 'علي الحكيم محمود', guardianPhone: '01066666302', tuitionFees: 17000, booksFees: 2300, uniformFees: 1200, totalFees: 20500, arrearsFees: 7500, paidAmount: 0, status: 'admitted', hasSiblings: false, oldStage: 'primary', oldGrade: 'الصف الرابع الابتدائي', oldTuitionFees: 16500, oldBooksFees: 2200, oldUniformFees: 1200, oldTotalFees: 19900, oldPaidAmount: 12400 },
+    { nationalId: '31006010000303', name: 'صفاء حسين الشربيني', stage: 'preparatory', grade: 'الصف الأول الإعدادي', track: 'local', guardianName: 'حسين الشربيني علاء', guardianPhone: '01066666303', tuitionFees: 20000, booksFees: 3000, uniformFees: 1500, totalFees: 24500, arrearsFees: 4000, paidAmount: 0, status: 'admitted', hasSiblings: false, oldStage: 'primary', oldGrade: 'الصف السادس الابتدائي', oldTuitionFees: 18000, oldBooksFees: 2500, oldUniformFees: 1200, oldTotalFees: 21700, oldPaidAmount: 17700 },
+    { nationalId: '31006010000304', name: 'عزيزة رامي الصادق', stage: 'preparatory', grade: 'الصف الثاني الإعدادي', track: 'local', guardianName: 'رامي الصادق مصطفى', guardianPhone: '01066666304', tuitionFees: 21000, booksFees: 3000, uniformFees: 1500, totalFees: 25500, arrearsFees: 6000, paidAmount: 0, status: 'admitted', hasSiblings: false, oldStage: 'preparatory', oldGrade: 'الصف الأول الإعدادي', oldTuitionFees: 20000, oldBooksFees: 3000, oldUniformFees: 1500, oldTotalFees: 24500, oldPaidAmount: 18500 },
+    { nationalId: '31006010000305', name: 'ضياء الدين حامد رشاد', stage: 'secondary', grade: 'الصف الأول الثانوي', track: 'local', guardianName: 'حامد رشاد كمال', guardianPhone: '01066666305', tuitionFees: 25000, booksFees: 3500, uniformFees: 1500, totalFees: 30000, arrearsFees: 9000, paidAmount: 0, status: 'admitted', hasSiblings: false, oldStage: 'preparatory', oldGrade: 'الصف الثالث الإعدادي', oldTuitionFees: 22000, oldBooksFees: 3200, oldUniformFees: 1500, oldTotalFees: 26700, oldPaidAmount: 17700 },
+    { nationalId: '31006010000306', name: 'وسن طاهر البشير', stage: 'secondary', grade: 'الصف الثاني الثانوي', track: 'local', guardianName: 'طاهر البشير يوسف', guardianPhone: '01066666306', tuitionFees: 27000, booksFees: 3800, uniformFees: 1500, totalFees: 32300, arrearsFees: 8500, paidAmount: 0, status: 'admitted', hasSiblings: false, oldStage: 'secondary', oldGrade: 'الصف الأول الثانوي', oldTuitionFees: 25000, oldBooksFees: 3500, oldUniformFees: 1500, oldTotalFees: 30000, oldPaidAmount: 21500 },
+    { nationalId: '31006010000307', name: 'فراس نزار الخوري', stage: 'secondary', grade: 'الصف الثالث الثانوي', track: 'local', guardianName: 'نزار الخوري سامي', guardianPhone: '01066666307', tuitionFees: 30000, booksFees: 4000, uniformFees: 1500, totalFees: 35500, arrearsFees: 12000, paidAmount: 0, status: 'admitted', hasSiblings: false, oldStage: 'secondary', oldGrade: 'الصف الثاني الثانوي', oldTuitionFees: 27000, oldBooksFees: 3800, oldUniformFees: 1500, oldTotalFees: 32300, oldPaidAmount: 20300 },
+    { nationalId: '31006010000308', name: 'غادة سليم الطوخي', stage: 'primary', grade: 'الصف الرابع الابتدائي', track: 'local', guardianName: 'سليم الطوخي فتحي', guardianPhone: '01066666308', tuitionFees: 16500, booksFees: 2200, uniformFees: 1200, totalFees: 19900, arrearsFees: 3500, paidAmount: 0, status: 'admitted', hasSiblings: false, oldStage: 'primary', oldGrade: 'الصف الثالث الابتدائي', oldTuitionFees: 16000, oldBooksFees: 2200, oldUniformFees: 1200, oldTotalFees: 19400, oldPaidAmount: 15900 },
+  ];
+  for (const s of promoted) {
+    const { oldStage, oldGrade, oldTuitionFees, oldBooksFees, oldUniformFees, oldTotalFees, oldPaidAmount, ...studentData } = s;
+    const student = await prisma.student.upsert({
+      where: { nationalId: s.nationalId },
+      update: { ...studentData, academicYear: year },
+      create: { ...studentData, academicYear: year },
+    });
+    await prisma.studentYearlyFinance.upsert({
+      where: { studentId_academicYear: { studentId: student.id, academicYear: oldYear } },
+      update: { paidAmount: oldPaidAmount },
+      create: { studentId: student.id, academicYear: oldYear, stage: oldStage, grade: oldGrade, tuitionFees: oldTuitionFees, booksFees: oldBooksFees, uniformFees: oldUniformFees, busFees: 0, otherFees: 0, arrearsFees: 0, totalFees: oldTotalFees, paidAmount: oldPaidAmount },
+    });
+  }
+  console.log(`✅ تم إضافة ${promoted.length} طالب مُرقَّى مع سجل مالي 2023-2024.`);
+}
+
+async function seedPayments() {
+  console.log('💰 جاري إضافة المدفوعات وطلبات الدفع...');
+  const year = '2024-2025';
+  const paidIds = ['31001010000001','31001010000003','31001010000004','31001010000006','31001010000008','31001010000013','31001010000014','31001010000015','31002010000021','31002010000022','31002010000024','31002010000026','31002010000031','31002010000032','31002010000034','31002010000036','31002010000041','31002010000042','31002010000044','31002010000046','31002010000051','31002010000052','31002010000054','31002010000056','31003010000081','31003010000082','31003010000084','31003010000086','31003010000091','31003010000092','31003010000094','31003010000096','31004010000111','31004010000112','31004010000114','31004010000116','31004010000121','31004010000122','31004010000124','31004010000126','31004010000131','31004010000132','31004010000134','31004010000136'];
+  const pendingIds = ['31001010000007','31001010000009','31001010000011','31002010000023','31002010000025','31002010000033','31002010000035','31003010000083','31003010000085','31003010000093','31003010000095','31004010000113','31004010000115','31004010000123','31004010000125'];
+  let counter = 2000;
+  for (const nationalId of paidIds) {
+    const student = await prisma.student.findUnique({ where: { nationalId } });
+    if (!student) continue;
+    const tuitionPaid = Math.floor(student.tuitionFees * 0.6);
+    await prisma.payment.upsert({ where: { receiptNumber: `RCP-${counter}` }, update: {}, create: { studentId: student.id, studentName: student.name, amount: tuitionPaid, type: 'tuition', method: counter % 3 === 0 ? 'cash' : counter % 3 === 1 ? 'bank_transfer' : 'check', date: '2024-10-01', receiptNumber: `RCP-${counter}`, collectedBy: 'محمود إبراهيم نصر', academicYear: year, notes: 'دفعة أولى' } });
+    counter++;
+    if (student.booksFees > 0) {
+      await prisma.payment.upsert({ where: { receiptNumber: `RCP-${counter}` }, update: {}, create: { studentId: student.id, studentName: student.name, amount: student.booksFees, type: 'books', method: 'cash', date: '2024-09-15', receiptNumber: `RCP-${counter}`, collectedBy: 'محمود إبراهيم نصر', academicYear: year } });
+      counter++;
+    }
+    await prisma.student.update({ where: { id: student.id }, data: { paidAmount: tuitionPaid + student.booksFees } });
+  }
+  for (const nationalId of pendingIds) {
+    const student = await prisma.student.findUnique({ where: { nationalId } });
+    if (!student) continue;
+    await prisma.student.update({ where: { id: student.id }, data: { pendingPaymentAmount: Math.floor(student.tuitionFees * 0.4), pendingPaymentType: 'tuition', pendingPaymentMethod: 'bank_transfer', paymentRequestStatus: 'pending', pendingPaymentNotes: 'طلب سداد دفعة ثانية' } });
+  }
+  console.log(`✅ تم إضافة مدفوعات لـ ${paidIds.length} طالب و${pendingIds.length} طلب معلق.`);
+}
+
+async function seedInstallmentPlans() {
+  console.log('📅 جاري إضافة خطط الأقساط...');
+  const year = '2024-2025';
+  const planStudents = [
+    { nationalId: '31001010000005', overdue: false },
+    { nationalId: '31001010000010', overdue: false },
+    { nationalId: '31002010000043', overdue: false },
+    { nationalId: '31002010000045', overdue: false },
+    { nationalId: '31002010000053', overdue: false },
+    { nationalId: '31002010000055', overdue: false },
+    { nationalId: '31002010000063', overdue: false },
+    { nationalId: '31002010000065', overdue: false },
+    { nationalId: '31002010000073', overdue: false },
+    { nationalId: '31002010000075', overdue: false },
+    { nationalId: '31003010000083', overdue: false },
+    { nationalId: '31003010000085', overdue: false },
+    { nationalId: '31003010000093', overdue: true },
+    { nationalId: '31003010000095', overdue: true },
+    { nationalId: '31003010000103', overdue: true },
+    { nationalId: '31003010000105', overdue: true },
+    { nationalId: '31004010000113', overdue: true },
+    { nationalId: '31004010000115', overdue: true },
+    { nationalId: '31004010000123', overdue: true },
+    { nationalId: '31004010000125', overdue: true },
+    { nationalId: '31004010000133', overdue: true },
+    { nationalId: '31004010000135', overdue: true },
+    { nationalId: '31006010000301', overdue: false },
+    { nationalId: '31006010000303', overdue: false },
+    { nationalId: '31006010000305', overdue: true },
+  ];
+  for (const { nationalId, overdue } of planStudents) {
+    const student = await prisma.student.findUnique({ where: { nationalId } });
+    if (!student) continue;
+    const existing = await prisma.installmentPlan.findUnique({ where: { studentId: student.id } });
+    if (existing) continue;
+    const remaining = student.totalFees - student.paidAmount;
+    if (remaining <= 0) continue;
+    const amt = Math.floor(remaining / 4);
+    const installments = overdue
+      ? [
+          { amount: amt, dueDate: '2024-10-15', paidAmount: 0, status: 'pending' },
+          { amount: amt, dueDate: '2024-11-15', paidAmount: 0, status: 'pending' },
+          { amount: amt, dueDate: '2025-01-15', paidAmount: 0, status: 'pending' },
+          { amount: remaining - amt * 3, dueDate: '2025-03-15', paidAmount: 0, status: 'pending' },
+        ]
+      : [
+          { amount: amt, dueDate: '2024-10-15', paidAmount: amt, paidDate: '2024-10-10', status: 'paid' },
+          { amount: amt, dueDate: '2024-12-15', paidAmount: 0, status: 'pending' },
+          { amount: amt, dueDate: '2025-02-15', paidAmount: 0, status: 'pending' },
+          { amount: remaining - amt * 3, dueDate: '2025-04-15', paidAmount: 0, status: 'pending' },
+        ];
+    await prisma.installmentPlan.create({ data: { studentId: student.id, totalAmount: remaining, academicYear: year, status: 'active', installments: { create: installments } } });
+  }
+  console.log('✅ تم إضافة خطط الأقساط.');
+}
+
+async function seedInventoryTransactions() {
+  console.log('🏪 جاري إضافة حركات المخزن...');
+  const today = new Date().toISOString().split('T')[0];
+  const bookBuyers = ['31002010000021','31002010000022','31002010000024','31002010000026','31002010000031','31002010000032','31002010000034','31003010000081','31003010000082','31003010000084','31003010000091','31003010000092','31003010000094','31003010000101','31003010000102','31003010000104'];
+  const uniformBuyers = ['31001010000001','31001010000003','31001010000006','31001010000008','31002010000021','31002010000022','31002010000031','31002010000041','31002010000051','31002010000061','31002010000071','31003010000081','31003010000082','31004010000111','31004010000112','31006010000301','31006010000303'];
+  for (const nationalId of bookBuyers) {
+    const student = await prisma.student.findUnique({ where: { nationalId } });
+    if (!student) continue;
+    const itemId = student.stage === 'preparatory' ? 'inv-item-002' : 'inv-item-001';
+    const item = await prisma.inventoryItem.findUnique({ where: { id: itemId } });
+    if (!item) continue;
+    await prisma.inventoryTransaction.create({ data: { itemId, type: 'out', subType: 'sale', quantity: 1, unitCostSnapshot: item.unitCost, unitPriceSnapshot: item.unitPrice, totalAmount: item.unitPrice, studentId: student.id, studentName: student.name, performedBy: 'سامي عبدالله حسين', date: '2024-09-20', notes: 'بيع كتاب للطالب' } });
+  }
+  for (const nationalId of uniformBuyers) {
+    const student = await prisma.student.findUnique({ where: { nationalId } });
+    if (!student) continue;
+    await prisma.inventoryTransaction.create({ data: { itemId: 'inv-item-003', type: 'out', subType: 'sale', quantity: 1, unitCostSnapshot: 250, unitPriceSnapshot: 350, totalAmount: 350, studentId: student.id, studentName: student.name, performedBy: 'سامي عبدالله حسين', date: '2024-09-10', notes: 'بيع زي صيفي للطالب' } });
+  }
+  await prisma.inventoryTransaction.create({ data: { itemId: 'inv-item-001', type: 'in', subType: 'purchase', quantity: 300, unitCostSnapshot: 100, unitPriceSnapshot: 150, totalAmount: 30000, supplierName: 'دار النشر التعليمية', performedBy: 'سامي عبدالله حسين', date: '2024-09-01', notes: 'شراء مخزون بداية العام' } });
+  await prisma.inventoryTransaction.create({ data: { itemId: 'inv-item-003', type: 'in', subType: 'purchase', quantity: 400, unitCostSnapshot: 250, unitPriceSnapshot: 350, totalAmount: 100000, supplierName: 'مصنع الزي المدرسي', performedBy: 'سامي عبدالله حسين', date: '2024-08-25', notes: 'شراء مخزون الزي الصيفي' } });
+  console.log('✅ تم إضافة حركات المخزن.');
+}
+
 async function main() {
   await seedUsers();
   await seedInventoryItems();
   await seedAdmittedStudents();
+  await seedPendingStudents();
+  await seedPromotedStudents();
+  await seedPayments();
+  await seedInstallmentPlans();
+  await seedInventoryTransactions();
 }
 
 main()
