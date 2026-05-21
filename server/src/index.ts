@@ -287,6 +287,143 @@ app.post('/api/students/:id/promote', requireRoles('school_director', 'head_acco
   }
 });
 
+// Bulk promote students (wizard use)
+app.post('/api/students/bulk-promote', requireRoles('school_director', 'head_accountant'), async (req, res) => {
+  const { promotions } = req.body as {
+    promotions: Array<{
+      studentId: string;
+      stage: string;
+      grade: string;
+      academicYear: string;
+      tuitionFees: number;
+      booksFees: number;
+      uniformFees: number;
+      busFees: number;
+      otherFees: number;
+      arrearsFees: number;
+      discountAmount: number;
+      discountPercentage: number;
+      totalFees: number;
+      status: string;
+    }>;
+  };
+
+  if (!Array.isArray(promotions) || promotions.length === 0) {
+    return res.status(400).json({ error: 'لا يوجد طلاب للترقية' });
+  }
+
+  let promoted = 0;
+  const skipped: { id: string; name: string; reason: string }[] = [];
+
+  // Process in batches of 50
+  const BATCH_SIZE = 50;
+  for (let i = 0; i < promotions.length; i += BATCH_SIZE) {
+    const batch = promotions.slice(i, i + BATCH_SIZE);
+    try {
+      await prisma.$transaction(
+        batch.map((p) =>
+          prisma.student.update({
+            where: { id: p.studentId },
+            data: {
+              stage: p.stage,
+              grade: p.grade,
+              academicYear: p.academicYear,
+              tuitionFees: p.tuitionFees,
+              booksFees: p.booksFees,
+              uniformFees: p.uniformFees,
+              busFees: p.busFees,
+              otherFees: p.otherFees,
+              arrearsFees: p.arrearsFees,
+              discountAmount: p.discountAmount,
+              discountPercentage: p.discountPercentage,
+              totalFees: p.totalFees,
+              paidAmount: 0,
+              status: p.status,
+            },
+          })
+        )
+      );
+      promoted += batch.length;
+    } catch (error) {
+      for (const p of batch) {
+        skipped.push({ id: p.studentId, name: p.studentId, reason: String(error) });
+      }
+    }
+  }
+
+  // Save yearly finance snapshots for promoted students
+  try {
+    const promotedIds = promotions
+      .filter((p) => !skipped.find((s) => s.id === p.studentId))
+      .map((p) => p.studentId);
+
+    const studentsWithPayments = await prisma.student.findMany({
+      where: { id: { in: promotedIds } },
+      include: { payments: { where: { NOT: { type: 'application_fee' } } } },
+    });
+
+    for (const student of studentsWithPayments) {
+      const promo = promotions.find((p) => p.studentId === student.id);
+      if (!promo) continue;
+      const oldPaid = student.payments
+        .filter((p) => !p.academicYear || p.academicYear !== promo.academicYear)
+        .reduce((sum, p) => sum + p.amount, 0);
+      await prisma.studentYearlyFinance.upsert({
+        where: { studentId_academicYear: { studentId: student.id, academicYear: promo.academicYear } },
+        create: {
+          studentId: student.id,
+          academicYear: promo.academicYear,
+          stage: promo.stage,
+          grade: promo.grade,
+          tuitionFees: promo.tuitionFees,
+          booksFees: promo.booksFees,
+          uniformFees: promo.uniformFees,
+          busFees: promo.busFees,
+          otherFees: promo.otherFees,
+          arrearsFees: promo.arrearsFees,
+          totalFees: promo.totalFees,
+          paidAmount: 0,
+        },
+        update: { paidAmount: 0 },
+      });
+    }
+  } catch (error) {
+    console.error('Yearly finance snapshot error:', error);
+    // Non-fatal
+  }
+
+  res.json({ promoted, skipped });
+});
+
+// --- Settings API ---
+app.get('/api/settings/academic-year', requireAuth, async (req, res) => {
+  try {
+    const setting = await prisma.systemSetting.findUnique({
+      where: { key: 'activeAcademicYear' },
+    });
+    res.json({ academicYear: setting?.value ?? '2024-2025' });
+  } catch (error) {
+    res.status(500).json({ error: 'فشل جلب السنة الدراسية' });
+  }
+});
+
+app.put('/api/settings/academic-year', requireRoles('school_director', 'head_accountant'), async (req, res) => {
+  const { academicYear } = req.body;
+  if (!academicYear || typeof academicYear !== 'string') {
+    return res.status(400).json({ error: 'السنة الدراسية مطلوبة' });
+  }
+  try {
+    const setting = await prisma.systemSetting.upsert({
+      where: { key: 'activeAcademicYear' },
+      create: { key: 'activeAcademicYear', value: academicYear },
+      update: { value: academicYear },
+    });
+    res.json({ academicYear: setting.value });
+  } catch (error) {
+    res.status(500).json({ error: 'فشل تحديث السنة الدراسية' });
+  }
+});
+
 // --- Payments API ---
 app.get('/api/payments', async (req, res) => {
   try {
