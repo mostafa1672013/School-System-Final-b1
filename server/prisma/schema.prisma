@@ -45,6 +45,7 @@ model Student {
   uniformMandatory Boolean   @default(true)
   busFees         Float     @default(0)
   otherFees       Float     @default(0)
+  arrearsFees     Float     @default(0)
   totalFees       Float     @default(0)
   paidAmount      Float     @default(0)
   pendingPaymentAmount Float?
@@ -128,6 +129,7 @@ model StudentYearlyFinance {
   uniformFees     Float    @default(0)
   busFees         Float    @default(0)
   otherFees       Float    @default(0)
+  arrearsFees     Float    @default(0)
   totalFees       Float    @default(0)
   paidAmount      Float    @default(0)
   student         Student  @relation(fields: [studentId], references: [id], onDelete: Cascade)
