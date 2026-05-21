@@ -737,24 +737,37 @@ app.post('/api/payments', requireOpenTreasury, async (req, res) => {
         })
       ] : []),
       ...updates,
-      prisma.student.update({
-        where: { id: studentId },
-        data: { 
-          ...(type !== 'application_fee' && { paidAmount: { increment: amount } }),
-          ...(type === 'arrears' && { arrearsFees: { decrement: amount } }),
-          // Atomically update status for application_fee to prevent race conditions
-          ...(type === 'application_fee' && { status: 'under_testing', testResult: 'pending' }),
-          // If all remaining is used, clear any pending request
-          pendingPaymentAmount: null,
-          pendingPaymentType: null,
-          pendingPaymentMethod: null,
-          pendingWalletPhoneNumber: null,
-          pendingPaymentNotes: null,
-          pendingInstallmentPlanId: null,
-          pendingInstallmentId: null,
-          paymentRequestStatus: null
-        }
-      })
+      type === 'application_fee'
+        ? prisma.student.updateMany({
+            where: { id: studentId, status: { in: ['applied', 'failed'] } },
+            data: {
+              status: 'under_testing',
+              testResult: 'pending',
+              pendingPaymentAmount: null,
+              pendingPaymentType: null,
+              pendingPaymentMethod: null,
+              pendingWalletPhoneNumber: null,
+              pendingPaymentNotes: null,
+              pendingInstallmentPlanId: null,
+              pendingInstallmentId: null,
+              paymentRequestStatus: null,
+            }
+          })
+        : prisma.student.update({
+            where: { id: studentId },
+            data: {
+              ...(type !== 'arrears' && { paidAmount: { increment: amount } }),
+              ...(type === 'arrears' && { arrearsFees: { decrement: amount } }),
+              pendingPaymentAmount: null,
+              pendingPaymentType: null,
+              pendingPaymentMethod: null,
+              pendingWalletPhoneNumber: null,
+              pendingPaymentNotes: null,
+              pendingInstallmentPlanId: null,
+              pendingInstallmentId: null,
+              paymentRequestStatus: null
+            }
+          })
     ]);
 
     res.status(201).json(payment);
