@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { useTreasuryStore } from '@/stores/treasuryStore';
-import { useAuthStore } from '@/stores/authStore';
+import { useAuthStore, getAuthHeaders } from '@/stores/authStore';
 import { usePrintTreasuryReport } from '@/hooks/usePrintTreasuryReport';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -64,7 +64,7 @@ export default function Treasury() {
     }
 
     setIsSubmitting(true);
-    const success = await openTreasury(parseFloat(openingBalanceInput), user?.id || '');
+    const success = await openTreasury(parseFloat(openingBalanceInput));
     setIsSubmitting(false);
 
     if (success) {
@@ -268,8 +268,10 @@ export default function Treasury() {
             <div className="flex gap-3">
               <Button
                 onClick={async () => {
-                  const sessionDetails = await fetch(`/api/treasury/sessions/${status.session.id}`).then((r) =>
-                    r.json()
+                  const sessionDetails = await fetch(`/api/treasury/sessions/${status.session.id}`, {
+                    headers: getAuthHeaders()
+                  }).then((r) =>
+                    r.ok ? r.json() : { session: {} }
                   );
                   printReport(
                     status.session,

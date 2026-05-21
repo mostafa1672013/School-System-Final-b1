@@ -9,7 +9,7 @@ interface TreasuryState {
 
   // Actions
   fetchStatus: () => Promise<void>;
-  openTreasury: (openingBalance: number, userId: string) => Promise<boolean>;
+  openTreasury: (openingBalance: number) => Promise<boolean>;
   requestClose: (actualBalance: number, closedBy: string) => Promise<TreasuryCloseResult | null>;
   approveClose: (sessionId: string, actualBalance: number, closedBy: string, approvedBy: string, closureNote: string) => Promise<boolean>;
   fetchSessions: () => Promise<void>;
@@ -33,12 +33,12 @@ export const useTreasuryStore = create<TreasuryState>((set, get) => ({
     }
   },
 
-  openTreasury: async (openingBalance, userId) => {
+  openTreasury: async (openingBalance) => {
     try {
       const res = await fetch('/api/treasury/open', {
         method: 'POST',
         headers: getAuthHeaders(),
-        body: JSON.stringify({ openingBalance, openedBy: userId, userId }),
+        body: JSON.stringify({ openingBalance }),
       });
       if (res.ok) {
         await get().fetchStatus();

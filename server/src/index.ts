@@ -1928,7 +1928,8 @@ app.get('/api/treasury/status', async (req, res) => {
 
 // POST: فتح جلسة جديدة
 app.post('/api/treasury/open', async (req, res) => {
-  const { openingBalance, userId } = req.body;
+  const { openingBalance } = req.body;
+  const userId = req.user!.userId;  // always from JWT, never from body
 
   try {
     const today = new Date().toISOString().split('T')[0];
