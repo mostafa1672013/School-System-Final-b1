@@ -36,6 +36,7 @@ export default function PaymentApprovals() {
                 collectedBy: 'مدير المدرسة',
                 notes: 'تم الاعتماد من قبل الإدارة',
                 walletPhoneNumber: student.pendingWalletPhoneNumber || undefined,
+                academicYear: student.academicYear,
             };
             
             await addPayment(newPayment);

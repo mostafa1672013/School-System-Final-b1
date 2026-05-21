@@ -175,6 +175,7 @@ export default function Payments() {
                 notes: form.notes || undefined,
                 walletPhoneNumber: form.method === 'wallet' ? form.walletPhoneNumber : undefined,
                 userId: user?.id,
+                academicYear: student.academicYear,
             };
             
             const paymentId = await addPayment(newPayment);
