@@ -10,8 +10,9 @@
     "skipLibCheck": true,
     "forceConsistentCasingInFileNames": true,
     "types": ["node", "jest"],
-    "noEmitOnError": false
+    "noEmitOnError": false,
+    "noImplicitAny": false
   },
-  "include": ["src/**/*", "prisma/**/*"],
-  "exclude": ["node_modules"]
+  "include": ["src/**/*"],
+  "exclude": ["node_modules", "prisma/**/*"]
 }
