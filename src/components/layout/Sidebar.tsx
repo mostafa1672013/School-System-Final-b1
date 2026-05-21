@@ -17,7 +17,18 @@ import {
   UserCheck,
   Settings,
   ShieldAlert,
+  ShieldCheck,
   Plus,
+  BookOpen,
+  Receipt,
+  Wallet,
+  Coins,
+  History,
+  Vault,
+  Calendar,
+  FileText,
+  Database,
+  Tag,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { useAuthStore } from '@/stores/authStore';
@@ -55,6 +66,7 @@ const navItems: NavItem[] = [
     ]
   },
   { label: 'المدفوعات والخزينة', path: '/payments', icon: Banknote, roles: ['system_admin', 'school_director', 'head_accountant', 'accountant'] },
+  { label: 'الخزينة', path: '/treasury', icon: Vault, roles: ['system_admin', 'school_director', 'head_accountant', 'accountant'] },
   { label: 'المخزن', path: '/inventory', icon: Package, roles: ['system_admin', 'school_director', 'warehouse_keeper'] },
   { label: 'الباصات', path: '/bus', icon: Bus, roles: ['system_admin', 'school_director', 'bus_supervisor'] },
   { label: 'التقارير', path: '/reports', icon: BarChart3, roles: ['system_admin', 'school_director', 'head_accountant'] },
@@ -66,11 +78,27 @@ const navItems: NavItem[] = [
       { label: 'سجل الهياكل المالية', path: '/stage-fees', icon: Settings, roles: ['system_admin', 'school_director'] },
       { label: 'بناء هيكل جديد', path: '/stage-fees/new', icon: Plus, roles: ['system_admin', 'school_director'] },
       { label: 'صلاحيات الخصم', path: '/discount-settings', icon: UserCog, roles: ['system_admin', 'school_director'] },
+      { label: 'إعدادات الشارات', path: '/badge-settings', icon: Tag, roles: ['system_admin', 'school_director'] },
     ]
   },
   { label: 'اعتمادات الخصومات', path: '/discount-approvals', icon: ShieldAlert, roles: ['system_admin', 'school_director', 'head_accountant', 'accountant'] },
   { label: 'اعتمادات التحويلات', path: '/payment-approvals', icon: ShieldAlert, roles: ['system_admin', 'school_director'] },
+  { 
+    label: 'المحاسبة والمصروفات', 
+    icon: Wallet, 
+    roles: ['system_admin', 'school_director', 'head_accountant', 'accountant'],
+    subItems: [
+      { label: 'شجرة الحسابات', path: '/accounts', icon: BookOpen, roles: ['system_admin', 'school_director', 'head_accountant'] },
+      { label: 'القيود المحاسبية', path: '/journal-entries', icon: FileText, roles: ['system_admin', 'school_director', 'head_accountant'] },
+      { label: 'التقارير المحاسبية', path: '/accounting-reports', icon: BarChart3, roles: ['system_admin', 'school_director', 'head_accountant'] },
+      { label: 'الفترات المحاسبية', path: '/accounting-periods', icon: Calendar, roles: ['system_admin', 'school_director', 'head_accountant'] },
+      { label: 'إدارة حدود الصرف', path: '/expense-permissions', icon: ShieldCheck, roles: ['system_admin', 'school_director'] },
+      { label: 'طلب صرف مصروف', path: '/expenses', icon: Receipt, roles: ['system_admin', 'school_director', 'head_accountant', 'accountant', 'warehouse_keeper', 'bus_supervisor'] },
+      { label: 'اعتماد المصروفات', path: '/expense-approvals', icon: UserCheck, roles: ['system_admin', 'school_director', 'head_accountant'] },
+    ]
+  },
   { label: 'المستخدمين', path: '/users', icon: UserCog, roles: ['system_admin'] },
+  { label: 'إدارة قاعدة البيانات', path: '/database', icon: Database, roles: ['system_admin'] },
   { label: 'الملف الشخصي', path: '/profile', icon: User, roles: ['system_admin', 'school_director', 'head_accountant', 'accountant', 'warehouse_keeper', 'bus_supervisor'] },
 ];
 

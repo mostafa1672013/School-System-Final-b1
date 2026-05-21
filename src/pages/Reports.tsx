@@ -9,14 +9,14 @@ import { useStudentsStore } from '@/stores/studentsStore';
 import { usePaymentsStore } from '@/stores/paymentsStore';
 import { useInventoryStore } from '@/stores/inventoryStore';
 import { useBusStore } from '@/stores/busStore';
-import { formatCurrency, formatDateShort, stageLabels, categoryLabels, paymentTypeLabels } from '@/lib/utils';
+import { formatCurrency, formatDateShort, stageLabels, paymentTypeLabels } from '@/lib/utils';
 
 const COLORS = ['hsl(173,58%,39%)', 'hsl(38,92%,50%)', 'hsl(199,89%,48%)', 'hsl(0,72%,51%)', 'hsl(160,84%,39%)'];
 
 export default function Reports() {
     const { students } = useStudentsStore();
     const { payments, installmentPlans } = usePaymentsStore();
-    const { items } = useInventoryStore();
+    const { items, categories, fetchCategories } = useInventoryStore();
     const { routes, subscriptions } = useBusStore();
     const [studentSearch, setStudentSearch] = useState('');
 
@@ -24,7 +24,7 @@ export default function Reports() {
         const totalFees = students.reduce((s, st) => s + st.totalFees, 0);
         const totalPaid = students.reduce((s, st) => s + st.paidAmount, 0);
         const totalRemaining = totalFees - totalPaid;
-        const overdue = installmentPlans.flatMap((p) => p.installments.filter((i) => i.status === 'overdue')).reduce((s, i) => s + i.amount, 0);
+        const overdue = Object.values(installmentPlans).flatMap((p) => p.installments.filter((i) => i.status === 'overdue')).reduce((s, i) => s + i.amount, 0);
 
         const byStage = Object.entries(stageLabels).map(([key, label]) => {
             const stageStudents = students.filter((s) => s.stage === key);
@@ -52,14 +52,14 @@ export default function Reports() {
     }, [payments, searchedStudent]);
 
     const inventoryReport = useMemo(() => {
-        return Object.entries(categoryLabels).map(([key, label]) => {
-            const catItems = items.filter((i) => i.category === key);
+        return categories.map((cat) => {
+            const catItems = items.filter((i) => i.category === cat.key);
             const totalQty = catItems.reduce((s, i) => s + i.quantity, 0);
             const totalVal = catItems.reduce((s, i) => s + i.quantity * i.unitPrice, 0);
             const lowStock = catItems.filter((i) => i.quantity <= i.minQuantity).length;
-            return { name: label, items: catItems.length, quantity: totalQty, value: totalVal, lowStock };
+            return { name: cat.name, items: catItems.length, quantity: totalQty, value: totalVal, lowStock };
         });
-    }, [items]);
+    }, [items, categories]);
 
     const busReport = useMemo(() => {
         return routes.map((r) => {

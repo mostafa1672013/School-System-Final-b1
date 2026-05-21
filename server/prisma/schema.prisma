@@ -7,6 +7,18 @@ datasource db {
   url      = env("DATABASE_URL")
 }
 
+model Badge {
+  id                 String    @id @default(uuid())
+  name               String
+  color              String    @default("#6366f1") // hex color
+  icon               String?   // emoji or icon name
+  discountPercentage Float     @default(0)
+  description        String?
+  createdAt          DateTime  @default(now())
+  updatedAt          DateTime  @updatedAt
+  students           Student[]
+}
+
 model Student {
   id              String    @id @default(uuid())
   nationalId      String    @unique
@@ -39,6 +51,7 @@ model Student {
   pendingPaymentType   String?
   pendingPaymentMethod String?
   pendingWalletPhoneNumber String?
+  pendingPaymentNotes  String?
   pendingInstallmentPlanId String?
   pendingInstallmentId String?
   paymentRequestStatus String?
@@ -51,6 +64,8 @@ model Student {
   discountRequesterId String?
   discountApproverId  String?
   busRouteId      String?
+  badgeId         String?
+  badge           Badge?    @relation(fields: [badgeId], references: [id], onDelete: SetNull)
   documents       Json?     // stores URLs for birth certificate, ID, etc.
   extraFields     Json?     // stores custom fields as { label: string, value: string }[]
   additionalFees  Json?     // [{ name: string, amount: number, isMandatory: boolean }]
@@ -58,6 +73,7 @@ model Student {
   updatedAt       DateTime  @updatedAt
   payments        Payment[]
   yearlyFinance   StudentYearlyFinance[]
+  installmentPlan InstallmentPlan?
 }
 
 model StageFee {
@@ -91,10 +107,13 @@ model Payment {
   date          String
   receiptNumber String   @unique
   collectedBy   String
+  userId        String?  // من قام بالتحصيل (يجب أن يكون هو فاتح الخزينة)
   academicYear  String?
   notes         String?
   walletPhoneNumber String?
+  sessionId     String?
   student       Student  @relation(fields: [studentId], references: [id], onDelete: Cascade)
+  session       TreasurySession? @relation(fields: [sessionId], references: [id], onDelete: SetNull)
   createdAt     DateTime @default(now())
 }
 
@@ -112,7 +131,7 @@ model StudentYearlyFinance {
   totalFees       Float    @default(0)
   paidAmount      Float    @default(0)
   student         Student  @relation(fields: [studentId], references: [id], onDelete: Cascade)
-  
+
   @@unique([studentId, academicYear])
 }
 
@@ -120,13 +139,49 @@ model InventoryItem {
   id           String   @id @default(uuid())
   name         String
   category     String
+  itemType     String   @default("consumable")  // "sale" | "consumable"
   quantity     Int      @default(0)
   minQuantity  Int      @default(5)
+  maxQuantity  Int?
   unit         String   @default("قطعة")
-  unitPrice    Float    @default(0)
+  unitCost     Float    @default(0)             // تكلفة الشراء
+  unitPrice    Float    @default(0)             // سعر البيع
   grade        String?
   description  String?
   lastUpdated  String
+  transactions InventoryTransaction[]
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+}
+
+model InventoryTransaction {
+  id                String        @id @default(uuid())
+  itemId            String
+  item              InventoryItem @relation(fields: [itemId], references: [id], onDelete: Cascade)
+  type              String        // "in" | "out"
+  subType           String?       // "purchase" | "sale" | "consumption" | "adjustment"
+  quantity          Int
+  unitCostSnapshot  Float         @default(0)
+  unitPriceSnapshot Float         @default(0)
+  totalAmount       Float         @default(0)
+  supplierName      String?
+  departmentName    String?
+  studentId         String?
+  studentName       String?
+  notes             String?
+  performedBy       String
+  performedByUserId String?
+  journalEntryId    String?
+  date              String
+  createdAt         DateTime      @default(now())
+}
+
+model ItemCategory {
+  id        String   @id @default(uuid())
+  key       String   @unique
+  name      String
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 }
 
 model BusRoute {
@@ -150,6 +205,9 @@ model User {
   avatar    String?
   active    Boolean  @default(true)
   discountLimitPercent Float @default(0)
+  isOnline  Boolean  @default(false)
+  lastLoginAt DateTime?
+  lastLogoutAt DateTime?
   createdAt DateTime @default(now())
 }
 
@@ -157,4 +215,175 @@ model RoleLimit {
   role          String   @id
   maxPercentage Float
   maxAmount     Float
+}
+
+model Account {
+  id               String   @id @default(uuid())
+  code             String   @unique
+  name             String
+  nameEn           String?
+  type             String
+  level            Int      @default(4)
+  normalBalance    String   @default("debit")
+  parentId         String?
+  isSystemAccount  Boolean  @default(false)
+  allowManualEntry Boolean  @default(true)
+  isActive         Boolean  @default(true)
+  parent           Account?  @relation("SubAccounts", fields: [parentId], references: [id])
+  subAccounts      Account[] @relation("SubAccounts")
+  lines            JournalEntryLine[]
+  expenses         Expense[]
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
+}
+
+model FiscalYear {
+  id          String   @id @default(uuid())
+  yearCode    String   @unique
+  nameAr      String
+  nameEn      String
+  startDate   String
+  endDate     String
+  status      String   @default("active")
+  closedAt    DateTime?
+  closedBy    String?
+  createdAt   DateTime @default(now())
+  periods     AccountingPeriod[]
+}
+
+model AccountingPeriod {
+  id             String   @id @default(uuid())
+  periodCode     String   @unique
+  nameAr         String
+  nameEn         String
+  startDate      String
+  endDate        String
+  fiscalYearId   String
+  fiscalYear     FiscalYear @relation(fields: [fiscalYearId], references: [id])
+  status         String   @default("open")
+  closedAt       DateTime?
+  closedBy       String?
+  createdAt      DateTime @default(now())
+  journalEntries JournalEntry[]
+}
+
+model CostCenter {
+  id          String   @id @default(uuid())
+  code        String   @unique
+  nameAr      String
+  nameEn      String
+  description String?
+  parentId    String?
+  parent      CostCenter?  @relation("SubCostCenters", fields: [parentId], references: [id])
+  children    CostCenter[] @relation("SubCostCenters")
+  isActive    Boolean  @default(true)
+  createdAt   DateTime @default(now())
+  lines       JournalEntryLine[]
+}
+
+model JournalEntry {
+  id            String   @id @default(uuid())
+  entryNumber   String   @unique @default(uuid())
+  entryDate     String   @default("")
+  postingDate   String?
+  description   String
+  notes         String?
+  referenceType String?
+  referenceId   String?
+  status        String   @default("draft")
+  periodId      String?
+  period        AccountingPeriod? @relation(fields: [periodId], references: [id])
+  isReversal    Boolean  @default(false)
+  reversalOfId  String?
+  reversedById  String?
+  lines         JournalEntryLine[]
+  createdAt     DateTime @default(now())
+  createdBy     String?
+  approvedAt    DateTime?
+  approvedBy    String?
+  postedAt      DateTime?
+  postedBy      String?
+}
+
+model JournalEntryLine {
+  id             String      @id @default(uuid())
+  journalEntryId String
+  accountId      String
+  debit          Float       @default(0)
+  credit         Float       @default(0)
+  description    String?
+  costCenterId   String?
+  lineNumber     Int         @default(1)
+  journalEntry   JournalEntry @relation(fields: [journalEntryId], references: [id], onDelete: Cascade)
+  account        Account      @relation(fields: [accountId], references: [id])
+  costCenter     CostCenter?  @relation(fields: [costCenterId], references: [id])
+}
+
+model Expense {
+  id            String   @id @default(uuid())
+  amount        Float
+  date          String
+  description   String
+  accountId     String
+  account       Account  @relation(fields: [accountId], references: [id])
+  paymentMethod String
+  status        String   @default("pending_treasury") // pending_approval, pending_treasury, paid, rejected
+  requestedBy   String
+  approvedBy    String?
+  paidBy        String?
+  paidByUserId  String?  // من قام بدفع المصروفة من الخزينة (يجب أن يكون هو فاتح الخزينة)
+  notes         String?
+  sessionId     String?
+  session       TreasurySession? @relation(fields: [sessionId], references: [id], onDelete: SetNull)
+  createdAt     DateTime @default(now())
+}
+
+model ExpenseLimit {
+  role      String @id
+  maxAmount Float
+}
+
+model InstallmentPlan {
+  id           String        @id @default(uuid())
+  studentId    String        @unique
+  totalAmount  Float
+  academicYear String
+  status       String        @default("active") // active, completed
+  installments Installment[]
+  student      Student       @relation(fields: [studentId], references: [id], onDelete: Cascade)
+  createdAt    DateTime      @default(now())
+  updatedAt    DateTime      @updatedAt
+}
+
+model Installment {
+  id            String          @id @default(uuid())
+  planId        String
+  amount        Float
+  dueDate       String
+  paidAmount    Float           @default(0)
+  paidDate      String?
+  status        String          @default("pending") // pending, partial, paid
+  notes         String?
+  plan          InstallmentPlan @relation(fields: [planId], references: [id], onDelete: Cascade)
+  createdAt     DateTime        @default(now())
+  updatedAt     DateTime        @updatedAt
+}
+
+model TreasurySession {
+  id               String    @id @default(uuid())
+  date             String    @unique
+  openingBalance   Float
+  closingBalance   Float?
+  actualBalance    Float?
+  difference       Float?
+  status           String    @default("open") // open, closed
+  openedBy         String
+  closedBy         String?
+  closureNote      String?
+  approvedBy       String?
+  openedAt         DateTime  @default(now())
+  closedAt         DateTime?
+  payments         Payment[]
+  expenses         Expense[]
+  createdAt        DateTime  @default(now())
 }

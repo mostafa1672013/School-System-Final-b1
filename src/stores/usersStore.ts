@@ -1,3 +1,4 @@
+import { getAuthHeaders } from './authStore';
 import { create } from 'zustand';
 import { toast } from 'sonner';
 import type { User } from '@/types';
@@ -9,6 +10,9 @@ interface UsersState {
   addUser: (user: Omit<User, 'id'>) => Promise<void>;
   updateUser: (id: string, data: Partial<User>) => Promise<void>;
   toggleUserActive: (id: string, currentStatus: boolean) => Promise<void>;
+  deleteUser: (id: string) => Promise<void>;
+  changePassword: (id: string, password: string) => Promise<void>;
+  updateUserStatus: (userId: string, isOnline: boolean, lastLogoutAt: Date | null) => void;
 }
 
 export const useUsersStore = create<UsersState>((set) => ({
@@ -17,19 +21,23 @@ export const useUsersStore = create<UsersState>((set) => ({
   fetchUsers: async () => {
     set({ isLoading: true });
     try {
-      const response = await fetch('/api/users');
+      const response = await fetch('/api/users', {
+        headers: getAuthHeaders(),
+      });
+      if (!response.ok) throw new Error('Failed to fetch');
       const data = await response.json();
       set({ users: data, isLoading: false });
     } catch (error) {
       console.error('Fetch users error:', error);
       set({ isLoading: false });
+      toast.error('فشل في تحميل المستخدمين');
     }
   },
   addUser: async (user) => {
     try {
       const response = await fetch('/api/users', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: getAuthHeaders(),
         body: JSON.stringify({ ...user, active: true }),
       });
       const newUser = await response.json();
@@ -44,7 +52,7 @@ export const useUsersStore = create<UsersState>((set) => ({
     try {
       const response = await fetch(`/api/users/${id}`, {
         method: 'PATCH',
-        headers: { 'Content-Type': 'application/json' },
+        headers: getAuthHeaders(),
         body: JSON.stringify(data),
       });
       if (!response.ok) throw new Error('Failed to update user');
@@ -62,7 +70,7 @@ export const useUsersStore = create<UsersState>((set) => ({
     try {
       const response = await fetch(`/api/users/${id}`, {
         method: 'PATCH',
-        headers: { 'Content-Type': 'application/json' },
+        headers: getAuthHeaders(),
         body: JSON.stringify({ active: !currentStatus }),
       });
       const updatedUser = await response.json();
@@ -74,5 +82,41 @@ export const useUsersStore = create<UsersState>((set) => ({
       console.error('Toggle user active error:', error);
       toast.error('فشل في تغيير حالة المستخدم');
     }
+  },
+  deleteUser: async (id) => {
+    try {
+      const response = await fetch(`/api/users/${id}`, {
+        method: 'DELETE',
+      });
+      if (!response.ok) throw new Error('Failed to delete user');
+      set((state) => ({
+        users: state.users.filter((u) => u.id !== id),
+      }));
+      toast.success('تم حذف المستخدم بنجاح');
+    } catch (error) {
+      console.error('Delete user error:', error);
+      toast.error('فشل في حذف المستخدم');
+    }
+  },
+  changePassword: async (id, password) => {
+    try {
+      const response = await fetch(`/api/users/${id}`, {
+        method: 'PATCH',
+        headers: getAuthHeaders(),
+        body: JSON.stringify({ password }),
+      });
+      if (!response.ok) throw new Error('Failed to change password');
+      toast.success('تم تغيير كلمة المرور بنجاح');
+    } catch (error) {
+      console.error('Change password error:', error);
+      toast.error('فشل في تغيير كلمة المرور');
+    }
+  },
+  updateUserStatus: (userId, isOnline, lastLogoutAt) => {
+    set((state) => ({
+      users: state.users.map((u) =>
+        u.id === userId ? { ...u, isOnline, lastLogoutAt } : u
+      ),
+    }));
   },
 }));

@@ -3,7 +3,7 @@ import { useParams, Link } from 'react-router-dom';
 import { toast } from 'sonner';
 import {
     ArrowRight, User, Phone, MapPin, Calendar, CreditCard, BookOpen,
-    CheckCircle2, Clock, AlertCircle, Bus, Printer,
+    CheckCircle2, Clock, AlertCircle, Bus, Printer, Tag, X,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
@@ -17,7 +17,8 @@ import { usePaymentsStore } from '@/stores/paymentsStore';
 import { useBusStore } from '@/stores/busStore';
 import { useAuthStore } from '@/stores/authStore';
 import { formatCurrency, formatDateShort, stageLabels, paymentTypeLabels, paymentMethodLabels, generateId } from '@/lib/utils';
-import type { PaymentType, PaymentMethod } from '@/types';
+import { getAuthHeaders } from '@/stores/authStore';
+import type { PaymentType, PaymentMethod, Badge } from '@/types';
 import { printPaymentReceipt } from '@/hooks/usePrintReceipt';
 
 const instStatusConfig = {
@@ -29,18 +30,31 @@ const instStatusConfig = {
 export default function StudentDetail() {
     const { id } = useParams<{ id: string }>();
     const { students, fetchStudents, updateStudent } = useStudentsStore();
-    const { payments, fetchPayments, addPayment, installmentPlans, payInstallment, addInstallmentPlan, updateInstallmentPlan } = usePaymentsStore();
-    const { subscriptions, routes } = useBusStore();
     const { user } = useAuthStore();
+    const { 
+        payments, 
+        fetchPayments, 
+        addPayment, 
+        installmentPlans, 
+        fetchStudentInstallments,
+        saveInstallmentPlan,
+        payInstallment, 
+        updateInstallmentPlan 
+    } = usePaymentsStore();
+    const { subscriptions, routes } = useBusStore();
 
     useEffect(() => {
         fetchStudents();
         fetchPayments();
-    }, [fetchStudents, fetchPayments]);
+        if (id) fetchStudentInstallments(id);
+    }, [fetchStudents, fetchPayments, fetchStudentInstallments, id]);
 
     const student = students.find((s) => s.id === id);
     const studentPayments = useMemo(() => payments.filter((p) => p.studentId === id && p.type !== 'application_fee'), [payments, id]);
-    const studentInstallments = useMemo(() => installmentPlans.filter((p) => p.studentId === id), [installmentPlans, id]);
+    const studentInstallments = useMemo(() => {
+        const plan = id ? installmentPlans[id] : null;
+        return plan ? [plan] : [];
+    }, [installmentPlans, id]);
     const busSub = subscriptions.find((s) => s.studentId === id && s.status === 'active');
 
     const [payDialogOpen, setPayDialogOpen] = useState(false);
@@ -50,6 +64,34 @@ export default function StudentDetail() {
     const [installmentsPreview, setInstallmentsPreview] = useState<{id?: string, dueDate: string, amount: number, status?: string, paidAmount?: number}[]>([]);
     const [payingInstallment, setPayingInstallment] = useState<{planId: string, instId: string, maxAmount: number} | null>(null);
     const [editingPlanId, setEditingPlanId] = useState<string | null>(null);
+    const [badges, setBadges] = useState<Badge[]>([]);
+    const [badgeDialogOpen, setBadgeDialogOpen] = useState(false);
+    const [assigningBadge, setAssigningBadge] = useState(false);
+
+    useEffect(() => {
+        fetch('/api/badges', { headers: getAuthHeaders() })
+            .then(r => r.json()).then(setBadges).catch(() => {});
+    }, []);
+
+    const handleAssignBadge = async (badgeId: string | null) => {
+        if (!student) return;
+        setAssigningBadge(true);
+        try {
+            const res = await fetch(`/api/students/${student.id}/badge`, {
+                method: 'PATCH',
+                headers: getAuthHeaders(),
+                body: JSON.stringify({ badgeId }),
+            });
+            if (!res.ok) throw new Error();
+            toast.success(badgeId ? 'تم تعيين الشارة وتطبيق الخصم تلقائياً' : 'تم إزالة الشارة');
+            setBadgeDialogOpen(false);
+            await fetchStudents();
+        } catch {
+            toast.error('فشل تعيين الشارة');
+        } finally {
+            setAssigningBadge(false);
+        }
+    };
 
     // Pre-fill form if there's a rejected request
     useEffect(() => {
@@ -80,9 +122,10 @@ export default function StudentDetail() {
         );
     }
 
-    const remaining = student.totalFees - student.paidAmount;
+    const totalPaidFromPayments = useMemo(() => studentPayments.reduce((sum, p) => sum + p.amount, 0), [studentPayments]);
+    const remaining = student.totalFees - totalPaidFromPayments;
     const totalDebt = student.yearlyFinance?.reduce((sum, yf) => sum + (yf.totalFees - yf.paidAmount), 0) || remaining;
-    const paidPct = student.totalFees > 0 ? Math.round((student.paidAmount / student.totalFees) * 100) : 0;
+    const paidPct = student.totalFees > 0 ? Math.round((totalPaidFromPayments / student.totalFees) * 100) : 0;
 
     // Initialize installment plan dialog
     useEffect(() => {
@@ -142,6 +185,7 @@ export default function StudentDetail() {
                 pendingPaymentType: payForm.type,
                 pendingPaymentMethod: payForm.method,
                 pendingWalletPhoneNumber: payForm.method === 'wallet' ? payForm.walletPhoneNumber : undefined,
+                pendingPaymentNotes: payForm.notes,
                 pendingInstallmentPlanId: payingInstallment?.planId,
                 pendingInstallmentId: payingInstallment?.instId,
                 paymentRequestStatus: nextStatus
@@ -159,7 +203,7 @@ export default function StudentDetail() {
         }
     };
 
-    const handleCreatePlan = (e: React.FormEvent) => {
+    const handleCreatePlan = async (e: React.FormEvent) => {
         e.preventDefault();
         
         // Validate total amounts match
@@ -170,7 +214,6 @@ export default function StudentDetail() {
         }
 
         const installments = installmentsPreview.map((preview) => ({
-            id: preview.id || generateId(),
             dueDate: preview.dueDate,
             amount: Number(preview.amount),
             status: (preview.status as any) || 'pending',
@@ -178,40 +221,15 @@ export default function StudentDetail() {
         }));
 
         if (editingPlanId) {
-            if (user?.role === 'school_director' || user?.role === 'system_admin') {
-                updateInstallmentPlan(editingPlanId, {
-                    totalAmount: instForm.totalAmount,
-                    numberOfInstallments: instForm.numberOfInstallments,
-                    installments,
-                });
-                toast.success('تم تعديل خطة الأقساط بنجاح');
-            } else {
-                const existingPlan = studentInstallments.find(p => p.id === editingPlanId);
-                usePaymentsStore.getState().addPendingPlanEdit({
-                    planId: editingPlanId,
-                    studentId: student.id,
-                    studentName: student.name,
-                    oldTotal: existingPlan?.totalAmount || 0,
-                    newTotal: instForm.totalAmount,
-                    oldInstallments: existingPlan?.installments || [],
-                    newInstallments: installments,
-                    requestDate: new Date().toISOString().split('T')[0],
-                    requestedBy: user?.name || 'مستخدم'
-                });
-                toast.success('تم إرسال طلب تعديل تواريخ الأقساط لمدير المدرسة للاعتماد');
-            }
+            toast.info('تعديل الخطة سيتم حفظه في قاعدة البيانات قريباً');
         } else {
-            addInstallmentPlan({
-                studentId: student.id,
-                studentName: student.name,
-                totalAmount: instForm.totalAmount,
-                numberOfInstallments: instForm.numberOfInstallments,
-                installments,
-                createdDate: new Date().toISOString().split('T')[0],
-            });
-            toast.success('تم إنشاء خطة الأقساط بنجاح');
+            const success = await saveInstallmentPlan(student.id, instForm.totalAmount, student.academicYear, installments);
+            if (success) {
+                toast.success('تم إنشاء وحفظ خطة الأقساط في قاعدة البيانات بنجاح');
+            } else {
+                toast.error('حدث خطأ أثناء حفظ الخطة');
+            }
         }
-        
         setInstDialogOpen(false);
     };
 
@@ -236,7 +254,26 @@ export default function StudentDetail() {
                             <User className="size-8" />
                         </div>
                         <div className="flex-1">
-                            <h2 className="text-xl font-bold font-[Noto_Kufi_Arabic]">{student.name}</h2>
+                            <div className="flex items-center gap-2 flex-wrap">
+                                <h2 className="text-xl font-bold font-[Noto_Kufi_Arabic]">{student.name}</h2>
+                                {student.badge && (
+                                    <span
+                                        className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-bold text-white"
+                                        style={{ backgroundColor: student.badge.color }}
+                                        title={`خصم ${student.badge.discountPercentage}%`}
+                                    >
+                                        {student.badge.icon && <span>{student.badge.icon}</span>}
+                                        {student.badge.name}
+                                    </span>
+                                )}
+                                <button
+                                    onClick={() => setBadgeDialogOpen(true)}
+                                    className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs border border-dashed border-muted-foreground/40 text-muted-foreground hover:border-primary hover:text-primary transition-colors"
+                                >
+                                    <Tag className="size-3" />
+                                    {student.badge ? 'تغيير الشارة' : 'تعيين شارة'}
+                                </button>
+                            </div>
                             <p className="text-sm text-muted-foreground mt-1">{stageLabels[student.stage]} — {student.grade} / {student.className}</p>
                             <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 mt-4 text-sm">
                                 <div className="flex items-center gap-2 text-muted-foreground"><BookOpen className="size-4" /> الرقم القومي: <span className="tabular-nums font-medium text-foreground">{student.nationalId}</span></div>
@@ -265,7 +302,7 @@ export default function StudentDetail() {
                             {student.otherFees > 0 && <div className="flex justify-between text-xs"><span className="text-muted-foreground">رسوم أخرى</span><span className="font-medium tabular-nums">{formatCurrency(student.otherFees)}</span></div>}
                         </div>
                         <div className="flex justify-between text-sm"><span className="text-muted-foreground">إجمالي الرسوم المطلوبة</span><span className="font-bold tabular-nums">{formatCurrency(student.totalFees)}</span></div>
-                        <div className="flex justify-between text-sm"><span className="text-muted-foreground">المدفوع (السنة الحالية)</span><span className="font-bold text-emerald-600 tabular-nums">{formatCurrency(student.paidAmount)}</span></div>
+                        <div className="flex justify-between text-sm"><span className="text-muted-foreground">المدفوع (السنة الحالية)</span><span className="font-bold text-emerald-600 tabular-nums">{formatCurrency(totalPaidFromPayments)}</span></div>
                         <div className="flex justify-between text-sm border-t pt-2 mt-2"><span className="text-muted-foreground font-bold">إجمالي الرصيد المتبقي (غير مسدد)</span><span className="font-bold text-red-600 tabular-nums">{formatCurrency(totalDebt)}</span></div>
                         <div>
                             <div className="flex justify-between text-xs mb-1"><span>{paidPct}%</span></div>
@@ -498,7 +535,7 @@ export default function StudentDetail() {
                                 <div className="flex items-center justify-between">
                                     <div>
                                         <h4 className="font-bold font-[Noto_Kufi_Arabic]">خطة أقساط — إجمالي المستحق: {formatCurrency(plan.totalAmount)}</h4>
-                                        <p className="text-xs text-muted-foreground">{plan.numberOfInstallments} أقساط • أنشئت في {formatDateShort(plan.createdDate)}</p>
+                                        <p className="text-xs text-muted-foreground">{plan.installments.length} أقساط • السنة الدراسية: {plan.academicYear}</p>
                                     </div>
                                     <Button size="sm" variant="outline" onClick={() => {
                                         setEditingPlanId(plan.id);
@@ -597,6 +634,69 @@ export default function StudentDetail() {
                     )}
                 </TabsContent>
             </Tabs>
+
+            {/* Badge Assignment Dialog */}
+            {badgeDialogOpen && (
+                <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4" onClick={() => setBadgeDialogOpen(false)}>
+                    <div className="bg-card rounded-xl shadow-xl w-full max-w-sm p-6" onClick={e => e.stopPropagation()}>
+                        <div className="flex items-center justify-between mb-4">
+                            <h3 className="font-bold font-[Noto_Kufi_Arabic] text-lg">تعيين شارة للطالب</h3>
+                            <button onClick={() => setBadgeDialogOpen(false)} className="p-1 rounded hover:bg-muted">
+                                <X className="size-4" />
+                            </button>
+                        </div>
+
+                        <div className="space-y-2 max-h-72 overflow-y-auto">
+                            {/* No badge option */}
+                            <button
+                                className={`w-full flex items-center gap-3 p-3 rounded-lg border text-sm text-right transition-colors hover:bg-muted/50 ${!student.badgeId ? 'border-primary bg-primary/5' : 'border-border'}`}
+                                onClick={() => handleAssignBadge(null)}
+                                disabled={assigningBadge}
+                            >
+                                <span className="inline-flex items-center justify-center size-8 rounded-full bg-muted">
+                                    <X className="size-4 text-muted-foreground" />
+                                </span>
+                                <span className="font-medium">بدون شارة</span>
+                                {!student.badgeId && <span className="mr-auto text-xs text-primary">✓ محدد</span>}
+                            </button>
+
+                            {badges.map(badge => (
+                                <button
+                                    key={badge.id}
+                                    className={`w-full flex items-center gap-3 p-3 rounded-lg border text-sm text-right transition-colors hover:bg-muted/50 ${student.badgeId === badge.id ? 'border-primary bg-primary/5' : 'border-border'}`}
+                                    onClick={() => handleAssignBadge(badge.id)}
+                                    disabled={assigningBadge}
+                                >
+                                    <span
+                                        className="inline-flex items-center justify-center size-8 rounded-full text-white text-base"
+                                        style={{ backgroundColor: badge.color }}
+                                    >
+                                        {badge.icon || <Tag className="size-4" />}
+                                    </span>
+                                    <div className="flex-1 text-right">
+                                        <p className="font-medium">{badge.name}</p>
+                                        {badge.description && <p className="text-xs text-muted-foreground">{badge.description}</p>}
+                                    </div>
+                                    <span className="text-xs font-bold text-green-600 bg-green-50 px-2 py-0.5 rounded-full">
+                                        {badge.discountPercentage}% خصم
+                                    </span>
+                                    {student.badgeId === badge.id && <span className="text-xs text-primary">✓</span>}
+                                </button>
+                            ))}
+
+                            {badges.length === 0 && (
+                                <p className="text-center text-sm text-muted-foreground py-4">
+                                    لا توجد شارات. أنشئ شارات من إعدادات الرسوم أولاً.
+                                </p>
+                            )}
+                        </div>
+
+                        {assigningBadge && (
+                            <p className="text-center text-sm text-muted-foreground mt-3">جاري الحفظ...</p>
+                        )}
+                    </div>
+                </div>
+            )}
         </div>
     );
 }

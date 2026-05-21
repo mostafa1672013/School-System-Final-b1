@@ -1,0 +1,100 @@
+import { getAuthHeaders } from './authStore';
+import { create } from 'zustand';
+import type { TreasurySession, TreasuryStatus, TreasuryCloseResult } from '@/types';
+
+interface TreasuryState {
+  status: TreasuryStatus | null;
+  sessions: TreasurySession[];
+  loading: boolean;
+
+  // Actions
+  fetchStatus: () => Promise<void>;
+  openTreasury: (openingBalance: number, userId: string) => Promise<boolean>;
+  requestClose: (actualBalance: number, closedBy: string) => Promise<TreasuryCloseResult | null>;
+  approveClose: (sessionId: string, actualBalance: number, closedBy: string, approvedBy: string, closureNote: string) => Promise<boolean>;
+  fetchSessions: () => Promise<void>;
+}
+
+export const useTreasuryStore = create<TreasuryState>((set, get) => ({
+  status: null,
+  sessions: [],
+  loading: false,
+
+  fetchStatus: async () => {
+    set({ loading: true });
+    try {
+      const res = await fetch('/api/treasury/status', { headers: getAuthHeaders() });
+      const data = await res.json();
+      set({ status: data });
+    } catch (error) {
+      console.error('Failed to fetch treasury status:', error);
+    } finally {
+      set({ loading: false });
+    }
+  },
+
+  openTreasury: async (openingBalance, userId) => {
+    try {
+      const res = await fetch('/api/treasury/open', {
+        method: 'POST',
+        headers: getAuthHeaders(),
+        body: JSON.stringify({ openingBalance, openedBy: userId, userId }),
+      });
+      if (res.ok) {
+        await get().fetchStatus();
+        return true;
+      }
+      return false;
+    } catch (error) {
+      console.error('Failed to open treasury:', error);
+      return false;
+    }
+  },
+
+  requestClose: async (actualBalance, closedBy) => {
+    try {
+      const res = await fetch('/api/treasury/close-request', {
+        method: 'POST',
+        headers: getAuthHeaders(),
+        body: JSON.stringify({ actualBalance, closedBy }),
+      });
+      if (!res.ok) return null;
+      const data = await res.json();
+      if (data.status === 'closed') {
+        await get().fetchStatus();
+      }
+      return data;
+    } catch (error) {
+      console.error('Failed to request close:', error);
+      return null;
+    }
+  },
+
+  approveClose: async (sessionId, actualBalance, closedBy, approvedBy, closureNote) => {
+    try {
+      const res = await fetch('/api/treasury/close-approve', {
+        method: 'POST',
+        headers: getAuthHeaders(),
+        body: JSON.stringify({ sessionId, actualBalance, closedBy, approvedBy, closureNote }),
+      });
+      if (res.ok) {
+        await get().fetchStatus();
+        return true;
+      }
+      return false;
+    } catch (error) {
+      console.error('Failed to approve close:', error);
+      return false;
+    }
+  },
+
+  fetchSessions: async () => {
+    try {
+      const res = await fetch('/api/treasury/sessions', { headers: getAuthHeaders() });
+      const data = await res.json();
+      set({ sessions: data });
+    } catch (error) {
+      console.error('Failed to fetch sessions:', error);
+    }
+  },
+}));

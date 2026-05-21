@@ -1,3 +1,4 @@
+import { getAuthHeaders } from './authStore';
 import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
 import type { Student, StageFee } from '@/types';
@@ -22,7 +23,7 @@ export const useAdmissionStore = create<AdmissionState>()(
       fetchStageFees: async () => {
         set({ isLoading: true });
         try {
-          const response = await fetch('/api/stage-fees');
+          const response = await fetch('/api/stage-fees', { headers: getAuthHeaders() });
           const data = await response.json();
           set({ stageFees: data, isLoading: false });
         } catch (error) {
@@ -39,7 +40,7 @@ export const useAdmissionStore = create<AdmissionState>()(
           
           const response = await fetch(url, {
             method: isUpdate ? 'PATCH' : 'POST',
-            headers: { 'Content-Type': 'application/json' },
+            headers: getAuthHeaders(),
             body: JSON.stringify(feeData),
           });
 
@@ -68,7 +69,7 @@ export const useAdmissionStore = create<AdmissionState>()(
       applyAdmission: async (studentData) => {
         const response = await fetch('/api/admission/apply', {
           method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
+          headers: getAuthHeaders(),
           body: JSON.stringify(studentData),
         });
         if (!response.ok) {
@@ -80,25 +81,27 @@ export const useAdmissionStore = create<AdmissionState>()(
       setTestResult: async (id, result) => {
         await fetch(`/api/admission/test-result/${id}`, {
           method: 'PATCH',
-          headers: { 'Content-Type': 'application/json' },
+          headers: getAuthHeaders(),
           body: JSON.stringify({ result }),
         });
       },
       setupFees: async (id, fees) => {
         await fetch(`/api/admission/setup-fees/${id}`, {
           method: 'PATCH',
-          headers: { 'Content-Type': 'application/json' },
+          headers: getAuthHeaders(),
           body: JSON.stringify(fees),
         });
       },
       approveAdmission: async (id) => {
         await fetch(`/api/admission/approve/${id}`, {
           method: 'PATCH',
+          headers: getAuthHeaders(),
         });
       },
       deleteStageFee: async (id) => {
         const response = await fetch(`/api/stage-fees/${id}`, {
           method: 'DELETE',
+          headers: getAuthHeaders(),
         });
         if (!response.ok) throw new Error('Failed to delete');
         set((state) => ({

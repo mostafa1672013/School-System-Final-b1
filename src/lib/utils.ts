@@ -70,14 +70,6 @@ export const paymentMethodLabels: Record<string, string> = {
   wallet: 'محفظة إلكترونية',
 };
 
-export const categoryLabels: Record<string, string> = {
-  books: 'كتب',
-  uniform: 'زي مدرسي',
-  tools: 'أدوات مكتبية',
-  lab_equipment: 'أدوات معملية',
-  operational: 'مستلزمات تشغيلية',
-};
-
 export const stageLabels: Record<string, string> = {
   kg: 'رياض الأطفال',
   primary: 'المرحلة الابتدائية',

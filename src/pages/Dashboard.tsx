@@ -35,12 +35,17 @@ export default function Dashboard() {
   }, [students, items, subscriptions]);
 
   const overdueInstallments = useMemo(() => {
-    return installmentPlans.flatMap((plan) =>
+    return Object.values(installmentPlans).flatMap((plan) =>
       plan.installments
-        .filter((inst) => inst.status === 'overdue')
-        .map((inst) => ({ ...inst, studentName: plan.studentName, planId: plan.id, studentId: plan.studentId }))
+        .filter((inst) => inst.status === 'overdue' || (inst.status === 'pending' && new Date(inst.dueDate) < new Date()))
+        .map((inst) => ({ 
+          ...inst, 
+          studentName: students.find(s => s.id === plan.studentId)?.name || 'طالب', 
+          planId: plan.id, 
+          studentId: plan.studentId 
+        }))
     );
-  }, [installmentPlans]);
+  }, [installmentPlans, students]);
 
   const recentPayments = useMemo(() => payments.slice(0, 8), [payments]);
 

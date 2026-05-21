@@ -1,8 +1,10 @@
+import { getAuthHeaders } from './authStore';
 import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
 import type { Payment, InstallmentPlan } from '@/types';
-import { mockPayments, mockInstallments } from '@/constants/mockData';
+import { mockPayments } from '@/constants/mockData';
 import { generateId } from '@/lib/utils';
+import { toast } from 'sonner';
 
 export interface PendingPlanEdit {
   id: string;
@@ -23,11 +25,14 @@ interface PaymentsState {
   fetchPayments: () => Promise<void>;
   addPayment: (payment: Omit<Payment, 'id'>) => Promise<string>;
   getStudentPayments: (studentId: string) => Payment[];
-  installmentPlans: InstallmentPlan[];
-  addInstallmentPlan: (plan: Omit<InstallmentPlan, 'id'>) => void;
-  getStudentInstallments: (studentId: string) => InstallmentPlan[];
-  updateInstallmentPlan: (planId: string, updates: Partial<InstallmentPlan>) => void;
-  payInstallment: (planId: string, installmentId: string, amount: number) => void;
+  
+  // Installment Methods
+  installmentPlans: Record<string, InstallmentPlan>; // studentId -> Plan
+  fetchStudentInstallments: (studentId: string) => Promise<InstallmentPlan | null>;
+  saveInstallmentPlan: (studentId: string, totalAmount: number, academicYear: string, installments: any[]) => Promise<boolean>;
+  payInstallment: (installmentId: string, amount: number, paidDate: string) => Promise<boolean>;
+  deleteInstallmentPlan: (studentId: string) => Promise<boolean>;
+  
   pendingPlanEdits: PendingPlanEdit[];
   addPendingPlanEdit: (edit: Omit<PendingPlanEdit, 'id'>) => void;
   approvePlanEdit: (editId: string) => void;
@@ -39,12 +44,13 @@ export const usePaymentsStore = create<PaymentsState>()(
     (set, get) => ({
       payments: [],
       isLoading: false,
-      installmentPlans: mockInstallments,
+      installmentPlans: {},
       pendingPlanEdits: [],
+
       fetchPayments: async () => {
         set({ isLoading: true });
         try {
-          const response = await fetch('/api/payments');
+          const response = await fetch('/api/payments', { headers: getAuthHeaders() });
           const data = await response.json();
           set({ payments: data, isLoading: false });
         } catch (error) {
@@ -52,11 +58,12 @@ export const usePaymentsStore = create<PaymentsState>()(
           set({ isLoading: false });
         }
       },
+
       addPayment: async (payment) => {
         try {
           const response = await fetch('/api/payments', {
             method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
+            headers: getAuthHeaders(),
             body: JSON.stringify(payment),
           });
           const newPayment = await response.json();
@@ -67,55 +74,105 @@ export const usePaymentsStore = create<PaymentsState>()(
           return '';
         }
       },
+
       getStudentPayments: (studentId) => get().payments.filter((p) => p.studentId === studentId),
-      addInstallmentPlan: (plan) => set((state) => ({
-        installmentPlans: [...state.installmentPlans, { ...plan, id: generateId() }],
-      })),
-      updateInstallmentPlan: (planId, updates) => set((state) => ({
-        installmentPlans: state.installmentPlans.map((plan) => 
-          plan.id === planId ? { ...plan, ...updates } : plan
-        ),
-      })),
+
+      // Installment Implementations
+      fetchStudentInstallments: async (studentId) => {
+        try {
+          const response = await fetch(`/api/installments/${studentId}`, { headers: getAuthHeaders() });
+          if (!response.ok) return null;
+          const plan = await response.json();
+          if (plan) {
+            set(state => ({
+              installmentPlans: { ...state.installmentPlans, [studentId]: plan }
+            }));
+          }
+          return plan;
+        } catch (error) {
+          console.error('Fetch installments error:', error);
+          return null;
+        }
+      },
+
+      saveInstallmentPlan: async (studentId, totalAmount, academicYear, installments) => {
+        try {
+          const response = await fetch('/api/installments', {
+            method: 'POST',
+            headers: getAuthHeaders(),
+            body: JSON.stringify({ studentId, totalAmount, academicYear, installments }),
+          });
+          if (response.ok) {
+            const plan = await response.json();
+            set(state => ({
+              installmentPlans: { ...state.installmentPlans, [studentId]: plan }
+            }));
+            return true;
+          }
+          return false;
+        } catch (error) {
+          console.error('Save plan error:', error);
+          return false;
+        }
+      },
+
+      payInstallment: async (installmentId, amount, paidDate) => {
+        try {
+          // This logic is simplified; in a real app, you'd calculate status on server
+          const status = 'paid'; // Placeholder
+          const response = await fetch(`/api/installments/${installmentId}`, {
+            method: 'PATCH',
+            headers: getAuthHeaders(),
+            body: JSON.stringify({ paidAmount: amount, status, paidDate }),
+          });
+          return response.ok;
+        } catch (error) {
+          console.error('Pay installment error:', error);
+          return false;
+        }
+      },
+
+      deleteInstallmentPlan: async (studentId) => {
+        try {
+          const response = await fetch(`/api/installments/plan/${studentId}`, {
+            method: 'DELETE',
+            headers: getAuthHeaders(),
+          });
+          if (response.ok) {
+            set(state => {
+              const newPlans = { ...state.installmentPlans };
+              delete newPlans[studentId];
+              return { installmentPlans: newPlans };
+            });
+            return true;
+          }
+          return false;
+        } catch (error) {
+          console.error('Delete plan error:', error);
+          return false;
+        }
+      },
+
       addPendingPlanEdit: (edit) => set((state) => ({
         pendingPlanEdits: [...state.pendingPlanEdits, { ...edit, id: generateId() }]
       })),
+      
       approvePlanEdit: (editId) => set((state) => {
         const edit = state.pendingPlanEdits.find(e => e.id === editId);
         if (!edit) return state;
+        // This will need server implementation eventually, for now just UI state
         return {
-          installmentPlans: state.installmentPlans.map((plan) => 
-            plan.id === edit.planId ? { ...plan, totalAmount: edit.newTotal, installments: edit.newInstallments } : plan
-          ),
           pendingPlanEdits: state.pendingPlanEdits.filter(e => e.id !== editId)
         };
       }),
+
       rejectPlanEdit: (editId) => set((state) => ({
         pendingPlanEdits: state.pendingPlanEdits.filter(e => e.id !== editId)
       })),
-      getStudentInstallments: (studentId) => get().installmentPlans.filter((p) => p.studentId === studentId),
-      payInstallment: (planId, installmentId, amount) => set((state) => ({
-        installmentPlans: state.installmentPlans.map((plan) =>
-          plan.id === planId
-            ? {
-              ...plan,
-              installments: plan.installments.map((inst) => {
-                if (inst.id === installmentId) {
-                  const newPaidAmount = (inst.paidAmount || 0) + amount;
-                  const newStatus = newPaidAmount >= inst.amount ? 'paid' : 'pending';
-                  return { 
-                    ...inst, 
-                    paidAmount: newPaidAmount, 
-                    status: newStatus, 
-                    paidDate: newStatus === 'paid' ? new Date().toISOString().split('T')[0] : inst.paidDate 
-                  };
-                }
-                return inst;
-              }),
-            }
-            : plan
-        ),
-      })),
     }),
-    { name: 'school-payments' }
+    { 
+      name: 'school-payments',
+      partialize: (state) => ({ payments: state.payments }), // Only persist payments for offline view
+    }
   )
 );

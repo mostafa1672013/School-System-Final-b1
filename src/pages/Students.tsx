@@ -210,7 +210,19 @@ export default function Students() {
                                 return (
                                     <tr key={s.id} className="border-b last:border-0 hover:bg-muted/20 transition-colors">
                                         <td className="p-3">
-                                            <p className="font-medium">{s.name}</p>
+                                            <div className="flex items-center gap-2 flex-wrap">
+                                                <p className="font-medium">{s.name}</p>
+                                                {s.badge && (
+                                                    <span
+                                                        className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-full text-[10px] font-bold text-white"
+                                                        style={{ backgroundColor: s.badge.color }}
+                                                        title={`${s.badge.name} — خصم ${s.badge.discountPercentage}%`}
+                                                    >
+                                                        {s.badge.icon && <span>{s.badge.icon}</span>}
+                                                        {s.badge.name}
+                                                    </span>
+                                                )}
+                                            </div>
                                             <p className="text-xs text-muted-foreground">{s.nationalId}</p>
                                         </td>
                                         <td className="p-3 hidden md:table-cell text-muted-foreground">{stageLabels[s.stage]}</td>

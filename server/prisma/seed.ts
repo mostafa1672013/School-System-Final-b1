@@ -42,6 +42,26 @@ async function main() {
   }
 
   console.log('✅ تم إضافة بيانات الرسوم بنجاح.');
+
+  const defaultCategories = [
+    { key: 'books', name: 'كتب' },
+    { key: 'uniform', name: 'زي مدرسي' },
+    { key: 'tools', name: 'أدوات مكتبية' },
+    { key: 'lab_equipment', name: 'أدوات معملية' },
+    { key: 'operational', name: 'مستلزمات تشغيلية' },
+  ];
+
+  console.log('🌱 جاري إضافة التصنيفات الافتراضية...');
+
+  for (const cat of defaultCategories) {
+    await prisma.itemCategory.upsert({
+      where: { key: cat.key },
+      update: { name: cat.name },
+      create: cat,
+    });
+  }
+
+  console.log('✅ تم إضافة التصنيفات بنجاح.');
 }
 
 main()

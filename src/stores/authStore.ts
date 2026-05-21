@@ -1,10 +1,10 @@
 import { create } from 'zustand';
 import { persist, createJSONStorage } from 'zustand/middleware';
 import type { User } from '@/types';
-import { mockUsers } from '@/constants/mockData';
 
 interface AuthState {
   user: User | null;
+  token: string | null;
   isAuthenticated: boolean;
   login: (email: string, password: string) => Promise<boolean>;
   updateProfile: (data: Partial<User>) => Promise<boolean>;
@@ -15,6 +15,7 @@ export const useAuthStore = create<AuthState>()(
   persist(
     (set, get) => ({
       user: null,
+      token: null,
       isAuthenticated: false,
       login: async (email, password) => {
         try {
@@ -33,8 +34,8 @@ export const useAuthStore = create<AuthState>()(
             return false;
           }
 
-          const user = await response.json();
-          set({ user, isAuthenticated: true });
+          const { user, token } = await response.json();
+          set({ user, token, isAuthenticated: true });
           return true;
         } catch (error) {
           console.error('Login error:', error);
@@ -46,11 +47,15 @@ export const useAuthStore = create<AuthState>()(
       },
       updateProfile: async (data) => {
         const currentUser = get().user;
-        if (!currentUser) return false;
+        const token = get().token;
+        if (!currentUser || !token) return false;
         try {
           const response = await fetch(`/api/users/${currentUser.id}`, {
             method: 'PATCH',
-            headers: { 'Content-Type': 'application/json' },
+            headers: {
+              'Content-Type': 'application/json',
+              'Authorization': `Bearer ${token}`,
+            },
             body: JSON.stringify(data),
           });
           if (!response.ok) return false;
@@ -62,12 +67,33 @@ export const useAuthStore = create<AuthState>()(
           return false;
         }
       },
-      logout: () => set({ user: null, isAuthenticated: false }),
+      logout: () => {
+        const token = get().token;
+        if (token) {
+          fetch('/api/auth/logout', {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+              'Authorization': `Bearer ${token}`,
+            },
+          }).catch(() => {});
+        }
+        set({ user: null, token: null, isAuthenticated: false });
+      },
     }),
-    { 
+    {
       name: 'school-auth',
       // sessionStorage: session ends when browser/tab is closed
       storage: createJSONStorage(() => sessionStorage)
     }
   )
 );
+
+// Helper function to get auth headers for API calls
+export const getAuthHeaders = () => {
+  const token = useAuthStore.getState().token;
+  return {
+    'Content-Type': 'application/json',
+    ...(token ? { 'Authorization': `Bearer ${token}` } : {}),
+  };
+};

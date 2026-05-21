@@ -1,3 +1,4 @@
+import { getAuthHeaders } from './authStore';
 import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
 import type { Student } from '@/types';
@@ -23,7 +24,7 @@ export const useStudentsStore = create<StudentsState>()(
       fetchStudents: async () => {
         set({ isLoading: true });
         try {
-          const response = await fetch('/api/students');
+          const response = await fetch('/api/students', { headers: getAuthHeaders() });
           const data = await response.json();
           set({ students: data, isLoading: false });
         } catch (error) {
@@ -35,7 +36,7 @@ export const useStudentsStore = create<StudentsState>()(
         try {
           const response = await fetch('/api/students', {
             method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
+            headers: getAuthHeaders(),
             body: JSON.stringify(student),
           });
           const newStudent = await response.json();
@@ -48,7 +49,7 @@ export const useStudentsStore = create<StudentsState>()(
         try {
           const response = await fetch(`/api/students/${id}`, {
             method: 'PATCH',
-            headers: { 'Content-Type': 'application/json' },
+            headers: getAuthHeaders(),
             body: JSON.stringify(data),
           });
           if (!response.ok) throw new Error('Failed to update student on server');
@@ -65,6 +66,7 @@ export const useStudentsStore = create<StudentsState>()(
         try {
           await fetch(`/api/students/${id}`, {
             method: 'DELETE',
+            headers: getAuthHeaders(),
           });
           set((state) => ({
             students: state.students.filter((s) => s.id !== id),

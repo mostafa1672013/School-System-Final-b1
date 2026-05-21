@@ -1,3 +1,4 @@
+import { getAuthHeaders } from './authStore';
 import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
 import { toast } from 'sonner';
@@ -27,7 +28,7 @@ export const useBusStore = create<BusState>()(
       fetchRoutes: async () => {
         set({ isLoading: true });
         try {
-          const response = await fetch('/api/bus-routes');
+          const response = await fetch('/api/bus-routes', { headers: getAuthHeaders() });
           const data = await response.json();
           set({ routes: data, isLoading: false });
         } catch (error) {
@@ -39,7 +40,7 @@ export const useBusStore = create<BusState>()(
         try {
           const response = await fetch('/api/bus-routes', {
             method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
+            headers: getAuthHeaders(),
             body: JSON.stringify(route),
           });
           if (!response.ok) throw new Error('Failed to create route');
@@ -54,7 +55,7 @@ export const useBusStore = create<BusState>()(
         try {
           const response = await fetch(`/api/bus-routes/${id}`, {
             method: 'PATCH',
-            headers: { 'Content-Type': 'application/json' },
+            headers: getAuthHeaders(),
             body: JSON.stringify(data),
           });
           if (!response.ok) throw new Error('Failed to update route');
