@@ -105,22 +105,27 @@ export const useStudentsStore = create<StudentsState>()(
         ),
       })),
       promoteStudent: async (id, data) => {
-        const response = await fetch(`/api/students/${id}`, {
-          method: 'PATCH',
-          headers: getAuthHeaders(),
-          body: JSON.stringify({
-            stage: data.toStage,
-            grade: data.toGrade,
-            academicYear: data.toAcademicYear,
-            tuitionFees: data.tuitionFees,
-            booksFees: data.booksFees,
-            uniformFees: data.uniformFees,
-            busFees: data.busFees,
-            otherFees: data.otherFees,
-            totalFees: data.totalFees,
-            paidAmount: 0,
-          }),
-        });
+        let response: Response;
+        try {
+          response = await fetch(`/api/students/${id}`, {
+            method: 'PATCH',
+            headers: getAuthHeaders(),
+            body: JSON.stringify({
+              stage: data.toStage,
+              grade: data.toGrade,
+              academicYear: data.toAcademicYear,
+              tuitionFees: data.tuitionFees,
+              booksFees: data.booksFees,
+              uniformFees: data.uniformFees,
+              busFees: data.busFees,
+              otherFees: data.otherFees,
+              totalFees: data.totalFees,
+              paidAmount: 0,
+            }),
+          });
+        } catch {
+          throw new Error('خطأ في الاتصال بالخادم');
+        }
         if (!response.ok) {
           const err = await response.json();
           throw new Error(err.error || 'فشل النقل');
@@ -137,7 +142,8 @@ export const useStudentsStore = create<StudentsState>()(
           try {
             await get().promoteStudent(p.studentId, p);
             succeeded++;
-          } catch {
+          } catch (err) {
+            console.error(`Bulk promote failed for student ${p.studentId}:`, err);
             failed++;
           }
         }
