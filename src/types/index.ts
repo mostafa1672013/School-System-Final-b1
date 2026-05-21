@@ -383,3 +383,8 @@ export interface TreasuryCloseResult {
   sessionId?: string;
   session?: TreasurySession;
 }
+
+export interface SystemSetting {
+  key: string;
+  value: string;
+}

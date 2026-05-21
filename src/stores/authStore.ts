@@ -36,6 +36,10 @@ export const useAuthStore = create<AuthState>()(
 
           const { user, token } = await response.json();
           set({ user, token, isAuthenticated: true });
+          // Fetch active academic year after login
+          import('@/stores/settingsStore').then(({ useSettingsStore }) => {
+            useSettingsStore.getState().fetchAcademicYear();
+          });
           return true;
         } catch (error) {
           console.error('Login error:', error);
