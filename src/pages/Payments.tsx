@@ -357,7 +357,7 @@ export default function Payments() {
                                 <SelectTrigger className="w-full sm:w-40"><SelectValue placeholder="النوع" /></SelectTrigger>
                                 <SelectContent>
                                     <SelectItem value="all">كل الأنواع</SelectItem>
-                                    {Object.entries(paymentTypeLabels).map(([k, v]) => <SelectItem key={k} value={k}>{v}</SelectItem>)}
+                                    {Object.entries(paymentTypeLabels).filter(([key]) => key !== 'arrears' && key !== 'application_fee').map(([k, v]) => <SelectItem key={k} value={k}>{v}</SelectItem>)}
                                 </SelectContent>
                             </Select>
                             <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>

@@ -513,6 +513,14 @@ app.post('/api/payments', requireOpenTreasury, async (req, res) => {
     return res.status(400).json({ error: 'المبلغ يجب أن يكون أكبر من صفر', code: 'INVALID_AMOUNT' });
   }
 
+  if (type === 'arrears') {
+    const currentStudent = await prisma.student.findUnique({ where: { id: studentId }, select: { arrearsFees: true } });
+    if (!currentStudent) return res.status(404).json({ error: 'الطالب غير موجود' });
+    if (amount > currentStudent.arrearsFees) {
+      return res.status(400).json({ error: 'مبلغ السداد أكبر من المتأخرات المستحقة' });
+    }
+  }
+
   try {
     // 1. Fetch student's yearly finance records ordered by year (oldest first)
     const yearlyFinances = await prisma.studentYearlyFinance.findMany({
@@ -536,8 +544,8 @@ app.post('/api/payments', requireOpenTreasury, async (req, res) => {
     const debitAccount = await prisma.account.findUnique({ where: { code: debitCode } });
     const creditAccount = await prisma.account.findUnique({ where: { code: creditCode } });
 
-    // 2. Allocate payment to oldest years first (if not application fee)
-    if (type !== 'application_fee') {
+    // 2. Allocate payment to oldest years first (if not application fee or arrears)
+    if (type !== 'application_fee' && type !== 'arrears') {
       for (const finance of yearlyFinances) {
         if (remainingAmount <= 0) break;
 
