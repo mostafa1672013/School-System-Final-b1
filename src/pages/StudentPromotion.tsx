@@ -38,6 +38,12 @@ const ALLOWED_ROLES = ['school_director', 'head_accountant'];
 
 const stageOrder: Stage[] = ['kg', 'primary', 'preparatory', 'secondary'];
 
+const FINAL_SECONDARY_GRADE = gradeOptions['secondary'][gradeOptions['secondary'].length - 1];
+
+function isFinalGrade(stage: Stage, grade: string): boolean {
+  return stage === 'secondary' && grade === FINAL_SECONDARY_GRADE;
+}
+
 function getNextStageAndGrade(stage: Stage, grade: string): { stage: Stage; grade: string } | null {
   const grades = gradeOptions[stage];
   const idx = grades.indexOf(grade);
@@ -115,6 +121,7 @@ function SinglePromotion({ students, stageFees, promoteStudent }: {
     busFees: number; otherFees: number;
     arrearsFees: number; discountAmount: number; discountPercentage: number;
     totalFees: number;
+    status: 'admitted' | 'graduated';
   }) => Promise<void>;
 }) {
   const [search, setSearch] = useState('');
@@ -124,6 +131,7 @@ function SinglePromotion({ students, stageFees, promoteStudent }: {
   const [toAcademicYear, setToAcademicYear] = useState(getNextAcademicYear(currentAcademicYear));
   const [loading, setLoading] = useState(false);
   const [confirmOpen, setConfirmOpen] = useState(false);
+  const [newStatus, setNewStatus] = useState<'admitted' | 'graduated'>('admitted');
 
   const activeStudents = useMemo(() =>
     students.filter(s => s.status === 'active' || s.status === 'admitted'),
@@ -164,6 +172,7 @@ function SinglePromotion({ students, stageFees, promoteStudent }: {
       setToGrade(s.grade);
     }
     setToAcademicYear(getNextAcademicYear(s.academicYear));
+    setNewStatus('admitted');
     setSearch('');
   };
 
@@ -185,6 +194,7 @@ function SinglePromotion({ students, stageFees, promoteStudent }: {
         discountAmount: promotionCalc.badgeDiscount,
         discountPercentage: selected.badge?.discountPercentage ?? 0,
         totalFees: promotionCalc.totalFees,
+        status: newStatus,
       });
       toast.success(`تم نقل ${selected.name} بنجاح إلى ${stageLabels[toStage]} - ${toGrade}`);
       setSelected(null);
@@ -338,6 +348,20 @@ function SinglePromotion({ students, stageFees, promoteStudent }: {
                   </tr>
                 </tbody>
               </table>
+              {isFinalGrade(toStage, toGrade) && (
+                <div className="space-y-2 pt-2">
+                  <Label className="font-semibold">الوضع بعد النقل</Label>
+                  <Select value={newStatus} onValueChange={v => setNewStatus(v as 'admitted' | 'graduated')}>
+                    <SelectTrigger>
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="admitted">لا زال طالباً</SelectItem>
+                      <SelectItem value="graduated">تخرج</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+              )}
               <p className="text-amber-600 text-xs">سيتم إعادة تعيين المبالغ المسددة إلى صفر.</p>
             </div>
           )}
@@ -364,6 +388,7 @@ function BulkPromotion({ students, stageFees, bulkPromoteStudents }: {
     busFees: number; otherFees: number;
     arrearsFees: number; discountAmount: number; discountPercentage: number;
     totalFees: number;
+    status: 'admitted' | 'graduated';
   }>) => Promise<{ succeeded: number; failed: number }>;
 }) {
   const [fromStage, setFromStage] = useState<Stage>('primary');
@@ -373,6 +398,7 @@ function BulkPromotion({ students, stageFees, bulkPromoteStudents }: {
   const [loading, setLoading] = useState(false);
   const [result, setResult] = useState<{ succeeded: number; failed: number } | null>(null);
   const [confirmOpen, setConfirmOpen] = useState(false);
+  const [statusMap, setStatusMap] = useState<Record<string, 'admitted' | 'graduated'>>({});
 
   const eligible = useMemo(() =>
     students.filter(s =>
@@ -397,7 +423,7 @@ function BulkPromotion({ students, stageFees, bulkPromoteStudents }: {
     });
   };
 
-  const buildPromotions = () => {
+  const promotions = useMemo(() => {
     return Array.from(selected).map(id => {
       const student = students.find(s => s.id === id)!;
       const ns = nextStageGrade ?? { stage: fromStage, grade: fromGrade };
@@ -422,17 +448,18 @@ function BulkPromotion({ students, stageFees, bulkPromoteStudents }: {
         discountAmount: badgeDiscount,
         discountPercentage: student.badge?.discountPercentage ?? 0,
         totalFees,
+        status: (statusMap[id] ?? 'admitted') as 'admitted' | 'graduated',
       };
     });
-  };
+  }, [selected, students, nextStageGrade, fromStage, fromGrade, stageFees, toAcademicYear, statusMap]);
 
   const handleBulkPromote = async () => {
     setLoading(true);
     try {
-      const promotions = buildPromotions();
       const res = await bulkPromoteStudents(promotions);
       setResult(res);
       setSelected(new Set());
+      setStatusMap({});
       setConfirmOpen(false);
       toast.success(`تم النقل الجماعي: ${res.succeeded} نجح، ${res.failed} فشل`);
     } catch {
@@ -586,6 +613,46 @@ function BulkPromotion({ students, stageFees, bulkPromoteStudents }: {
             <p>سيتم نقل <span className="font-bold">{selected.size}</span> طالب</p>
             {nextStageGrade && (
               <p>إلى: <span className="font-semibold">{stageLabels[nextStageGrade.stage]} - {nextStageGrade.grade}</span> ({toAcademicYear})</p>
+            )}
+            {promotions.length > 0 && (
+              <div className="max-h-48 overflow-y-auto border rounded">
+                <table className="w-full text-xs">
+                  <thead className="bg-slate-50 sticky top-0">
+                    <tr>
+                      <th className="p-2 text-right font-semibold">الاسم</th>
+                      <th className="p-2 text-right font-semibold">الوضع</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-slate-100">
+                    {promotions.map(p => {
+                      const student = students.find(s => s.id === p.studentId);
+                      return (
+                        <tr key={p.studentId}>
+                          <td className="p-2">{student?.name}</td>
+                          <td className="p-2">
+                            {isFinalGrade(p.toStage, p.toGrade) ? (
+                              <Select
+                                value={statusMap[p.studentId] ?? 'admitted'}
+                                onValueChange={v => setStatusMap(prev => ({ ...prev, [p.studentId]: v as 'admitted' | 'graduated' }))}
+                              >
+                                <SelectTrigger className="h-7 text-xs w-28">
+                                  <SelectValue />
+                                </SelectTrigger>
+                                <SelectContent>
+                                  <SelectItem value="admitted">طالب</SelectItem>
+                                  <SelectItem value="graduated">متخرج</SelectItem>
+                                </SelectContent>
+                              </Select>
+                            ) : (
+                              <span className="text-xs text-muted-foreground">طالب</span>
+                            )}
+                          </td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
+              </div>
             )}
             <p className="text-amber-600">سيتم إعادة تعيين المبالغ المسددة إلى صفر لجميع الطلاب المنقولين.</p>
           </div>
