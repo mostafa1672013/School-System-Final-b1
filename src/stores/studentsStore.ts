@@ -13,7 +13,7 @@ interface StudentsState {
   updateStudent: (id: string, data: Partial<Student>) => void;
   deleteStudent: (id: string) => void;
   getStudent: (id: string) => Student | undefined;
-  addPaymentToStudent: (id: string, amount: number) => void;
+  addPaymentToStudent: (id: string, amount: number, paymentType?: string) => void;
   promoteStudent: (id: string, data: {
     toStage: Stage;
     toGrade: string;
@@ -107,9 +107,15 @@ export const useStudentsStore = create<StudentsState>()(
         }
       },
       getStudent: (id) => get().students.find((s) => s.id === id),
-      addPaymentToStudent: (id, amount) => set((state) => ({
+      addPaymentToStudent: (id, amount, paymentType) => set((state) => ({
         students: state.students.map((s) =>
-          s.id === id ? { ...s, paidAmount: s.paidAmount + amount } : s
+          s.id === id
+            ? {
+                ...s,
+                paidAmount: paymentType !== 'application_fee' ? s.paidAmount + amount : s.paidAmount,
+                ...(paymentType === 'application_fee' && { status: 'under_testing' as const }),
+              }
+            : s
         ),
       })),
       promoteStudent: async (id, data) => {

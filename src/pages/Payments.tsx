@@ -187,7 +187,7 @@ export default function Payments() {
             };
             
             const paymentId = await addPayment(newPayment);
-            await addPaymentToStudent(form.studentId, form.amount);
+            await addPaymentToStudent(form.studentId, form.amount, form.type);
 
             if (student.pendingPaymentAmount && student.pendingPaymentAmount > 0) {
                 await fetch(`/api/students/${student.id}`, {
