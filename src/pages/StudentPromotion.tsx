@@ -313,7 +313,7 @@ function SinglePromotion({ students, stageFees, promoteStudent }: {
                   </tr>
                   <tr>
                     <td className="py-1.5 text-slate-600">رسوم بعد الخصم</td>
-                    <td className="py-1.5 text-left font-medium">{formatCurrency(promotionCalc.netNewFees + selected.busFees + selected.otherFees)}</td>
+                    <td className="py-1.5 text-left font-medium">{formatCurrency(promotionCalc.netNewFees)}</td>
                   </tr>
                   <tr>
                     <td className="py-1.5 text-slate-600">متأخرات السنة السابقة</td>
