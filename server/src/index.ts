@@ -176,6 +176,10 @@ app.patch('/api/students/:id', async (req, res) => {
 app.delete('/api/students/:id', async (req, res) => {
   const id = Array.isArray(req.params.id) ? req.params.id[0] : req.params.id;
   try {
+    const existingPlan = await prisma.installmentPlan.findUnique({ where: { studentId: id } });
+    if (existingPlan) {
+      return res.status(400).json({ error: 'لا يمكن حذف الطالب — يوجد خطة أقساط نشطة، يرجى إنهاؤها أو حذفها أولاً.' });
+    }
     await prisma.student.delete({ where: { id } });
     res.json({ message: 'تم حذف الطالب بنجاح. المدفوعات المسجلة محفوظة في الخزينة.' });
   } catch (error) {
