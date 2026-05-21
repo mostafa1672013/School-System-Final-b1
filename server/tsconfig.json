@@ -11,7 +11,9 @@
     "forceConsistentCasingInFileNames": true,
     "types": ["node", "jest"],
     "noEmitOnError": false,
-    "noImplicitAny": false
+    "noImplicitAny": false,
+    "moduleResolution": "bundler",
+    "ignoreDeprecations": "5.0"
   },
   "include": ["src/**/*"],
   "exclude": ["node_modules", "prisma/**/*"]
