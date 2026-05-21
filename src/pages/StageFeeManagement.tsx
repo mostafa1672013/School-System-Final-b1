@@ -7,10 +7,12 @@ import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/com
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Badge } from '@/components/ui/badge';
 import { useAdmissionStore } from '@/stores/admissionStore';
-import { stageLabels, trackLabels, formatCurrency, currentAcademicYear } from '@/lib/utils';
+import { stageLabels, trackLabels, formatCurrency } from '@/lib/utils';
+import { useSettingsStore } from '@/stores/settingsStore';
 import StatCard from '@/components/features/StatCard';
 
 export default function StageFeeManagement() {
+    const { activeAcademicYear: currentAcademicYear } = useSettingsStore();
     const navigate = useNavigate();
     const { stageFees, fetchStageFees, deleteStageFee } = useAdmissionStore();
 

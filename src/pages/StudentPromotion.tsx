@@ -14,7 +14,8 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '
 import { useStudentsStore } from '@/stores/studentsStore';
 import { useAdmissionStore } from '@/stores/admissionStore';
 import { useAuthStore } from '@/stores/authStore';
-import { stageLabels, gradeOptions, academicYears, currentAcademicYear, formatCurrency } from '@/lib/utils';
+import { stageLabels, gradeOptions, academicYears, formatCurrency } from '@/lib/utils';
+import { useSettingsStore } from '@/stores/settingsStore';
 import type { Stage, Student, StageFee, AdditionalFee } from '@/types';
 
 function calcPromoFees(
@@ -124,6 +125,7 @@ function SinglePromotion({ students, stageFees, promoteStudent }: {
     status: 'admitted' | 'graduated';
   }) => Promise<void>;
 }) {
+  const { activeAcademicYear: currentAcademicYear } = useSettingsStore();
   const [search, setSearch] = useState('');
   const [selected, setSelected] = useState<Student | null>(null);
   const [toStage, setToStage] = useState<Stage>('primary');
@@ -391,6 +393,7 @@ function BulkPromotion({ students, stageFees, bulkPromoteStudents }: {
     status: 'admitted' | 'graduated';
   }>) => Promise<{ succeeded: number; failed: number }>;
 }) {
+  const { activeAcademicYear: currentAcademicYear } = useSettingsStore();
   const [fromStage, setFromStage] = useState<Stage>('primary');
   const [fromGrade, setFromGrade] = useState(gradeOptions['primary'][0]);
   const [toAcademicYear, setToAcademicYear] = useState(getNextAcademicYear(currentAcademicYear));
