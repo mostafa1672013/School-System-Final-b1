@@ -17,7 +17,7 @@ import { useTreasuryStore } from '@/stores/treasuryStore';
 import { formatCurrency, formatDateShort, paymentTypeLabels, paymentMethodLabels, statusLabels } from '@/lib/utils';
 import type { PaymentType, PaymentMethod } from '@/types';
 import { printPaymentReceipt } from '@/hooks/usePrintReceipt';
-import { useAuthStore } from '@/stores/authStore';
+import { useAuthStore, getAuthHeaders } from '@/stores/authStore';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { useAccountingStore } from '@/stores/accountingStore';
 import { usePrintExpenseVoucher } from '@/hooks/usePrintExpenseVoucher';
@@ -42,6 +42,7 @@ export default function Payments() {
     const [form, setForm] = useState({
         studentId: '', amount: 0, type: 'tuition' as PaymentType, method: 'cash' as PaymentMethod, notes: '', walletPhoneNumber: ''
     });
+    const [isSubmitting, setIsSubmitting] = useState(false);
 
     useEffect(() => {
         if (location.state && (location.state as any).studentId) {
@@ -127,33 +128,40 @@ export default function Payments() {
 
     const handleAddPayment = async (e: React.FormEvent) => {
         e.preventDefault();
+        if (isSubmitting) return;
+        setIsSubmitting(true);
 
         // Security: User must be logged in
         if (!user || !user.id) {
             toast.error('يجب تسجيل الدخول أولاً');
+            setIsSubmitting(false);
             return;
         }
 
         // Security: Check authorization - MUST be the one who opened the treasury
         if (!treasuryStatus || !treasuryStatus.session || !treasuryStatus.session.openedBy) {
             toast.error('لا توجد جلسة خزينة');
+            setIsSubmitting(false);
             return;
         }
 
         if (treasuryStatus.session.openedBy !== user.id) {
             toast.error('فقط الشخص الذي فتح الخزينة يمكنه تسجيل المدفوعات');
+            setIsSubmitting(false);
             return;
         }
 
         // Validation: Amount must be greater than zero
         if (!form.amount || form.amount <= 0) {
             toast.error('يجب إدخال مبلغ أكبر من صفر');
+            setIsSubmitting(false);
             return;
         }
 
         // Guard: Treasury must be open
         if (treasuryStatus.status !== 'open') {
             toast.error('الخزينة مغلقة - يجب فتحها أولاً');
+            setIsSubmitting(false);
             return;
         }
 
@@ -180,20 +188,11 @@ export default function Payments() {
             
             const paymentId = await addPayment(newPayment);
             await addPaymentToStudent(form.studentId, form.amount);
-            
-            // Handle post-payment student updates
-            if (form.type === 'application_fee' && (student.status === 'applied' || student.status === 'failed')) {
-                await fetch(`/api/admission/test-result/${student.id}`, {
-                    method: 'PATCH',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ result: 'pending' }), 
-                });
-            }
 
             if (student.pendingPaymentAmount && student.pendingPaymentAmount > 0) {
                 await fetch(`/api/students/${student.id}`, {
                     method: 'PATCH',
-                    headers: { 'Content-Type': 'application/json' },
+                    headers: getAuthHeaders(),
                     body: JSON.stringify({ 
                         pendingPaymentAmount: null, 
                         pendingPaymentType: null, 
@@ -209,10 +208,12 @@ export default function Payments() {
             printPaymentReceipt({ id: paymentId || '', ...newPayment }, { grade: student.grade, guardianName: student.guardianName });
             
             fetchStudents();
+            setIsSubmitting(false);
             setDialogOpen(false);
             setForm({ studentId: '', amount: 0, type: 'tuition', method: 'cash', notes: '', walletPhoneNumber: '' });
         } catch (error) {
             toast.error('حدث خطأ أثناء تسجيل الدفع');
+            setIsSubmitting(false);
         }
     };
 
@@ -221,7 +222,7 @@ export default function Payments() {
         try {
             await fetch(`/api/students/${form.studentId}`, {
                 method: 'PATCH',
-                headers: { 'Content-Type': 'application/json' },
+                headers: getAuthHeaders(),
                 body: JSON.stringify({ paymentRequestStatus: 'rejected' }),
             });
             fetchStudents();
@@ -383,7 +384,7 @@ export default function Payments() {
                                             <Button type="button" variant="destructive" size="sm" onClick={handleRejectPayment}>إرجاع للمحاسب</Button>
                                             <div className="flex gap-2">
                                                 <Button type="button" variant="outline" onClick={() => setDialogOpen(false)}>إلغاء</Button>
-                                                <Button type="submit" disabled={!isAuthorized || treasuryStatus?.status !== 'open'}>تأكيد التحصيل</Button>
+                                                <Button type="submit" disabled={!isAuthorized || treasuryStatus?.status !== 'open' || isSubmitting}>{isSubmitting ? 'جارٍ التسجيل...' : 'تأكيد التحصيل'}</Button>
                                             </div>
                                         </div>
                                     </form>
