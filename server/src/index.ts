@@ -60,7 +60,7 @@ const loginLimiter = rateLimit({
 });
 
 // Global auth middleware for all protected routes
-const PUBLIC_PATHS = ['/api/auth/login'];
+const PUBLIC_PATHS = ['/api/auth/login', '/health'];
 app.use((req, res, next) => {
   if (PUBLIC_PATHS.includes(req.path)) return next();
   requireAuth(req, res, next);
@@ -177,6 +177,7 @@ app.post('/api/students/:id/promote', requireRoles('school_director', 'head_acco
     stage, grade, academicYear,
     tuitionFees, booksFees, uniformFees, busFees, otherFees,
     arrearsFees, discountAmount, discountPercentage, totalFees,
+    status,
   } = req.body;
 
   try {
@@ -191,6 +192,7 @@ app.post('/api/students/:id/promote', requireRoles('school_director', 'head_acco
           discountPercentage: discountPercentage ?? 0,
           totalFees,
           paidAmount: 0,
+          status: status ?? 'admitted',
         },
         include: { yearlyFinance: { orderBy: { academicYear: 'asc' } } },
       }),
@@ -2302,8 +2304,17 @@ app.patch('/api/students/:id/badge', async (req, res) => {
   }
 });
 
-// Start server
-httpServer.listen(PORT, () => {
-  console.log(`🚀 Server running on http://localhost:${PORT}`);
-  console.log(`🔌 WebSocket ready on ws://localhost:${PORT}`);
+// Health check endpoint
+app.get('/health', (_req, res) => {
+  res.json({ status: 'ok', timestamp: new Date().toISOString() });
 });
+
+export { app };
+
+// Start server (only when not in test environment)
+if (process.env.NODE_ENV !== 'test') {
+  httpServer.listen(PORT, () => {
+    console.log(`🚀 Server running on http://localhost:${PORT}`);
+    console.log(`🔌 WebSocket ready on ws://localhost:${PORT}`);
+  });
+}
