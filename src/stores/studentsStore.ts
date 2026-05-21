@@ -1,7 +1,7 @@
 import { getAuthHeaders } from './authStore';
 import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
-import type { Student } from '@/types';
+import type { Student, Stage } from '@/types';
 import { mockStudents } from '@/constants/mockData';
 import { generateId } from '@/lib/utils';
 
@@ -14,6 +14,29 @@ interface StudentsState {
   deleteStudent: (id: string) => void;
   getStudent: (id: string) => Student | undefined;
   addPaymentToStudent: (id: string, amount: number) => void;
+  promoteStudent: (id: string, data: {
+    toStage: Stage;
+    toGrade: string;
+    toAcademicYear: string;
+    tuitionFees: number;
+    booksFees: number;
+    uniformFees: number;
+    busFees: number;
+    otherFees: number;
+    totalFees: number;
+  }) => Promise<void>;
+  bulkPromoteStudents: (promotions: Array<{
+    studentId: string;
+    toStage: Stage;
+    toGrade: string;
+    toAcademicYear: string;
+    tuitionFees: number;
+    booksFees: number;
+    uniformFees: number;
+    busFees: number;
+    otherFees: number;
+    totalFees: number;
+  }>) => Promise<{ succeeded: number; failed: number }>;
 }
 
 export const useStudentsStore = create<StudentsState>()(
@@ -81,6 +104,45 @@ export const useStudentsStore = create<StudentsState>()(
           s.id === id ? { ...s, paidAmount: s.paidAmount + amount } : s
         ),
       })),
+      promoteStudent: async (id, data) => {
+        const response = await fetch(`/api/students/${id}`, {
+          method: 'PATCH',
+          headers: getAuthHeaders(),
+          body: JSON.stringify({
+            stage: data.toStage,
+            grade: data.toGrade,
+            academicYear: data.toAcademicYear,
+            tuitionFees: data.tuitionFees,
+            booksFees: data.booksFees,
+            uniformFees: data.uniformFees,
+            busFees: data.busFees,
+            otherFees: data.otherFees,
+            totalFees: data.totalFees,
+            paidAmount: 0,
+          }),
+        });
+        if (!response.ok) {
+          const err = await response.json();
+          throw new Error(err.error || 'فشل النقل');
+        }
+        const updated = await response.json();
+        set((state) => ({
+          students: state.students.map((s) => (s.id === id ? updated : s)),
+        }));
+      },
+      bulkPromoteStudents: async (promotions) => {
+        let succeeded = 0;
+        let failed = 0;
+        for (const p of promotions) {
+          try {
+            await get().promoteStudent(p.studentId, p);
+            succeeded++;
+          } catch {
+            failed++;
+          }
+        }
+        return { succeeded, failed };
+      },
     }),
     { name: 'school-students' }
   )
