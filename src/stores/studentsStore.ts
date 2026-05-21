@@ -27,6 +27,7 @@ interface StudentsState {
     discountAmount: number;
     discountPercentage: number;
     totalFees: number;
+    status: import('@/types').StudentStatus;
   }) => Promise<void>;
   bulkPromoteStudents: (promotions: Array<{
     studentId: string;
@@ -42,6 +43,7 @@ interface StudentsState {
     discountAmount: number;
     discountPercentage: number;
     totalFees: number;
+    status: import('@/types').StudentStatus;
   }>) => Promise<{ succeeded: number; failed: number }>;
 }
 
@@ -129,6 +131,7 @@ export const useStudentsStore = create<StudentsState>()(
               discountAmount: data.discountAmount,
               discountPercentage: data.discountPercentage,
               totalFees: data.totalFees,
+              status: data.status,
             }),
           });
         } catch {
