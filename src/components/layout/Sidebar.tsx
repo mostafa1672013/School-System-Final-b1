@@ -30,6 +30,7 @@ import {
   Database,
   Tag,
   ArrowRightLeft,
+  CalendarClock,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { useAuthStore } from '@/stores/authStore';
@@ -67,6 +68,7 @@ const navItems: NavItem[] = [
     ]
   },
   { label: 'نقل الطلاب', path: '/student-promotion', icon: ArrowRightLeft, roles: ['school_director', 'head_accountant'] },
+  { label: 'إدارة السنة الدراسية', path: '/year-management', icon: CalendarClock, roles: ['school_director', 'head_accountant'] },
   { label: 'المدفوعات والخزينة', path: '/payments', icon: Banknote, roles: ['system_admin', 'school_director', 'head_accountant', 'accountant'] },
   { label: 'الخزينة', path: '/treasury', icon: Vault, roles: ['system_admin', 'school_director', 'head_accountant', 'accountant'] },
   { label: 'المخزن', path: '/inventory', icon: Package, roles: ['system_admin', 'school_director', 'warehouse_keeper'] },

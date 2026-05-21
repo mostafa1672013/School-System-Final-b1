@@ -32,6 +32,7 @@ const AccountingReports = lazy(() => import('@/pages/AccountingReports'));
 const Expenses = lazy(() => import('@/pages/Expenses'));
 const ExpenseApprovals = lazy(() => import('@/pages/ExpenseApprovals'));
 const ExpensePermissions = lazy(() => import('@/pages/ExpensePermissions'));
+const YearManagement = lazy(() => import('@/pages/YearManagement'));
 
 function LoadingFallback() {
   return (
@@ -74,6 +75,7 @@ export default function App() {
             <Route path="/admission/new" element={<NewAdmission />} />
             <Route path="/stage-fees" element={<StageFeeManagement />} />
             <Route path="/stage-fees/new" element={<NewStageFee />} />
+            <Route path="/year-management" element={<YearManagement />} />
             <Route path="/discount-approvals" element={<DiscountApprovals />} />
             <Route path="/discount-settings" element={<DiscountSettings />} />
             <Route path="/badge-settings" element={<BadgeSettings />} />
