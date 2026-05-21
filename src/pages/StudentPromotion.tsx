@@ -15,7 +15,7 @@ import { useStudentsStore } from '@/stores/studentsStore';
 import { useAdmissionStore } from '@/stores/admissionStore';
 import { useAuthStore } from '@/stores/authStore';
 import { stageLabels, gradeOptions, academicYears, currentAcademicYear, formatCurrency } from '@/lib/utils';
-import type { Stage, Student } from '@/types';
+import type { Stage, Student, StageFee } from '@/types';
 
 const ALLOWED_ROLES = ['school_director', 'head_accountant'];
 
@@ -91,8 +91,12 @@ export default function StudentPromotion() {
 
 function SinglePromotion({ students, stageFees, promoteStudent }: {
   students: Student[];
-  stageFees: any[];
-  promoteStudent: any;
+  stageFees: StageFee[];
+  promoteStudent: (id: string, data: {
+    toStage: Stage; toGrade: string; toAcademicYear: string;
+    tuitionFees: number; booksFees: number; uniformFees: number;
+    busFees: number; otherFees: number; totalFees: number;
+  }) => Promise<void>;
 }) {
   const [search, setSearch] = useState('');
   const [selected, setSelected] = useState<Student | null>(null);
@@ -153,7 +157,8 @@ function SinglePromotion({ students, stageFees, promoteStudent }: {
         busFees: selected.busFees,
         otherFees: selected.otherFees,
         totalFees: matchedFee
-          ? matchedFee.tuitionFees + matchedFee.booksFees + matchedFee.uniformFees + selected.busFees + selected.otherFees
+          ? matchedFee.tuitionFees + matchedFee.booksFees + matchedFee.uniformFees + selected.busFees + selected.otherFees +
+            (matchedFee.additionalFees?.filter(f => f.isMandatory).reduce((sum, f) => sum + f.amount, 0) ?? 0)
           : selected.totalFees,
       });
       toast.success(`تم نقل ${selected.name} بنجاح إلى ${stageLabels[toStage]} - ${toGrade}`);
@@ -275,7 +280,8 @@ function SinglePromotion({ students, stageFees, promoteStudent }: {
               <p><span className="font-semibold">من:</span> {stageLabels[selected.stage]} - {selected.grade} ({selected.academicYear})</p>
               <p><span className="font-semibold">إلى:</span> {stageLabels[toStage]} - {toGrade} ({toAcademicYear})</p>
               {matchedFee && (
-                <p><span className="font-semibold">إجمالي الرسوم الجديدة:</span> {formatCurrency(matchedFee.tuitionFees + matchedFee.booksFees + matchedFee.uniformFees + selected.busFees + selected.otherFees)}</p>
+                <p><span className="font-semibold">إجمالي الرسوم الجديدة:</span> {formatCurrency(matchedFee.tuitionFees + matchedFee.booksFees + matchedFee.uniformFees + selected.busFees + selected.otherFees +
+                  (matchedFee.additionalFees?.filter(f => f.isMandatory).reduce((sum, f) => sum + f.amount, 0) ?? 0))}</p>
               )}
               <p className="text-amber-600">سيتم إعادة تعيين المبالغ المسددة إلى صفر.</p>
             </div>
@@ -296,8 +302,12 @@ function SinglePromotion({ students, stageFees, promoteStudent }: {
 
 function BulkPromotion({ students, stageFees, bulkPromoteStudents }: {
   students: Student[];
-  stageFees: any[];
-  bulkPromoteStudents: any;
+  stageFees: StageFee[];
+  bulkPromoteStudents: (promotions: Array<{
+    studentId: string; toStage: Stage; toGrade: string; toAcademicYear: string;
+    tuitionFees: number; booksFees: number; uniformFees: number;
+    busFees: number; otherFees: number; totalFees: number;
+  }>) => Promise<{ succeeded: number; failed: number }>;
 }) {
   const [fromStage, setFromStage] = useState<Stage>('primary');
   const [fromGrade, setFromGrade] = useState(gradeOptions['primary'][0]);
@@ -351,7 +361,8 @@ function BulkPromotion({ students, stageFees, bulkPromoteStudents }: {
         busFees: student.busFees,
         otherFees: student.otherFees,
         totalFees: fee
-          ? fee.tuitionFees + fee.booksFees + fee.uniformFees + student.busFees + student.otherFees
+          ? fee.tuitionFees + fee.booksFees + fee.uniformFees + student.busFees + student.otherFees +
+            (fee.additionalFees?.filter(f => f.isMandatory).reduce((sum, f) => sum + f.amount, 0) ?? 0)
           : student.totalFees,
       };
     });
@@ -489,7 +500,8 @@ function BulkPromotion({ students, stageFees, bulkPromoteStudents }: {
                     <TableCell>
                       {fee ? (
                         <span className="text-emerald-600 font-medium">
-                          {formatCurrency(fee.tuitionFees + fee.booksFees + fee.uniformFees + s.busFees + s.otherFees)}
+                          {formatCurrency(fee.tuitionFees + fee.booksFees + fee.uniformFees + s.busFees + s.otherFees +
+                            (fee.additionalFees?.filter(f => f.isMandatory).reduce((sum, f) => sum + f.amount, 0) ?? 0))}
                         </span>
                       ) : (
                         <span className="text-amber-500 text-xs">لا يوجد هيكل رسوم</span>
