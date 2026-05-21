@@ -167,7 +167,7 @@ export default function Payments() {
 
         try {
             const student = students.find((s) => s.id === form.studentId);
-            if (!student) { toast.error('يرجى اختيار طالب'); return; }
+            if (!student) { toast.error('يرجى اختيار طالب'); setIsSubmitting(false); return; }
             
             const receiptNumber = `REC-${Date.now().toString().slice(-6)}`;
             const date = new Date().toISOString().split('T')[0];
