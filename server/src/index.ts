@@ -22,10 +22,23 @@ const ALLOWED_ORIGINS = (process.env.ALLOWED_ORIGINS || 'http://localhost:5173,h
   .split(',')
   .map(s => s.trim());
 
+const isOriginAllowed = (origin: string | undefined): boolean => {
+  if (!origin) return true;
+  if (ALLOWED_ORIGINS.includes(origin)) return true;
+  // Allow any localhost/127.0.0.1 origin in development
+  return /^https?:\/\/(localhost|127\.0\.0\.1)(:\d+)?$/.test(origin);
+};
+
 const httpServer = createServer(app);
 const io = new SocketIOServer(httpServer, {
   cors: {
-    origin: ALLOWED_ORIGINS,
+    origin: (origin, callback) => {
+      if (isOriginAllowed(origin)) {
+        callback(null, origin);
+      } else {
+        callback(new Error(`CORS: origin ${origin} not allowed`));
+      }
+    },
     methods: ['GET', 'POST'],
     credentials: true,
   }
@@ -36,7 +49,7 @@ app.use(helmet());
 
 app.use(cors({
   origin: (origin, callback) => {
-    if (!origin || ALLOWED_ORIGINS.includes(origin)) {
+    if (isOriginAllowed(origin)) {
       callback(null, true);
     } else {
       callback(new Error(`CORS: origin ${origin} not allowed`));
@@ -181,6 +194,25 @@ app.post('/api/students/:id/promote', requireRoles('school_director', 'head_acco
   } = req.body;
 
   try {
+    // Fetch current student to save old-year snapshot
+    const currentStudent = await prisma.student.findUnique({
+      where: { id },
+      include: {
+        payments: {
+          where: { NOT: { type: 'application_fee' } },
+        },
+      },
+    });
+
+    if (!currentStudent) {
+      return res.status(404).json({ error: 'الطالب غير موجود' });
+    }
+
+    const oldAcademicYear = currentStudent.academicYear;
+    const oldPaidAmount = currentStudent.payments
+      .filter(p => !p.academicYear || p.academicYear === oldAcademicYear)
+      .reduce((sum, p) => sum + p.amount, 0);
+
     const [student] = await prisma.$transaction([
       prisma.student.update({
         where: { id },
@@ -195,6 +227,24 @@ app.post('/api/students/:id/promote', requireRoles('school_director', 'head_acco
           status: status ?? 'admitted',
         },
         include: { yearlyFinance: { orderBy: { academicYear: 'asc' } } },
+      }),
+      prisma.studentYearlyFinance.upsert({
+        where: { studentId_academicYear: { studentId: id, academicYear: oldAcademicYear } },
+        create: {
+          studentId: id,
+          academicYear: oldAcademicYear,
+          stage: currentStudent.stage,
+          grade: currentStudent.grade,
+          tuitionFees: currentStudent.tuitionFees,
+          booksFees: currentStudent.booksFees,
+          uniformFees: currentStudent.uniformFees,
+          busFees: currentStudent.busFees,
+          otherFees: currentStudent.otherFees,
+          arrearsFees: currentStudent.arrearsFees,
+          totalFees: currentStudent.totalFees,
+          paidAmount: oldPaidAmount,
+        },
+        update: { paidAmount: oldPaidAmount },
       }),
       prisma.studentYearlyFinance.upsert({
         where: { studentId_academicYear: { studentId: id, academicYear } },
@@ -471,7 +521,7 @@ app.post('/api/payments', requireOpenTreasury, async (req, res) => {
     });
 
     let remainingAmount = amount;
-    const updates = [];
+    const updates: ReturnType<typeof prisma.studentYearlyFinance.update>[] = [];
 
     const debitCode = method === 'cash' ? '1001' : '1002';
     let creditCode = '4006';
@@ -529,6 +579,7 @@ app.post('/api/payments', requireOpenTreasury, async (req, res) => {
         where: { id: studentId },
         data: { 
           ...(type !== 'application_fee' && { paidAmount: { increment: amount } }),
+          ...(type === 'arrears' && { arrearsFees: { decrement: amount } }),
           // If all remaining is used, clear any pending request
           pendingPaymentAmount: null,
           pendingPaymentType: null,
