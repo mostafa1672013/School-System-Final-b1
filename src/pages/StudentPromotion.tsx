@@ -129,6 +129,21 @@ function SinglePromotion({ students, stageFees, promoteStudent }: {
     ) || null;
   }, [stageFees, selected, toStage, toGrade, toAcademicYear]);
 
+  const promotionCalc = useMemo(() => {
+    if (!selected) return null;
+    const arrears = Math.max(0, selected.totalFees - selected.paidAmount);
+    const baseNewFees = matchedFee
+      ? matchedFee.tuitionFees + matchedFee.booksFees + matchedFee.uniformFees +
+        (matchedFee.additionalFees?.filter((f: any) => f.isMandatory).reduce((sum: number, f: any) => sum + f.amount, 0) ?? 0)
+      : selected.tuitionFees + selected.booksFees + selected.uniformFees;
+    const badgeDiscount = selected.badge
+      ? Math.round(baseNewFees * (selected.badge.discountPercentage / 100) * 100) / 100
+      : 0;
+    const netNewFees = baseNewFees - badgeDiscount;
+    const totalFees = netNewFees + selected.busFees + selected.otherFees + arrears;
+    return { arrears, baseNewFees, badgeDiscount, netNewFees, totalFees };
+  }, [selected, matchedFee]);
+
   const handleSelectStudent = (s: Student) => {
     setSelected(s);
     const next = getNextStageAndGrade(s.stage, s.grade);
@@ -147,6 +162,7 @@ function SinglePromotion({ students, stageFees, promoteStudent }: {
     if (!selected || !toGrade) return;
     setLoading(true);
     try {
+      if (!promotionCalc) return;
       await promoteStudent(selected.id, {
         toStage,
         toGrade,
@@ -156,10 +172,10 @@ function SinglePromotion({ students, stageFees, promoteStudent }: {
         uniformFees: matchedFee?.uniformFees ?? selected.uniformFees,
         busFees: selected.busFees,
         otherFees: selected.otherFees,
-        totalFees: matchedFee
-          ? matchedFee.tuitionFees + matchedFee.booksFees + matchedFee.uniformFees + selected.busFees + selected.otherFees +
-            (matchedFee.additionalFees?.filter(f => f.isMandatory).reduce((sum, f) => sum + f.amount, 0) ?? 0)
-          : selected.totalFees,
+        arrearsFees: promotionCalc.arrears,
+        discountAmount: promotionCalc.badgeDiscount,
+        discountPercentage: selected.badge?.discountPercentage ?? 0,
+        totalFees: promotionCalc.totalFees,
       });
       toast.success(`تم نقل ${selected.name} بنجاح إلى ${stageLabels[toStage]} - ${toGrade}`);
       setSelected(null);
@@ -350,6 +366,15 @@ function BulkPromotion({ students, stageFees, bulkPromoteStudents }: {
         f.track === student.track &&
         f.academicYear === toAcademicYear
       );
+      const arrears = Math.max(0, student.totalFees - student.paidAmount);
+      const baseNewFees = fee
+        ? fee.tuitionFees + fee.booksFees + fee.uniformFees +
+          (fee.additionalFees?.filter((f: any) => f.isMandatory).reduce((sum: number, f: any) => sum + f.amount, 0) ?? 0)
+        : student.tuitionFees + student.booksFees + student.uniformFees;
+      const badgeDiscount = student.badge
+        ? Math.round(baseNewFees * (student.badge.discountPercentage / 100) * 100) / 100
+        : 0;
+      const netNewFees = baseNewFees - badgeDiscount;
       return {
         studentId: id,
         toStage: ns.stage,
@@ -360,10 +385,10 @@ function BulkPromotion({ students, stageFees, bulkPromoteStudents }: {
         uniformFees: fee?.uniformFees ?? student.uniformFees,
         busFees: student.busFees,
         otherFees: student.otherFees,
-        totalFees: fee
-          ? fee.tuitionFees + fee.booksFees + fee.uniformFees + student.busFees + student.otherFees +
-            (fee.additionalFees?.filter(f => f.isMandatory).reduce((sum, f) => sum + f.amount, 0) ?? 0)
-          : student.totalFees,
+        arrearsFees: arrears,
+        discountAmount: badgeDiscount,
+        discountPercentage: student.badge?.discountPercentage ?? 0,
+        totalFees: netNewFees + student.busFees + student.otherFees + arrears,
       };
     });
   };
@@ -498,14 +523,33 @@ function BulkPromotion({ students, stageFees, bulkPromoteStudents }: {
                     </TableCell>
                     <TableCell>{formatCurrency(s.totalFees)}</TableCell>
                     <TableCell>
-                      {fee ? (
-                        <span className="text-emerald-600 font-medium">
-                          {formatCurrency(fee.tuitionFees + fee.booksFees + fee.uniformFees + s.busFees + s.otherFees +
-                            (fee.additionalFees?.filter(f => f.isMandatory).reduce((sum, f) => sum + f.amount, 0) ?? 0))}
-                        </span>
-                      ) : (
-                        <span className="text-amber-500 text-xs">لا يوجد هيكل رسوم</span>
-                      )}
+                      {(() => {
+                        const ns = nextStageGrade ?? { stage: fromStage, grade: fromGrade };
+                        const fee = stageFees.find(f =>
+                          f.stage === ns.stage &&
+                          f.grade === ns.grade &&
+                          f.track === s.track &&
+                          f.academicYear === toAcademicYear
+                        );
+                        const arrears = Math.max(0, s.totalFees - s.paidAmount);
+                        const base = fee
+                          ? fee.tuitionFees + fee.booksFees + fee.uniformFees +
+                            (fee.additionalFees?.filter((f: any) => f.isMandatory).reduce((sum: number, f: any) => sum + f.amount, 0) ?? 0)
+                          : null;
+                        const discount = (base !== null && s.badge)
+                          ? Math.round(base * (s.badge.discountPercentage / 100) * 100) / 100
+                          : 0;
+                        const net = base !== null ? base - discount + s.busFees + s.otherFees + arrears : null;
+                        return net !== null ? (
+                          <div className="space-y-0.5">
+                            <span className="text-emerald-600 font-medium block">{formatCurrency(net)}</span>
+                            {arrears > 0 && <span className="text-red-500 text-xs block">متأخرات: {formatCurrency(arrears)}</span>}
+                            {discount > 0 && <span className="text-slate-400 text-xs block">خصم: {formatCurrency(discount)}</span>}
+                          </div>
+                        ) : (
+                          <span className="text-amber-500 text-xs">لا يوجد هيكل رسوم</span>
+                        );
+                      })()}
                     </TableCell>
                   </TableRow>
                 );
