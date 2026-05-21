@@ -290,16 +290,42 @@ function SinglePromotion({ students, stageFees, promoteStudent }: {
           <DialogHeader>
             <DialogTitle className="font-[Noto_Kufi_Arabic]">تأكيد نقل الطالب</DialogTitle>
           </DialogHeader>
-          {selected && (
-            <div className="space-y-2 text-sm">
-              <p><span className="font-semibold">الطالب:</span> {selected.name}</p>
-              <p><span className="font-semibold">من:</span> {stageLabels[selected.stage]} - {selected.grade} ({selected.academicYear})</p>
-              <p><span className="font-semibold">إلى:</span> {stageLabels[toStage]} - {toGrade} ({toAcademicYear})</p>
-              {matchedFee && (
-                <p><span className="font-semibold">إجمالي الرسوم الجديدة:</span> {formatCurrency(matchedFee.tuitionFees + matchedFee.booksFees + matchedFee.uniformFees + selected.busFees + selected.otherFees +
-                  (matchedFee.additionalFees?.filter(f => f.isMandatory).reduce((sum, f) => sum + f.amount, 0) ?? 0))}</p>
-              )}
-              <p className="text-amber-600">سيتم إعادة تعيين المبالغ المسددة إلى صفر.</p>
+          {selected && promotionCalc && (
+            <div className="space-y-3 text-sm">
+              <div className="space-y-1">
+                <p><span className="font-semibold">الطالب:</span> {selected.name}</p>
+                <p><span className="font-semibold">من:</span> {stageLabels[selected.stage]} - {selected.grade} ({selected.academicYear})</p>
+                <p><span className="font-semibold">إلى:</span> {stageLabels[toStage]} - {toGrade} ({toAcademicYear})</p>
+              </div>
+              <table className="w-full text-sm border-t border-slate-200 pt-2">
+                <tbody className="divide-y divide-slate-100">
+                  <tr>
+                    <td className="py-1.5 text-slate-600">رسوم المرحلة الجديدة</td>
+                    <td className="py-1.5 text-left font-medium">{formatCurrency(promotionCalc.baseNewFees)}</td>
+                  </tr>
+                  <tr>
+                    <td className="py-1.5 text-slate-600">
+                      خصم الشارة{selected.badge ? ` (${selected.badge.discountPercentage}%)` : ''}
+                    </td>
+                    <td className="py-1.5 text-left font-medium text-emerald-600">
+                      {promotionCalc.badgeDiscount > 0 ? `− ${formatCurrency(promotionCalc.badgeDiscount)}` : formatCurrency(0)}
+                    </td>
+                  </tr>
+                  <tr>
+                    <td className="py-1.5 text-slate-600">رسوم بعد الخصم</td>
+                    <td className="py-1.5 text-left font-medium">{formatCurrency(promotionCalc.netNewFees + selected.busFees + selected.otherFees)}</td>
+                  </tr>
+                  <tr>
+                    <td className="py-1.5 text-slate-600">متأخرات السنة السابقة</td>
+                    <td className="py-1.5 text-left font-medium text-red-600">{formatCurrency(promotionCalc.arrears)}</td>
+                  </tr>
+                  <tr className="border-t-2 border-slate-300 font-bold">
+                    <td className="py-2">الإجمالي</td>
+                    <td className="py-2 text-left text-primary">{formatCurrency(promotionCalc.totalFees)}</td>
+                  </tr>
+                </tbody>
+              </table>
+              <p className="text-amber-600 text-xs">سيتم إعادة تعيين المبالغ المسددة إلى صفر.</p>
             </div>
           )}
           <DialogFooter className="gap-2 flex-row-reverse sm:flex-row-reverse">
