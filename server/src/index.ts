@@ -171,7 +171,7 @@ app.delete('/api/students/:id', async (req, res) => {
 });
 
 // Promote student to new stage/grade with arrears carryover
-app.post('/api/students/:id/promote', async (req, res) => {
+app.post('/api/students/:id/promote', requireRoles('school_director', 'head_accountant'), async (req, res) => {
   const id = Array.isArray(req.params.id) ? req.params.id[0] : req.params.id;
   const {
     stage, grade, academicYear,

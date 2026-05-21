@@ -112,7 +112,9 @@ function SinglePromotion({ students, stageFees, promoteStudent }: {
   promoteStudent: (id: string, data: {
     toStage: Stage; toGrade: string; toAcademicYear: string;
     tuitionFees: number; booksFees: number; uniformFees: number;
-    busFees: number; otherFees: number; totalFees: number;
+    busFees: number; otherFees: number;
+    arrearsFees: number; discountAmount: number; discountPercentage: number;
+    totalFees: number;
   }) => Promise<void>;
 }) {
   const [search, setSearch] = useState('');
@@ -187,8 +189,8 @@ function SinglePromotion({ students, stageFees, promoteStudent }: {
       toast.success(`تم نقل ${selected.name} بنجاح إلى ${stageLabels[toStage]} - ${toGrade}`);
       setSelected(null);
       setConfirmOpen(false);
-    } catch (e: any) {
-      toast.error(e.message || 'فشل النقل');
+    } catch (e: unknown) {
+      toast.error((e as Error).message || 'فشل النقل');
     } finally {
       setLoading(false);
     }
@@ -359,7 +361,9 @@ function BulkPromotion({ students, stageFees, bulkPromoteStudents }: {
   bulkPromoteStudents: (promotions: Array<{
     studentId: string; toStage: Stage; toGrade: string; toAcademicYear: string;
     tuitionFees: number; booksFees: number; uniformFees: number;
-    busFees: number; otherFees: number; totalFees: number;
+    busFees: number; otherFees: number;
+    arrearsFees: number; discountAmount: number; discountPercentage: number;
+    totalFees: number;
   }>) => Promise<{ succeeded: number; failed: number }>;
 }) {
   const [fromStage, setFromStage] = useState<Stage>('primary');
