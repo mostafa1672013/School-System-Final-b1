@@ -1,4 +1,4 @@
-export type UserRole = 'system_admin' | 'school_director' | 'head_accountant' | 'accountant' | 'warehouse_keeper' | 'bus_supervisor';
+export type UserRole = 'system_admin' | 'school_director' | 'head_accountant' | 'accountant' | 'warehouse_keeper' | 'bus_supervisor' | 'student_affairs';
 
 export interface Badge {
   id: string;
