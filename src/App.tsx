@@ -8,6 +8,7 @@ const Login = lazy(() => import('@/pages/Login'));
 const Dashboard = lazy(() => import('@/pages/Dashboard'));
 const Students = lazy(() => import('@/pages/Students'));
 const StudentDetail = lazy(() => import('@/pages/StudentDetail'));
+const StudentPromotion = lazy(() => import('@/pages/StudentPromotion'));
 const Payments = lazy(() => import('@/pages/Payments'));
 const PaymentApprovals = lazy(() => import('@/pages/PaymentApprovals'));
 const Treasury = lazy(() => import('@/pages/Treasury'));
@@ -60,6 +61,7 @@ export default function App() {
             <Route path="/dashboard" element={<Dashboard />} />
             <Route path="/students" element={<Students />} />
             <Route path="/students/:id" element={<StudentDetail />} />
+            <Route path="/student-promotion" element={<StudentPromotion />} />
             <Route path="/payments" element={<Payments />} />
             <Route path="/payment-approvals" element={<PaymentApprovals />} />
             <Route path="/treasury" element={<Treasury />} />
