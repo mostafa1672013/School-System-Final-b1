@@ -29,6 +29,7 @@ import {
   FileText,
   Database,
   Tag,
+  ArrowRightLeft,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { useAuthStore } from '@/stores/authStore';
@@ -55,9 +56,9 @@ interface NavItem {
 
 const navItems: NavItem[] = [
   { label: 'لوحة التحكم', path: '/dashboard', icon: LayoutDashboard, roles: ['system_admin', 'school_director', 'head_accountant', 'accountant', 'warehouse_keeper', 'bus_supervisor'] },
-  { 
-    label: 'إدارة الطلاب', 
-    icon: GraduationCap, 
+  {
+    label: 'إدارة الطلاب',
+    icon: GraduationCap,
     roles: ['system_admin', 'school_director', 'head_accountant', 'accountant'],
     subItems: [
       { label: 'قائمة الطلاب', path: '/students', icon: GraduationCap, roles: ['system_admin', 'school_director', 'head_accountant', 'accountant'] },
@@ -65,6 +66,7 @@ const navItems: NavItem[] = [
       { label: 'طلب التحاق جديد', path: '/admission/new', icon: UserCheck, roles: ['system_admin', 'school_director', 'head_accountant', 'accountant'] },
     ]
   },
+  { label: 'نقل الطلاب', path: '/student-promotion', icon: ArrowRightLeft, roles: ['school_director', 'head_accountant'] },
   { label: 'المدفوعات والخزينة', path: '/payments', icon: Banknote, roles: ['system_admin', 'school_director', 'head_accountant', 'accountant'] },
   { label: 'الخزينة', path: '/treasury', icon: Vault, roles: ['system_admin', 'school_director', 'head_accountant', 'accountant'] },
   { label: 'المخزن', path: '/inventory', icon: Package, roles: ['system_admin', 'school_director', 'warehouse_keeper'] },
