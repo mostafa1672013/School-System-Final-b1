@@ -336,7 +336,17 @@ async function seedInventoryTransactions() {
   console.log('✅ تم إضافة حركات المخزن.');
 }
 
+async function seedSystemSettings() {
+  await prisma.systemSetting.upsert({
+    where: { key: 'activeAcademicYear' },
+    create: { key: 'activeAcademicYear', value: '2024-2025' },
+    update: {},
+  });
+  console.log('✓ System settings seeded');
+}
+
 async function main() {
+  await seedSystemSettings();
   await seedUsers();
   await seedInventoryItems();
   await seedAdmittedStudents();

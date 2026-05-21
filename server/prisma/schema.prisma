@@ -389,3 +389,8 @@ model TreasurySession {
   expenses         Expense[]
   createdAt        DateTime  @default(now())
 }
+
+model SystemSetting {
+  key   String @id
+  value String
+}
