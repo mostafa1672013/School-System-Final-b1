@@ -56,7 +56,14 @@ export default function StudentDetail() {
     }, [fetchStudents, fetchPayments, fetchStudentInstallments, fetchStudentInventory, id]);
 
     const student = students.find((s) => s.id === id);
-    const studentPayments = useMemo(() => payments.filter((p) => p.studentId === id && p.type !== 'application_fee'), [payments, id]);
+    const studentPayments = useMemo(
+      () => payments.filter(p =>
+        p.studentId === id &&
+        p.type !== 'application_fee' &&
+        (!p.academicYear || p.academicYear === student?.academicYear)
+      ),
+      [payments, id, student?.academicYear]
+    );
     const studentInstallments = useMemo(() => {
         const plan = id ? installmentPlans[id] : null;
         return plan ? [plan] : [];
@@ -298,6 +305,30 @@ export default function StudentDetail() {
                         </div>
                     </div>
                 </div>
+
+                {/* Arrears Alert Banner */}
+                {student.arrearsFees > 0 && (
+                  <div className="rounded-lg border border-amber-200 bg-amber-50 p-4 flex items-center justify-between gap-3">
+                    <div className="flex items-center gap-2">
+                      <AlertCircle className="size-5 text-amber-600 shrink-0" />
+                      <p className="text-sm font-medium text-amber-800">
+                        يوجد متأخرات من سنوات سابقة:{' '}
+                        <span className="font-bold tabular-nums">{formatCurrency(student.arrearsFees)}</span>
+                      </p>
+                    </div>
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      className="border-amber-300 text-amber-800 hover:bg-amber-100 shrink-0"
+                      onClick={() => {
+                        setPayForm(f => ({ ...f, type: 'arrears' as PaymentType, amount: student.arrearsFees }));
+                        setPayDialogOpen(true);
+                      }}
+                    >
+                      تسجيل دفعة للمتأخرات
+                    </Button>
+                  </div>
+                )}
 
                 {/* Financial Summary */}
                 <div className="rounded-lg border bg-card p-6 space-y-4">
