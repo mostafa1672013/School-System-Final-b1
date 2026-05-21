@@ -20,6 +20,7 @@ import { formatCurrency, formatDateShort, stageLabels, paymentTypeLabels, paymen
 import { getAuthHeaders } from '@/stores/authStore';
 import type { PaymentType, PaymentMethod, Badge } from '@/types';
 import { printPaymentReceipt } from '@/hooks/usePrintReceipt';
+import StudentStatement from '@/components/student/StudentStatement';
 
 const instStatusConfig = {
     paid: { label: 'مسدد', icon: CheckCircle2, color: 'text-emerald-600 bg-emerald-50' },
@@ -31,23 +32,28 @@ export default function StudentDetail() {
     const { id } = useParams<{ id: string }>();
     const { students, fetchStudents, updateStudent } = useStudentsStore();
     const { user } = useAuthStore();
-    const { 
-        payments, 
-        fetchPayments, 
-        addPayment, 
-        installmentPlans, 
+    const {
+        payments,
+        fetchPayments,
+        addPayment,
+        installmentPlans,
         fetchStudentInstallments,
         saveInstallmentPlan,
-        payInstallment, 
-        updateInstallmentPlan 
+        payInstallment,
+        updateInstallmentPlan,
+        fetchStudentInventory,
+        inventoryTx: inventoryTxMap
     } = usePaymentsStore();
     const { subscriptions, routes } = useBusStore();
 
     useEffect(() => {
         fetchStudents();
         fetchPayments();
-        if (id) fetchStudentInstallments(id);
-    }, [fetchStudents, fetchPayments, fetchStudentInstallments, id]);
+        if (id) {
+            fetchStudentInstallments(id);
+            fetchStudentInventory(id);
+        }
+    }, [fetchStudents, fetchPayments, fetchStudentInstallments, fetchStudentInventory, id]);
 
     const student = students.find((s) => s.id === id);
     const studentPayments = useMemo(() => payments.filter((p) => p.studentId === id && p.type !== 'application_fee'), [payments, id]);
@@ -55,6 +61,10 @@ export default function StudentDetail() {
         const plan = id ? installmentPlans[id] : null;
         return plan ? [plan] : [];
     }, [installmentPlans, id]);
+    const studentInventoryTx = useMemo(
+        () => (id ? (inventoryTxMap[id] ?? []) : []),
+        [inventoryTxMap, id]
+    );
     const busSub = subscriptions.find((s) => s.studentId === id && s.status === 'active');
 
     const [payDialogOpen, setPayDialogOpen] = useState(false);
@@ -479,6 +489,7 @@ export default function StudentDetail() {
                     <TabsTrigger value="payments">سجل المدفوعات</TabsTrigger>
                     <TabsTrigger value="installments">خطط الأقساط</TabsTrigger>
                     <TabsTrigger value="history">السجل المالي للسنوات</TabsTrigger>
+                    <TabsTrigger value="statement">كشف الحساب</TabsTrigger>
                 </TabsList>
 
                 <TabsContent value="payments">
@@ -632,6 +643,15 @@ export default function StudentDetail() {
                             </div>
                         </div>
                     )}
+                </TabsContent>
+
+                <TabsContent value="statement" className="space-y-4">
+                    <StudentStatement
+                        student={student}
+                        payments={studentPayments}
+                        installmentPlan={studentInstallments[0] ?? null}
+                        inventoryTx={studentInventoryTx}
+                    />
                 </TabsContent>
             </Tabs>
 
