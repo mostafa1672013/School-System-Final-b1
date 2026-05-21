@@ -108,6 +108,7 @@ export default function YearManagement() {
       const promotions = [
         ...promotionData.toPromote.map(({ student, nextStage, nextGrade, fees, matchedFee }) => ({
           studentId: student.id,
+          fromAcademicYear: activeAcademicYear,
           stage: nextStage,
           grade: nextGrade,
           academicYear: targetYear,
@@ -124,6 +125,7 @@ export default function YearManagement() {
         })),
         ...promotionData.graduates.map((s) => ({
           studentId: s.id,
+          fromAcademicYear: activeAcademicYear,
           stage: s.stage,
           grade: s.grade,
           academicYear: targetYear,

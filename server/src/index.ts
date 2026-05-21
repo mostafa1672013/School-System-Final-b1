@@ -292,6 +292,7 @@ app.post('/api/students/bulk-promote', requireRoles('school_director', 'head_acc
   const { promotions } = req.body as {
     promotions: Array<{
       studentId: string;
+      fromAcademicYear: string;
       stage: string;
       grade: string;
       academicYear: string;
@@ -365,14 +366,15 @@ app.post('/api/students/bulk-promote', requireRoles('school_director', 'head_acc
     for (const student of studentsWithPayments) {
       const promo = promotions.find((p) => p.studentId === student.id);
       if (!promo) continue;
+      const fromYear = promo.fromAcademicYear;
       const oldPaid = student.payments
-        .filter((p) => !p.academicYear || p.academicYear !== promo.academicYear)
+        .filter((p) => !p.academicYear || p.academicYear === fromYear)
         .reduce((sum, p) => sum + p.amount, 0);
       await prisma.studentYearlyFinance.upsert({
-        where: { studentId_academicYear: { studentId: student.id, academicYear: promo.academicYear } },
+        where: { studentId_academicYear: { studentId: student.id, academicYear: fromYear } },
         create: {
           studentId: student.id,
-          academicYear: promo.academicYear,
+          academicYear: fromYear,
           stage: promo.stage,
           grade: promo.grade,
           tuitionFees: promo.tuitionFees,
@@ -382,9 +384,9 @@ app.post('/api/students/bulk-promote', requireRoles('school_director', 'head_acc
           otherFees: promo.otherFees,
           arrearsFees: promo.arrearsFees,
           totalFees: promo.totalFees,
-          paidAmount: 0,
+          paidAmount: oldPaid,
         },
-        update: { paidAmount: 0 },
+        update: { paidAmount: oldPaid },
       });
     }
   } catch (error) {
