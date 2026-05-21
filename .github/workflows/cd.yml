@@ -1,7 +1,9 @@
 name: CD
 
 on:
-  push:
+  workflow_run:
+    workflows: ["CI"]
+    types: [completed]
     branches: [main]
 
 concurrency:
@@ -13,6 +15,7 @@ jobs:
   deploy-frontend:
     name: Deploy Frontend → GitHub Pages
     runs-on: ubuntu-latest
+    if: ${{ github.event.workflow_run.conclusion == 'success' }}
     permissions:
       contents: write
 
@@ -41,6 +44,7 @@ jobs:
   build-and-push:
     name: Build & Push Backend Image → GHCR
     runs-on: ubuntu-latest
+    if: ${{ github.event.workflow_run.conclusion == 'success' }}
     permissions:
       contents: read
       packages: write
@@ -85,6 +89,7 @@ jobs:
   migrate:
     name: Run Prisma Migrations
     runs-on: ubuntu-latest
+    if: ${{ github.event.workflow_run.conclusion == 'success' }}
     needs: build-and-push
     environment: production
 

@@ -12,7 +12,7 @@ const config: Config = {
   testPathIgnorePatterns: ['/node_modules/', '/dist/'],
   testTimeout: 10000,
   transform: {
-    '^.+\\.tsx?$': ['ts-jest', { tsconfig: 'tsconfig.json', isolatedModules: true }],
+    '^.+\\.tsx?$': ['ts-jest', { tsconfig: 'tsconfig.json' }],
   },
 };
 

@@ -13,7 +13,8 @@
     "noEmitOnError": false,
     "noImplicitAny": false,
     "moduleResolution": "bundler",
-    "ignoreDeprecations": "5.0"
+    "ignoreDeprecations": "5.0",
+    "isolatedModules": true
   },
   "include": ["src/**/*"],
   "exclude": ["node_modules", "prisma/**/*"]
