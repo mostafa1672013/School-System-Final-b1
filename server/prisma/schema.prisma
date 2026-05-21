@@ -120,7 +120,7 @@ model Payment {
 
 model StudentYearlyFinance {
   id              String   @id @default(uuid())
-  studentId       String
+  studentId       String?
   academicYear    String
   grade           String
   stage           String
@@ -132,7 +132,7 @@ model StudentYearlyFinance {
   arrearsFees     Float    @default(0)
   totalFees       Float    @default(0)
   paidAmount      Float    @default(0)
-  student         Student  @relation(fields: [studentId], references: [id], onDelete: Cascade)
+  student         Student? @relation(fields: [studentId], references: [id], onDelete: SetNull)
 
   @@unique([studentId, academicYear])
 }
