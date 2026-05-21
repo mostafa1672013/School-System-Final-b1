@@ -179,6 +179,7 @@ export const usePaymentsStore = create<PaymentsState>()(
           const response = await fetch(`/api/students/${studentId}/inventory`, {
             headers: getAuthHeaders(),
           });
+          if (!response.ok) throw new Error(`Failed to fetch inventory: ${response.status}`);
           const data = await response.json();
           set(state => ({
             inventoryTx: { ...state.inventoryTx, [studentId]: data },

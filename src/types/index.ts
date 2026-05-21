@@ -27,7 +27,7 @@ export interface User {
   createdAt?: Date;
 }
 
-export type StudentStatus = 'applied' | 'under_testing' | 'fee_setup' | 'pending_approval' | 'admitted' | 'inactive' | 'graduated' | 'transferred';
+export type StudentStatus = 'applied' | 'under_testing' | 'fee_setup' | 'pending_approval' | 'active' | 'admitted' | 'inactive' | 'graduated' | 'transferred';
 export type Stage = 'kg' | 'primary' | 'preparatory' | 'secondary';
 export type Track = 'local' | 'international';
 
