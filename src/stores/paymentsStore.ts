@@ -1,7 +1,7 @@
 import { getAuthHeaders } from './authStore';
 import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
-import type { Payment, InstallmentPlan } from '@/types';
+import type { Payment, InstallmentPlan, InventoryTransaction } from '@/types';
 import { mockPayments } from '@/constants/mockData';
 import { generateId } from '@/lib/utils';
 import { toast } from 'sonner';
@@ -37,6 +37,9 @@ interface PaymentsState {
   addPendingPlanEdit: (edit: Omit<PendingPlanEdit, 'id'>) => void;
   approvePlanEdit: (editId: string) => void;
   rejectPlanEdit: (editId: string) => void;
+
+  inventoryTx: Record<string, InventoryTransaction[]>; // studentId -> transactions
+  fetchStudentInventory: (studentId: string) => Promise<void>;
 }
 
 export const usePaymentsStore = create<PaymentsState>()(
@@ -46,6 +49,7 @@ export const usePaymentsStore = create<PaymentsState>()(
       isLoading: false,
       installmentPlans: {},
       pendingPlanEdits: [],
+      inventoryTx: {},
 
       fetchPayments: async () => {
         set({ isLoading: true });
@@ -169,6 +173,20 @@ export const usePaymentsStore = create<PaymentsState>()(
       rejectPlanEdit: (editId) => set((state) => ({
         pendingPlanEdits: state.pendingPlanEdits.filter(e => e.id !== editId)
       })),
+
+      fetchStudentInventory: async (studentId) => {
+        try {
+          const response = await fetch(`/api/students/${studentId}/inventory`, {
+            headers: getAuthHeaders(),
+          });
+          const data = await response.json();
+          set(state => ({
+            inventoryTx: { ...state.inventoryTx, [studentId]: data },
+          }));
+        } catch (error) {
+          console.error('Fetch student inventory error:', error);
+        }
+      },
     }),
     { 
       name: 'school-payments',
