@@ -73,14 +73,6 @@ export default function YearManagement() {
   const [confirmText, setConfirmText] = useState('');
   const [activating, setActivating] = useState(false);
 
-  if (!user || !ALLOWED_ROLES.includes(user.role)) {
-    return (
-      <div className="flex items-center justify-center h-64">
-        <p className="text-muted-foreground">ليس لديك صلاحية الوصول لهذه الصفحة</p>
-      </div>
-    );
-  }
-
   const eligibleStudents = useMemo(
     () => students.filter((s) => s.academicYear === activeAcademicYear && ['admitted', 'active'].includes(s.status)),
     [students, activeAcademicYear]
@@ -180,6 +172,14 @@ export default function YearManagement() {
   const notPromoted = students.filter(
     (s) => s.academicYear === activeAcademicYear && !['admitted', 'active', 'inactive', 'graduated', 'transferred'].includes(s.status)
   );
+
+  if (!user || !ALLOWED_ROLES.includes(user.role)) {
+    return (
+      <div className="flex items-center justify-center h-64">
+        <p className="text-muted-foreground">ليس لديك صلاحية الوصول لهذه الصفحة</p>
+      </div>
+    );
+  }
 
   return (
     <div className="space-y-6 max-w-4xl mx-auto pb-10">
