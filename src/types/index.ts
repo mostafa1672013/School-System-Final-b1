@@ -48,6 +48,7 @@ export interface StudentYearlyFinance {
   uniformFees: number;
   busFees: number;
   otherFees: number;
+  arrearsFees: number;
   totalFees: number;
   paidAmount: number;
 }
@@ -75,6 +76,7 @@ export interface Student {
   uniformFees: number;
   busFees: number;
   otherFees: number;
+  arrearsFees: number;
   totalFees: number;
   paidAmount: number;
   discountAmount: number;
