@@ -381,15 +381,3 @@ export interface TreasuryCloseResult {
   sessionId?: string;
   session?: TreasurySession;
 }
-
-export interface PromotionRecord {
-  studentId: string;
-  fromStage: Stage;
-  fromGrade: string;
-  fromAcademicYear: string;
-  toStage: Stage;
-  toGrade: string;
-  toAcademicYear: string;
-  promotedAt: string;
-  promotedBy: string;
-}
