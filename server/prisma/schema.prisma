@@ -100,7 +100,7 @@ model StageFee {
 
 model Payment {
   id            String   @id @default(uuid())
-  studentId     String
+  studentId     String?
   studentName   String
   amount        Float
   type          String
@@ -113,7 +113,7 @@ model Payment {
   notes         String?
   walletPhoneNumber String?
   sessionId     String?
-  student       Student  @relation(fields: [studentId], references: [id], onDelete: Cascade)
+  student       Student? @relation(fields: [studentId], references: [id], onDelete: SetNull)
   session       TreasurySession? @relation(fields: [sessionId], references: [id], onDelete: SetNull)
   createdAt     DateTime @default(now())
 }
