@@ -170,6 +170,67 @@ app.delete('/api/students/:id', async (req, res) => {
   }
 });
 
+// Promote student to new stage/grade with arrears carryover
+app.post('/api/students/:id/promote', async (req, res) => {
+  const id = Array.isArray(req.params.id) ? req.params.id[0] : req.params.id;
+  const {
+    stage, grade, academicYear,
+    tuitionFees, booksFees, uniformFees, busFees, otherFees,
+    arrearsFees, discountAmount, discountPercentage, totalFees,
+  } = req.body;
+
+  try {
+    const [student] = await prisma.$transaction([
+      prisma.student.update({
+        where: { id },
+        data: {
+          stage, grade, academicYear,
+          tuitionFees, booksFees, uniformFees, busFees, otherFees,
+          arrearsFees: arrearsFees ?? 0,
+          discountAmount: discountAmount ?? 0,
+          discountPercentage: discountPercentage ?? 0,
+          totalFees,
+          paidAmount: 0,
+        },
+        include: { yearlyFinance: { orderBy: { academicYear: 'asc' } } },
+      }),
+      prisma.studentYearlyFinance.upsert({
+        where: { studentId_academicYear: { studentId: id, academicYear } },
+        create: {
+          studentId: id,
+          academicYear,
+          stage,
+          grade,
+          tuitionFees,
+          booksFees,
+          uniformFees,
+          busFees,
+          otherFees,
+          arrearsFees: arrearsFees ?? 0,
+          totalFees,
+          paidAmount: 0,
+        },
+        update: {
+          stage,
+          grade,
+          tuitionFees,
+          booksFees,
+          uniformFees,
+          busFees,
+          otherFees,
+          arrearsFees: arrearsFees ?? 0,
+          totalFees,
+          paidAmount: 0,
+        },
+      }),
+    ]);
+    res.json(student);
+  } catch (error) {
+    console.error('Promote student error:', error);
+    res.status(400).json({ error: 'فشل نقل الطالب', details: String(error) });
+  }
+});
+
 // --- Payments API ---
 app.get('/api/payments', async (req, res) => {
   try {
