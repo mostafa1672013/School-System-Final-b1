@@ -212,6 +212,7 @@ model User {
   isOnline  Boolean  @default(false)
   lastLoginAt DateTime?
   lastLogoutAt DateTime?
+  tokenVersion  Int      @default(0)
   deletedAt DateTime?
   createdAt DateTime @default(now())
 }

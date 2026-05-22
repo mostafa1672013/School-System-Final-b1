@@ -1,11 +1,15 @@
 import { Request, Response, NextFunction } from 'express';
 import jwt, { SignOptions } from 'jsonwebtoken';
+import { PrismaClient } from '@prisma/client';
+
+const prisma = new PrismaClient();
 
 // ---- Types ----
 export interface JwtPayload {
   userId: string;
   role: string;
   email: string;
+  tokenVersion: number;
 }
 
 // Extend Express Request so downstream handlers can read req.user
@@ -30,15 +34,29 @@ export function signToken(payload: JwtPayload): string {
   return jwt.sign(payload, JWT_SECRET as string, options);
 }
 
-// ---- requireAuth: verifies Bearer token, populates req.user ----
-export function requireAuth(req: Request, res: Response, next: NextFunction) {
+// ---- requireAuth: verifies Bearer token, checks tokenVersion against DB, populates req.user ----
+export async function requireAuth(req: Request, res: Response, next: NextFunction) {
   const header = req.headers.authorization;
   if (!header?.startsWith('Bearer ')) {
     return res.status(401).json({ error: 'Authentication required' });
   }
   const token = header.slice(7);
   try {
-    const payload = jwt.verify(token, JWT_SECRET as string) as any as JwtPayload;
+    const payload = jwt.verify(token, JWT_SECRET as string) as JwtPayload;
+
+    // Verify tokenVersion and account status against DB
+    const user = await prisma.user.findUnique({
+      where: { id: payload.userId },
+      select: { tokenVersion: true, active: true, deletedAt: true },
+    });
+
+    if (!user || user.deletedAt || !user.active) {
+      return res.status(401).json({ error: 'Account inactive or deleted' });
+    }
+    if (user.tokenVersion !== payload.tokenVersion) {
+      return res.status(401).json({ error: 'Session invalidated. Please log in again.' });
+    }
+
     req.user = payload;
     next();
   } catch {

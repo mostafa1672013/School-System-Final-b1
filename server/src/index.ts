@@ -498,6 +498,7 @@ app.post('/api/auth/login', loginLimiter, validate(LoginSchema), async (req, res
       userId: user.id,
       role: user.role,
       email: user.email,
+      tokenVersion: user.tokenVersion,
     });
 
     res.json({ user: userWithoutPassword, token });
@@ -511,9 +512,13 @@ app.post('/api/auth/logout', requireAuth, async (req, res) => {
   try {
     await prisma.user.update({
       where: { id: req.user!.userId },
-      data: { isOnline: false, lastLogoutAt: new Date() },
+      data: {
+        tokenVersion: { increment: 1 },
+        isOnline: false,
+        lastLogoutAt: new Date(),
+      },
     });
-    res.status(204).send();
+    res.json({ success: true });
   } catch (error) {
     res.status(500).json({ error: 'Logout failed' });
   }
@@ -623,9 +628,20 @@ app.patch('/api/users/:id', requireAuth, validate(UpdateUserSchema), async (req,
       delete safeData.role;
     }
 
+    // If role is changing, read the existing user to detect the change
+    let existingUser: { role: string } | null = null;
+    if (safeData.role) {
+      existingUser = await prisma.user.findUnique({ where: { id }, select: { role: true } });
+    }
+
     const user = await prisma.user.update({
       where: { id },
-      data: safeData,
+      data: {
+        ...safeData,
+        ...(safeData.role && existingUser && safeData.role !== existingUser.role
+          ? { tokenVersion: { increment: 1 } }
+          : {}),
+      },
       select: {
         id: true,
         name: true,
