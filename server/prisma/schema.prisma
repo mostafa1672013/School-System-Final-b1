@@ -70,6 +70,7 @@ model Student {
   documents       Json?     // stores URLs for birth certificate, ID, etc.
   extraFields     Json?     // stores custom fields as { label: string, value: string }[]
   additionalFees  Json?     // [{ name: string, amount: number, isMandatory: boolean }]
+  deletedAt       DateTime?
   createdAt       DateTime  @default(now())
   updatedAt       DateTime  @updatedAt
   payments        Payment[]
@@ -115,6 +116,7 @@ model Payment {
   sessionId     String?
   student       Student? @relation(fields: [studentId], references: [id], onDelete: SetNull)
   session       TreasurySession? @relation(fields: [sessionId], references: [id], onDelete: SetNull)
+  deletedAt     DateTime?
   createdAt     DateTime @default(now())
 }
 
@@ -210,6 +212,7 @@ model User {
   isOnline  Boolean  @default(false)
   lastLoginAt DateTime?
   lastLogoutAt DateTime?
+  deletedAt DateTime?
   createdAt DateTime @default(now())
 }
 
