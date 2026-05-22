@@ -1903,7 +1903,7 @@ app.get('/api/treasury/status', async (req, res) => {
       });
       return res.json({
         status: 'no_session',
-        suggestedOpeningBalance: lastSession?.closingBalance ?? null,
+        suggestedOpeningBalance: lastSession?.actualBalance ?? lastSession?.closingBalance ?? null,
         isFirstEver: !lastSession
       });
     }
