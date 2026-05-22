@@ -1,16 +1,17 @@
-import { Decimal } from '@prisma/client/runtime/library';
+import { Prisma } from '@prisma/client';
 
-export function toNumber(d: Decimal | null | undefined): number {
+export function toNumber(d: Prisma.Decimal | null | undefined): number {
   if (d == null) return 0;
   return d.toNumber();
 }
 
-export function toDecimal(n: number | string): Decimal {
-  return new Decimal(n);
+export function toDecimal(n: number | string): Prisma.Decimal {
+  return new Prisma.Decimal(n);
 }
 
 export function serializeDecimals<T>(obj: T): T {
-  if (obj instanceof Decimal) return obj.toNumber() as unknown as T;
+  if (obj instanceof Prisma.Decimal) return obj.toNumber() as unknown as T;
+  if (obj instanceof Date) return obj as unknown as T;
   if (Array.isArray(obj)) return obj.map(serializeDecimals) as unknown as T;
   if (obj !== null && typeof obj === 'object') {
     return Object.fromEntries(
