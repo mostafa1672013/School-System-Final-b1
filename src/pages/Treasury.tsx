@@ -57,6 +57,15 @@ export default function Treasury() {
     setIsAuthorized(authorized);
   }, [status, user]);
 
+  // Show loading spinner before any status checks
+  if (loading && !status) {
+    return (
+      <div className="flex items-center justify-center min-h-screen">
+        <p className="text-gray-500">جاري التحميل...</p>
+      </div>
+    );
+  }
+
   const handleOpenTreasury = async () => {
     if (!openingBalanceInput || parseFloat(openingBalanceInput) < 0) {
       toast.error('الرجاء إدخال رصيد صحيح');
@@ -551,15 +560,6 @@ export default function Treasury() {
             </div>
           </DialogContent>
         </Dialog>
-      </div>
-    );
-  }
-
-  // Loading state
-  if (loading) {
-    return (
-      <div className="flex items-center justify-center min-h-screen">
-        <p className="text-gray-500">جاري التحميل...</p>
       </div>
     );
   }
