@@ -2052,7 +2052,7 @@ app.post('/api/treasury/close-request', async (req, res) => {
 
 // POST: تقديم ملاحظة فرق وتحويل الجلسة إلى حالة pending_close
 app.post('/api/treasury/pending-close', async (req, res) => {
-  const { actualBalance, closureNote } = req.body;
+  const { actualBalance, closureNote, expectedBalance } = req.body;
   const userId = req.user!.userId;
 
   if (!closureNote || closureNote.trim().length < 10) {
@@ -2062,25 +2062,25 @@ app.post('/api/treasury/pending-close', async (req, res) => {
   try {
     const today = new Date().toISOString().split('T')[0];
     const session = await prisma.treasurySession.findUnique({
-      where: { date: today },
-      include: {
-        payments: true,
-        expenses: { where: { status: 'paid' } }
-      }
+      where: { date: today }
+      // no include needed — we use caller-supplied expectedBalance
     });
 
-    if (!session || session.status !== 'open') {
-      return res.status(404).json({ error: 'لا توجد جلسة مفتوحة اليوم' });
+    if (!session) {
+      return res.status(404).json({ error: 'لا توجد جلسة اليوم' });
+    }
+    if (session.status === 'pending_close') {
+      return res.status(409).json({ error: 'طلب الإغلاق تم تقديمه بالفعل وفي انتظار موافقة المدير', code: 'ALREADY_PENDING' });
+    }
+    if (session.status !== 'open') {
+      return res.status(400).json({ error: 'الجلسة مغلقة بالفعل' });
     }
 
     if (session.openedBy !== userId) {
       return res.status(403).json({ error: 'فقط من فتح الخزينة يمكنه تقديم طلب الإغلاق' });
     }
 
-    const totalIncome = session.payments.reduce((sum: number, p: any) => sum + p.amount, 0);
-    const totalExpenses = session.expenses.reduce((sum: number, e: any) => sum + e.amount, 0);
-    const expectedBalance = session.openingBalance + totalIncome - totalExpenses;
-    const difference = Number(actualBalance) - expectedBalance;
+    const difference = Number(actualBalance) - Number(expectedBalance);
 
     const closerUser = await prisma.user.findUnique({ where: { id: userId }, select: { name: true } });
 
@@ -2089,7 +2089,7 @@ app.post('/api/treasury/pending-close', async (req, res) => {
       data: {
         status: 'pending_close',
         actualBalance: Number(actualBalance),
-        closingBalance: expectedBalance,
+        closingBalance: Number(expectedBalance),
         difference,
         closedBy: closerUser?.name || userId,
         closureNote: closureNote.trim()
@@ -2099,7 +2099,7 @@ app.post('/api/treasury/pending-close', async (req, res) => {
     res.json({
       status: 'pending_close',
       session: updated,
-      expectedBalance,
+      expectedBalance: Number(expectedBalance),
       actualBalance: Number(actualBalance),
       difference,
       sessionId: session.id

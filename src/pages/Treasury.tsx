@@ -121,6 +121,10 @@ export default function Treasury() {
   };
 
   const handleSubmitPendingClose = async () => {
+    if (!pendingDiscrepancyInfo) {
+      toast.error('معلومات الجرد غير متوفرة');
+      return;
+    }
     if (!closureNote || closureNote.trim().length < 10) {
       toast.error('يجب كتابة سبب الفرق (10 أحرف على الأقل)');
       return;
@@ -128,7 +132,8 @@ export default function Treasury() {
 
     setIsSubmitting(true);
     const result = await submitPendingClose(
-      pendingDiscrepancyInfo!.actualBalance,
+      pendingDiscrepancyInfo.actualBalance,
+      pendingDiscrepancyInfo.expectedBalance,
       closureNote
     );
     setIsSubmitting(false);
@@ -251,7 +256,7 @@ export default function Treasury() {
                 <Button
                   onClick={async () => {
                     setIsSubmitting(true);
-                    const success = await approveClose(status.session!.id, '');
+                    const success = await approveClose(status.session!.id);
                     setIsSubmitting(false);
                     if (success) toast.success('تم اعتماد إغلاق الخزينة');
                     else toast.error('فشل الاعتماد');
