@@ -156,9 +156,15 @@ export default function Treasury() {
           <Card className="w-full border-2 border-dashed">
             <CardHeader className="text-center">
               <Vault className="w-16 h-16 mx-auto text-blue-600 mb-4" />
-              <CardTitle>فتح الخزينة</CardTitle>
+              <CardTitle>{status?.closedToday ? 'تم إغلاق الخزينة اليوم' : 'فتح الخزينة'}</CardTitle>
             </CardHeader>
             <CardContent className="space-y-6">
+              {status?.closedToday && (
+                <div className="bg-green-50 p-4 rounded-lg border border-green-200 text-center">
+                  <p className="text-green-700 font-medium">✓ تم إغلاق جلسة اليوم بنجاح</p>
+                  <p className="text-sm text-gray-500 mt-1">يمكنك فتح جلسة جديدة إذا لزم الأمر</p>
+                </div>
+              )}
               <div className="space-y-4">
                 {status?.suggestedOpeningBalance !== null && status?.suggestedOpeningBalance !== undefined ? (
                   <div className="bg-blue-50 p-4 rounded-lg border border-blue-200">

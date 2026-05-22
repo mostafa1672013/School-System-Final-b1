@@ -1897,14 +1897,16 @@ app.get('/api/treasury/status', async (req, res) => {
       }
     });
 
-    if (!session) {
+    if (!session || session.status === 'closed') {
       const lastSession = await prisma.treasurySession.findFirst({
+        where: { status: 'closed' },
         orderBy: { date: 'desc' }
       });
       return res.json({
         status: 'no_session',
         suggestedOpeningBalance: lastSession?.actualBalance ?? lastSession?.closingBalance ?? null,
-        isFirstEver: !lastSession
+        isFirstEver: !lastSession,
+        closedToday: session?.status === 'closed'
       });
     }
 

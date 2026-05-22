@@ -376,6 +376,7 @@ export interface TreasuryStatus {
   expensesCount?: number;
   suggestedOpeningBalance?: number | null;
   isFirstEver?: boolean;
+  closedToday?: boolean;
 }
 
 export interface TreasuryCloseResult {
