@@ -361,6 +361,8 @@ export interface TreasurySession {
   approvedBy: string | null;
   openedAt: string;
   closedAt: string | null;
+  payments?: Payment[];
+  expenses?: Expense[];
 }
 
 export interface TreasuryStatus {
