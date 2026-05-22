@@ -10,6 +10,7 @@ import rateLimit from 'express-rate-limit';
 import accountingRouter from './accounting-api';
 import { signToken, requireAuth, requireRoles, adminOnly, managementRoles, accountantRoles, socketAuth } from './middleware/auth';
 import { validate, LoginSchema, CreateUserSchema, UpdateUserSchema } from './validation/schemas';
+import { audit, getAuditContext } from './middleware/audit';
 
 dotenv.config();
 
@@ -196,6 +197,14 @@ app.delete('/api/students/:id', requireAuth, managementRoles, async (req, res) =
       where: { id },
       data: { deletedAt: new Date() },
     });
+    await audit(
+      getAuditContext(req),
+      'DELETE',
+      'Student',
+      id,
+      { name: student.name, status: student.status },
+      { deletedAt: new Date().toISOString() },
+    );
     res.json({ success: true });
   } catch (err) {
     res.status(400).json({ error: 'Failed to delete student' });
@@ -797,6 +806,14 @@ app.post('/api/payments', requireOpenTreasury, async (req, res) => {
           })
     ]);
 
+    await audit(
+      getAuditContext(req),
+      'CREATE',
+      'Payment',
+      payment.id,
+      null,
+      { amount: String(payment.amount), type: payment.type, studentId: payment.studentId, method: payment.method },
+    );
     res.status(201).json(payment);
   } catch (error: any) {
     console.error('Payment error:', error?.message || error);
@@ -1595,12 +1612,20 @@ app.patch('/api/admission/action-discount/:id', async (req, res) => {
 
     const updatedStudent = await prisma.student.update({
       where: { id },
-      data: { 
+      data: {
         discountStatus: status,
         discountApprovedBy: status === 'approved' ? approvedBy : null,
         status: status === 'approved' ? 'pending_approval' : 'fee_setup'
       }
     });
+    await audit(
+      getAuditContext(req),
+      status === 'approved' ? 'APPROVE' : 'REJECT',
+      'Discount',
+      id,
+      { discountStatus: 'pending' },
+      { discountStatus: status === 'approved' ? 'approved' : 'rejected' },
+    );
     res.json(updatedStudent);
   } catch (error) {
     res.status(400).json({ error: 'Failed to action discount' });
@@ -1924,14 +1949,22 @@ app.get('/api/treasury/status', async (req, res) => {
     });
 
     if (!session || session.status === 'closed') {
-      const lastSession = await prisma.treasurySession.findFirst({
+      const userId = req.user!.userId;
+      const userLastSession = await prisma.treasurySession.findFirst({
+        where: { status: 'closed', openedBy: userId },
+        orderBy: { date: 'desc' }
+      });
+      const anyLastSession = userLastSession ?? await prisma.treasurySession.findFirst({
         where: { status: 'closed' },
         orderBy: { date: 'desc' }
       });
       return res.json({
         status: 'no_session',
-        suggestedOpeningBalance: lastSession?.actualBalance ?? lastSession?.closingBalance ?? null,
-        isFirstEver: !lastSession,
+        suggestedOpeningBalance: userLastSession
+          ? (userLastSession.actualBalance ?? userLastSession.closingBalance ?? null)
+          : null,
+        userHasPreviousSession: !!userLastSession,
+        isFirstEver: !anyLastSession,
         closedToday: session?.status === 'closed'
       });
     }
@@ -2007,6 +2040,15 @@ app.post('/api/treasury/open', async (req, res) => {
       }
     });
 
+    await audit(
+      getAuditContext(req),
+      'CREATE',
+      'TreasurySession',
+      session.id,
+      null,
+      { date: session.date, openingBalance: String(session.openingBalance) },
+    );
+
     res.status(201).json(session);
   } catch (error) {
     res.status(400).json({ error: 'فشل فتح الخزينة' });
@@ -2061,6 +2103,14 @@ app.post('/api/treasury/close-request', async (req, res) => {
           closedAt: new Date()
         }
       });
+      await audit(
+        getAuditContext(req),
+        'UPDATE',
+        'TreasurySession',
+        closed.id,
+        { status: 'open' },
+        { status: 'closed', closingBalance: String(expectedBalance) },
+      );
       return res.json({
         status: 'closed',
         session: closed,
@@ -2162,6 +2212,15 @@ app.post('/api/treasury/close-approve', async (req, res) => {
         // actualBalance, closingBalance, difference, closedBy, closureNote already set in pending-close step
       }
     });
+
+    await audit(
+      getAuditContext(req),
+      'UPDATE',
+      'TreasurySession',
+      closed.id,
+      { status: 'pending_close' },
+      { status: 'closed', closingBalance: String(closed.closingBalance) },
+    );
 
     res.json({ status: 'closed', session: closed });
   } catch (error) {
