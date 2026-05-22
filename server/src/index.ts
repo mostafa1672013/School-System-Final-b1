@@ -445,6 +445,7 @@ app.put('/api/settings/academic-year', requireRoles('school_director', 'head_acc
 app.get('/api/payments', async (req, res) => {
   try {
     const payments = await prisma.payment.findMany({
+      where: { deletedAt: null },
       orderBy: { date: 'desc' }
     });
     res.json(payments);
@@ -662,6 +663,7 @@ app.delete('/api/users/:id', requireAuth, adminOnly, async (req, res) => {
 app.get('/api/payments', async (req, res) => {
   try {
     const payments = await prisma.payment.findMany({
+      where: { deletedAt: null },
       orderBy: { date: 'desc' }
     });
     res.json(payments);
@@ -2288,7 +2290,7 @@ app.get('/api/database/backup', requireAuth, adminOnly, async (req, res) => {
         student: await prisma.student.findMany({ where: { deletedAt: null } }),
         studentYearlyFinance: await prisma.studentYearlyFinance.findMany(),
         stageFee: await prisma.stageFee.findMany(),
-        payment: await prisma.payment.findMany(),
+        payment: await prisma.payment.findMany({ where: { deletedAt: null } }),
         inventoryItem: await prisma.inventoryItem.findMany(),
         inventoryTransaction: await prisma.inventoryTransaction.findMany(),
         itemCategory: await prisma.itemCategory.findMany(),
