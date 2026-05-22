@@ -99,7 +99,7 @@ async function requireOpenTreasury(req: express.Request, res: express.Response, 
 
     if (!session || session.status !== 'open') {
       return res.status(403).json({
-        error: 'الخزينة مغلقة',
+        error: 'الخزينة مغلقة أو في انتظار الموافقة',
         code: 'TREASURY_CLOSED',
         message: 'يجب فتح الخزينة أولاً قبل تسجيل أي عملية مالية'
       });
@@ -1912,6 +1912,18 @@ app.get('/api/treasury/status', async (req, res) => {
     const totalExpenses = session.expenses.reduce((sum: number, e: any) => sum + e.amount, 0);
     const currentBalance = session.openingBalance + totalIncome - totalExpenses;
 
+    if (session.status === 'pending_close') {
+      return res.json({
+        status: 'pending_close',
+        session,
+        totalIncome,
+        totalExpenses,
+        currentBalance,
+        paymentsCount: session.payments.length,
+        expensesCount: session.expenses.length
+      });
+    }
+
     res.json({
       status: 'open',
       session,
@@ -2028,9 +2040,68 @@ app.post('/api/treasury/close-request', async (req, res) => {
   }
 });
 
-// POST: إغلاق مع موافقة المدير (عند وجود فرق)
+// POST: تقديم ملاحظة فرق وتحويل الجلسة إلى حالة pending_close
+app.post('/api/treasury/pending-close', async (req, res) => {
+  const { actualBalance, closureNote } = req.body;
+  const userId = req.user!.userId;
+
+  if (!closureNote || closureNote.trim().length < 10) {
+    return res.status(400).json({ error: 'يجب كتابة سبب الفرق (10 أحرف على الأقل)' });
+  }
+
+  try {
+    const today = new Date().toISOString().split('T')[0];
+    const session = await prisma.treasurySession.findUnique({
+      where: { date: today },
+      include: {
+        payments: true,
+        expenses: { where: { status: 'paid' } }
+      }
+    });
+
+    if (!session || session.status !== 'open') {
+      return res.status(404).json({ error: 'لا توجد جلسة مفتوحة اليوم' });
+    }
+
+    if (session.openedBy !== userId) {
+      return res.status(403).json({ error: 'فقط من فتح الخزينة يمكنه تقديم طلب الإغلاق' });
+    }
+
+    const totalIncome = session.payments.reduce((sum: number, p: any) => sum + p.amount, 0);
+    const totalExpenses = session.expenses.reduce((sum: number, e: any) => sum + e.amount, 0);
+    const expectedBalance = session.openingBalance + totalIncome - totalExpenses;
+    const difference = Number(actualBalance) - expectedBalance;
+
+    const closerUser = await prisma.user.findUnique({ where: { id: userId }, select: { name: true } });
+
+    const updated = await prisma.treasurySession.update({
+      where: { id: session.id },
+      data: {
+        status: 'pending_close',
+        actualBalance: Number(actualBalance),
+        closingBalance: expectedBalance,
+        difference,
+        closedBy: closerUser?.name || userId,
+        closureNote: closureNote.trim()
+      }
+    });
+
+    res.json({
+      status: 'pending_close',
+      session: updated,
+      expectedBalance,
+      actualBalance: Number(actualBalance),
+      difference,
+      sessionId: session.id
+    });
+  } catch (error) {
+    res.status(400).json({ error: 'فشل تقديم طلب الإغلاق' });
+  }
+});
+
+// POST: إغلاق مع موافقة المدير (عند وجود فرق - الجلسة يجب أن تكون في حالة pending_close)
 app.post('/api/treasury/close-approve', async (req, res) => {
-  const { sessionId, actualBalance, closureNote } = req.body;
+  const { sessionId } = req.body;
   const approvedByUserId = req.user!.userId;
 
   try {
@@ -2040,47 +2111,22 @@ app.post('/api/treasury/close-approve', async (req, res) => {
       return res.status(403).json({ error: 'ليس لديك صلاحية اعتماد الإغلاق' });
     }
 
-    if (!closureNote || closureNote.trim().length < 10) {
-      return res.status(400).json({ error: 'يجب كتابة سبب الفرق (10 أحرف على الأقل)' });
-    }
-
-    const sessionRec = await prisma.treasurySession.findUnique({
-      where: { id: sessionId },
-      select: { openedBy: true }
-    });
-    const closerUser = await prisma.user.findUnique({
-      where: { id: sessionRec?.openedBy || '' },
-      select: { name: true }
-    });
-    const closedBy = closerUser?.name || sessionRec?.openedBy || 'غير معروف';
-    const approvedBy = approver.name;
-
     const session = await prisma.treasurySession.findUnique({
-      where: { id: sessionId },
-      include: {
-        payments: true,
-        expenses: { where: { status: 'paid' } }
-      }
+      where: { id: sessionId }
     });
 
     if (!session) return res.status(404).json({ error: 'الجلسة غير موجودة' });
-
-    const totalIncome = session.payments.reduce((sum: number, p: any) => sum + p.amount, 0);
-    const totalExpenses = session.expenses.reduce((sum: number, e: any) => sum + e.amount, 0);
-    const expectedBalance = session.openingBalance + totalIncome - totalExpenses;
-    const difference = Number(actualBalance) - expectedBalance;
+    if (session.status !== 'pending_close') {
+      return res.status(400).json({ error: 'الجلسة ليست في حالة انتظار الموافقة' });
+    }
 
     const closed = await prisma.treasurySession.update({
       where: { id: sessionId },
       data: {
-        actualBalance: Number(actualBalance),
-        closingBalance: expectedBalance,
-        difference,
         status: 'closed',
-        closedBy,
-        approvedBy,
-        closureNote,
+        approvedBy: approver.name,
         closedAt: new Date()
+        // actualBalance, closingBalance, difference, closedBy, closureNote already set in pending-close step
       }
     });
 

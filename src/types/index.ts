@@ -345,7 +345,7 @@ export interface Expense {
 
 // ===== Treasury Types =====
 
-export type TreasurySessionStatus = 'open' | 'closed';
+export type TreasurySessionStatus = 'open' | 'pending_close' | 'closed';
 
 export interface TreasurySession {
   id: string;
@@ -364,7 +364,7 @@ export interface TreasurySession {
 }
 
 export interface TreasuryStatus {
-  status: 'open' | 'no_session';
+  status: 'open' | 'pending_close' | 'no_session';
   session?: TreasurySession;
   totalIncome?: number;
   totalExpenses?: number;

@@ -378,7 +378,7 @@ model TreasurySession {
   closingBalance   Float?
   actualBalance    Float?
   difference       Float?
-  status           String    @default("open") // open, closed
+  status           String    @default("open") // open, pending_close, closed
   openedBy         String
   closedBy         String?
   closureNote      String?

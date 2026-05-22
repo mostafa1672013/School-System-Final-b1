@@ -11,7 +11,8 @@ interface TreasuryState {
   fetchStatus: () => Promise<void>;
   openTreasury: (openingBalance: number) => Promise<boolean>;
   requestClose: (actualBalance: number) => Promise<TreasuryCloseResult | null>;
-  approveClose: (sessionId: string, actualBalance: number, closureNote: string) => Promise<boolean>;
+  submitPendingClose: (actualBalance: number, closureNote: string) => Promise<TreasuryCloseResult | null>;
+  approveClose: (sessionId: string, closureNote: string) => Promise<boolean>;
   fetchSessions: () => Promise<void>;
 }
 
@@ -70,12 +71,29 @@ export const useTreasuryStore = create<TreasuryState>((set, get) => ({
     }
   },
 
-  approveClose: async (sessionId, actualBalance, closureNote) => {
+  submitPendingClose: async (actualBalance, closureNote) => {
+    try {
+      const res = await fetch('/api/treasury/pending-close', {
+        method: 'POST',
+        headers: getAuthHeaders(),
+        body: JSON.stringify({ actualBalance, closureNote }),
+      });
+      if (!res.ok) return null;
+      const data = await res.json();
+      await get().fetchStatus();
+      return data;
+    } catch (error) {
+      console.error('Failed to submit pending close:', error);
+      return null;
+    }
+  },
+
+  approveClose: async (sessionId, closureNote) => {
     try {
       const res = await fetch('/api/treasury/close-approve', {
         method: 'POST',
         headers: getAuthHeaders(),
-        body: JSON.stringify({ sessionId, actualBalance, closureNote }),
+        body: JSON.stringify({ sessionId, closureNote }),
       });
       if (res.ok) {
         await get().fetchStatus();

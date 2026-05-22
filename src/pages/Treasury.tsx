@@ -12,7 +12,7 @@ import { toast } from 'sonner';
 import { formatCurrency } from '@/lib/utils';
 
 export default function Treasury() {
-  const { status, loading, fetchStatus, openTreasury, requestClose, approveClose } = useTreasuryStore();
+  const { status, loading, fetchStatus, openTreasury, requestClose, submitPendingClose, approveClose } = useTreasuryStore();
   const { user } = useAuthStore();
   const { printReport } = usePrintTreasuryReport();
 
@@ -21,8 +21,8 @@ export default function Treasury() {
   const [closureNote, setClosureNote] = useState('');
   const [showOpenDialog, setShowOpenDialog] = useState(false);
   const [showCloseDialog, setShowCloseDialog] = useState(false);
-  const [showApprovalDialog, setShowApprovalDialog] = useState(false);
-  const [closeRequestResult, setCloseRequestResult] = useState<any>(null);
+  const [showPendingNoteDialog, setShowPendingNoteDialog] = useState(false);
+  const [pendingDiscrepancyInfo, setPendingDiscrepancyInfo] = useState<{ expectedBalance: number; actualBalance: number; difference: number } | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isAuthorized, setIsAuthorized] = useState(false);
 
@@ -87,47 +87,44 @@ export default function Treasury() {
     setIsSubmitting(false);
 
     if (result) {
-      setCloseRequestResult(result);
       if (result.status === 'closed') {
         toast.success('تم إغلاق الخزينة بنجاح');
         setShowCloseDialog(false);
         setActualBalanceInput('');
-      } else {
-        toast.warning('يوجد فرق في الجرد - يحتاج موافقة المدير');
+      } else if (result.status === 'needs_approval') {
+        setPendingDiscrepancyInfo({
+          expectedBalance: result.expectedBalance,
+          actualBalance: result.actualBalance,
+          difference: result.difference,
+        });
         setShowCloseDialog(false);
-        setShowApprovalDialog(true);
+        setShowPendingNoteDialog(true);
       }
     } else {
       toast.error('فشل جرد الخزينة');
     }
   };
 
-  const handleApproveClose = async () => {
+  const handleSubmitPendingClose = async () => {
     if (!closureNote || closureNote.trim().length < 10) {
       toast.error('يجب كتابة سبب الفرق (10 أحرف على الأقل)');
       return;
     }
 
-    if (!closeRequestResult?.sessionId) {
-      toast.error('معلومات الجلسة غير صحيحة');
-      return;
-    }
-
     setIsSubmitting(true);
-    const success = await approveClose(
-      closeRequestResult.sessionId,
-      closeRequestResult.actualBalance,
+    const result = await submitPendingClose(
+      pendingDiscrepancyInfo!.actualBalance,
       closureNote
     );
     setIsSubmitting(false);
 
-    if (success) {
-      toast.success('تم إغلاق الخزينة مع الموافقة');
-      setShowApprovalDialog(false);
+    if (result) {
+      toast.warning('تم تقديم طلب الإغلاق - في انتظار موافقة المدير');
+      setShowPendingNoteDialog(false);
       setClosureNote('');
-      setActualBalanceInput('');
+      setPendingDiscrepancyInfo(null);
     } else {
-      toast.error('فشل إغلاق الخزينة');
+      toast.error('فشل تقديم طلب الإغلاق');
     }
   };
 
@@ -205,6 +202,58 @@ export default function Treasury() {
             </div>
           </DialogContent>
         </Dialog>
+      </div>
+    );
+  }
+
+  // === حالة pending_close ===
+  if (status.status === 'pending_close' && status.session) {
+    const canApprove = user?.role && ['school_director', 'head_accountant', 'system_admin'].includes(user.role);
+
+    return (
+      <div className="min-h-screen bg-gradient-to-br from-orange-50 to-orange-100 p-6">
+        <div className="max-w-md mx-auto h-screen flex flex-col items-center justify-center">
+          <Card className="w-full border-2 border-orange-300">
+            <CardHeader className="text-center">
+              <AlertCircle className="w-16 h-16 mx-auto text-orange-600 mb-4" />
+              <CardTitle>الخزينة في انتظار الموافقة</CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              <p className="text-sm text-gray-600">
+                قدّم {status.session.closedBy} طلب إغلاق مع فرق في الجرد.
+              </p>
+              <div className="bg-orange-50 p-4 rounded-lg border border-orange-200">
+                <p className="text-sm text-gray-600">الفرق:</p>
+                <p className="text-2xl font-bold text-orange-700">
+                  {formatCurrency(status.session.difference || 0)}
+                </p>
+              </div>
+              <div className="bg-gray-50 p-4 rounded-lg">
+                <p className="text-sm font-medium text-gray-700">سبب الفرق:</p>
+                <p className="text-sm text-gray-600 mt-1">{status.session.closureNote}</p>
+              </div>
+              {canApprove ? (
+                <Button
+                  onClick={async () => {
+                    setIsSubmitting(true);
+                    const success = await approveClose(status.session!.id, '');
+                    setIsSubmitting(false);
+                    if (success) toast.success('تم اعتماد إغلاق الخزينة');
+                    else toast.error('فشل الاعتماد');
+                  }}
+                  disabled={isSubmitting}
+                  className="w-full bg-orange-600 hover:bg-orange-700"
+                >
+                  {isSubmitting ? 'جاري الاعتماد...' : 'اعتماد الإغلاق'}
+                </Button>
+              ) : (
+                <p className="text-center text-sm text-gray-500">
+                  يرجى الانتظار حتى يعتمد المدير الإغلاق
+                </p>
+              )}
+            </CardContent>
+          </Card>
+        </div>
       </div>
     );
   }
@@ -453,29 +502,30 @@ export default function Treasury() {
           </DialogContent>
         </Dialog>
 
-        {/* Approval Dialog (for discrepancies) */}
-        <Dialog open={showApprovalDialog} onOpenChange={setShowApprovalDialog}>
+        {/* Note submission dialog — for discrepancy close requests */}
+        <Dialog open={showPendingNoteDialog} onOpenChange={setShowPendingNoteDialog}>
           <DialogContent className="max-w-md">
             <DialogHeader>
               <DialogTitle className="flex items-center gap-2">
                 <AlertCircle className="w-5 h-5 text-orange-600" />
-                طلب موافقة على الفرق
+                تقديم طلب إغلاق بفرق
               </DialogTitle>
-              <DialogDescription>يوجد فرق في الجرد - يحتاج موافقة من المدير</DialogDescription>
+              <DialogDescription>يوجد فرق في الجرد - اشرح السبب ليتم إرساله للمدير للموافقة</DialogDescription>
             </DialogHeader>
             <div className="space-y-6">
-              <Alert variant="destructive">
-                <AlertCircle className="h-4 w-4" />
-                <AlertTitle>فرق في الجرد</AlertTitle>
-                <AlertDescription>
-                  الفرق: {formatCurrency(closeRequestResult?.difference || 0)}
-                  <br />
-                  المتوقع: {formatCurrency(closeRequestResult?.expectedBalance || 0)}
-                  <br />
-                  الفعلي: {formatCurrency(closeRequestResult?.actualBalance || 0)}
-                </AlertDescription>
-              </Alert>
-
+              {pendingDiscrepancyInfo && (
+                <Alert variant="destructive">
+                  <AlertCircle className="h-4 w-4" />
+                  <AlertTitle>فرق في الجرد</AlertTitle>
+                  <AlertDescription>
+                    الفرق: {formatCurrency(pendingDiscrepancyInfo.difference)}
+                    <br />
+                    المتوقع: {formatCurrency(pendingDiscrepancyInfo.expectedBalance)}
+                    <br />
+                    الفعلي: {formatCurrency(pendingDiscrepancyInfo.actualBalance)}
+                  </AlertDescription>
+                </Alert>
+              )}
               <div className="space-y-3">
                 <label className="text-sm font-medium">سبب الفرق (إجباري)</label>
                 <textarea
@@ -486,17 +536,16 @@ export default function Treasury() {
                 />
                 <p className="text-xs text-gray-500">{closureNote.length}/10 أحرف</p>
               </div>
-
               <div className="flex gap-3">
-                <Button variant="outline" onClick={() => setShowApprovalDialog(false)} disabled={isSubmitting}>
+                <Button variant="outline" onClick={() => setShowPendingNoteDialog(false)} disabled={isSubmitting}>
                   إلغاء
                 </Button>
                 <Button
-                  onClick={handleApproveClose}
+                  onClick={handleSubmitPendingClose}
                   disabled={closureNote.trim().length < 10 || isSubmitting}
-                  className="bg-blue-600 hover:bg-blue-700"
+                  className="bg-orange-600 hover:bg-orange-700"
                 >
-                  {isSubmitting ? 'جاري الموافقة...' : 'الموافقة والإغلاق'}
+                  {isSubmitting ? 'جاري الإرسال...' : 'إرسال طلب الإغلاق'}
                 </Button>
               </div>
             </div>
