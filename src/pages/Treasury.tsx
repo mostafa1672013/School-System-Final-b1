@@ -77,29 +77,13 @@ export default function Treasury() {
   };
 
   const handleRequestClose = async () => {
-    // Security check: Only the treasury opener can close
-    if (!user || !user.id) {
-      toast.error('يجب تسجيل الدخول أولاً');
-      return;
-    }
-
-    if (!status || !status.session || !status.session.openedBy) {
-      toast.error('لا توجد جلسة خزينة مفتوحة');
-      return;
-    }
-
-    if (status.session.openedBy !== user.id) {
-      toast.error('فقط الشخص الذي فتح الخزينة يمكنه إغلاقها');
-      return;
-    }
-
     if (!actualBalanceInput || parseFloat(actualBalanceInput) < 0) {
       toast.error('الرجاء إدخال المبلغ الفعلي');
       return;
     }
 
     setIsSubmitting(true);
-    const result = await requestClose(parseFloat(actualBalanceInput), user?.name || 'أمين الخزينة');
+    const result = await requestClose(parseFloat(actualBalanceInput));
     setIsSubmitting(false);
 
     if (result) {
@@ -119,22 +103,6 @@ export default function Treasury() {
   };
 
   const handleApproveClose = async () => {
-    // Security check: Only the treasury opener can approve close
-    if (!user || !user.id) {
-      toast.error('يجب تسجيل الدخول أولاً');
-      return;
-    }
-
-    if (!status || !status.session || !status.session.openedBy) {
-      toast.error('لا توجد جلسة خزينة مفتوحة');
-      return;
-    }
-
-    if (status.session.openedBy !== user.id) {
-      toast.error('فقط الشخص الذي فتح الخزينة يمكنه الموافقة على الإغلاق');
-      return;
-    }
-
     if (!closureNote || closureNote.trim().length < 10) {
       toast.error('يجب كتابة سبب الفرق (10 أحرف على الأقل)');
       return;
@@ -149,8 +117,6 @@ export default function Treasury() {
     const success = await approveClose(
       closeRequestResult.sessionId,
       closeRequestResult.actualBalance,
-      user?.name || 'أمين الخزينة',
-      user?.id || '',
       closureNote
     );
     setIsSubmitting(false);

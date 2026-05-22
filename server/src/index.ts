@@ -1965,7 +1965,7 @@ app.post('/api/treasury/open', async (req, res) => {
 
 // POST: جرد الإغلاق - المرحلة الأولى (إدخال المبلغ الفعلي)
 app.post('/api/treasury/close-request', async (req, res) => {
-  const { actualBalance, closedBy } = req.body;
+  const { actualBalance } = req.body;
 
   try {
     const today = new Date().toISOString().split('T')[0];
@@ -1980,6 +1980,16 @@ app.post('/api/treasury/close-request', async (req, res) => {
     if (!session || session.status !== 'open') {
       return res.status(404).json({ error: 'لا توجد جلسة مفتوحة اليوم' });
     }
+
+    if (session.openedBy !== req.user!.userId) {
+      return res.status(403).json({
+        error: 'فقط الشخص الذي فتح الخزينة يمكنه إغلاقها',
+        code: 'UNAUTHORIZED_CLOSER'
+      });
+    }
+
+    const closerUser = await prisma.user.findUnique({ where: { id: req.user!.userId }, select: { name: true } });
+    const closedBy = closerUser?.name || req.user!.userId;
 
     const totalIncome = session.payments.reduce((sum: number, p: any) => sum + p.amount, 0);
     const totalExpenses = session.expenses.reduce((sum: number, e: any) => sum + e.amount, 0);
@@ -2020,10 +2030,11 @@ app.post('/api/treasury/close-request', async (req, res) => {
 
 // POST: إغلاق مع موافقة المدير (عند وجود فرق)
 app.post('/api/treasury/close-approve', async (req, res) => {
-  const { sessionId, actualBalance, closedBy, approvedBy, closureNote } = req.body;
+  const { sessionId, actualBalance, closureNote } = req.body;
+  const approvedByUserId = req.user!.userId;
 
   try {
-    const approver = await prisma.user.findUnique({ where: { id: approvedBy } });
+    const approver = await prisma.user.findUnique({ where: { id: approvedByUserId } });
     const approverRoles = ['school_director', 'head_accountant', 'system_admin'];
     if (!approver || !approverRoles.includes(approver.role)) {
       return res.status(403).json({ error: 'ليس لديك صلاحية اعتماد الإغلاق' });
@@ -2032,6 +2043,17 @@ app.post('/api/treasury/close-approve', async (req, res) => {
     if (!closureNote || closureNote.trim().length < 10) {
       return res.status(400).json({ error: 'يجب كتابة سبب الفرق (10 أحرف على الأقل)' });
     }
+
+    const sessionRec = await prisma.treasurySession.findUnique({
+      where: { id: sessionId },
+      select: { openedBy: true }
+    });
+    const closerUser = await prisma.user.findUnique({
+      where: { id: sessionRec?.openedBy || '' },
+      select: { name: true }
+    });
+    const closedBy = closerUser?.name || sessionRec?.openedBy || 'غير معروف';
+    const approvedBy = approver.name;
 
     const session = await prisma.treasurySession.findUnique({
       where: { id: sessionId },

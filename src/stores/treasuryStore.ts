@@ -10,8 +10,8 @@ interface TreasuryState {
   // Actions
   fetchStatus: () => Promise<void>;
   openTreasury: (openingBalance: number) => Promise<boolean>;
-  requestClose: (actualBalance: number, closedBy: string) => Promise<TreasuryCloseResult | null>;
-  approveClose: (sessionId: string, actualBalance: number, closedBy: string, approvedBy: string, closureNote: string) => Promise<boolean>;
+  requestClose: (actualBalance: number) => Promise<TreasuryCloseResult | null>;
+  approveClose: (sessionId: string, actualBalance: number, closureNote: string) => Promise<boolean>;
   fetchSessions: () => Promise<void>;
 }
 
@@ -51,12 +51,12 @@ export const useTreasuryStore = create<TreasuryState>((set, get) => ({
     }
   },
 
-  requestClose: async (actualBalance, closedBy) => {
+  requestClose: async (actualBalance) => {
     try {
       const res = await fetch('/api/treasury/close-request', {
         method: 'POST',
         headers: getAuthHeaders(),
-        body: JSON.stringify({ actualBalance, closedBy }),
+        body: JSON.stringify({ actualBalance }),
       });
       if (!res.ok) return null;
       const data = await res.json();
@@ -70,12 +70,12 @@ export const useTreasuryStore = create<TreasuryState>((set, get) => ({
     }
   },
 
-  approveClose: async (sessionId, actualBalance, closedBy, approvedBy, closureNote) => {
+  approveClose: async (sessionId, actualBalance, closureNote) => {
     try {
       const res = await fetch('/api/treasury/close-approve', {
         method: 'POST',
         headers: getAuthHeaders(),
-        body: JSON.stringify({ sessionId, actualBalance, closedBy, approvedBy, closureNote }),
+        body: JSON.stringify({ sessionId, actualBalance, closureNote }),
       });
       if (res.ok) {
         await get().fetchStatus();
