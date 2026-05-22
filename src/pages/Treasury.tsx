@@ -114,6 +114,8 @@ export default function Treasury() {
         });
         setShowCloseDialog(false);
         setShowPendingNoteDialog(true);
+      } else if ((result as any).status === 'error') {
+        toast.error((result as any).error || 'فشل جرد الخزينة');
       }
     } else {
       toast.error('فشل جرد الخزينة');

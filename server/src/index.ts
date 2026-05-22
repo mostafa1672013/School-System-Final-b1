@@ -2005,15 +2005,18 @@ app.post('/api/treasury/close-request', async (req, res) => {
       return res.status(404).json({ error: 'لا توجد جلسة مفتوحة اليوم' });
     }
 
-    if (session.openedBy !== req.user!.userId) {
+    const closerUser = await prisma.user.findUnique({ where: { id: req.user!.userId }, select: { name: true, role: true } });
+    const closedBy = closerUser?.name || req.user!.userId;
+
+    const managerRoles = ['school_director', 'head_accountant', 'system_admin'];
+    const isManager = closerUser && managerRoles.includes(closerUser.role);
+
+    if (session.openedBy !== req.user!.userId && !isManager) {
       return res.status(403).json({
-        error: 'فقط الشخص الذي فتح الخزينة يمكنه إغلاقها',
+        error: 'فقط الشخص الذي فتح الخزينة أو المدير يمكنه إغلاقها',
         code: 'UNAUTHORIZED_CLOSER'
       });
     }
-
-    const closerUser = await prisma.user.findUnique({ where: { id: req.user!.userId }, select: { name: true } });
-    const closedBy = closerUser?.name || req.user!.userId;
 
     const totalIncome = session.payments.reduce((sum: number, p: any) => sum + p.amount, 0);
     const totalExpenses = session.expenses.reduce((sum: number, e: any) => sum + e.amount, 0);

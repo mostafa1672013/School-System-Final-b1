@@ -62,7 +62,11 @@ export const useTreasuryStore = create<TreasuryState>((set, get) => ({
         headers: getAuthHeaders(),
         body: JSON.stringify({ actualBalance }),
       });
-      if (!res.ok) return null;
+      if (!res.ok) {
+        const errBody = await res.json().catch(() => ({}));
+        console.error('close-request failed:', res.status, errBody);
+        return { status: 'error' as any, error: errBody.error || `خطأ ${res.status}`, code: errBody.code };
+      }
       const data = await res.json();
       if (data.status === 'closed') {
         await get().fetchStatus();
