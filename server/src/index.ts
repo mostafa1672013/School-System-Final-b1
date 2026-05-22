@@ -126,6 +126,7 @@ async function requireOpenTreasury(req: express.Request, res: express.Response, 
 app.get('/api/students', async (req, res) => {
   try {
     const students = await prisma.student.findMany({
+      where: { deletedAt: null },
       include: {
         yearlyFinance: {
           orderBy: { academicYear: 'asc' }
@@ -173,17 +174,31 @@ app.patch('/api/students/:id', async (req, res) => {
 });
 
 // Delete student
-app.delete('/api/students/:id', async (req, res) => {
+app.delete('/api/students/:id', requireAuth, managementRoles, async (req, res) => {
   const id = Array.isArray(req.params.id) ? req.params.id[0] : req.params.id;
   try {
-    const existingPlan = await prisma.installmentPlan.findUnique({ where: { studentId: id } });
-    if (existingPlan) {
-      return res.status(400).json({ error: 'لا يمكن حذف الطالب — يوجد خطة أقساط نشطة، يرجى إنهاؤها أو حذفها أولاً.' });
+    const paymentCount = await prisma.payment.count({
+      where: { studentId: id, deletedAt: null },
+    });
+    if (paymentCount > 0) {
+      return res.status(409).json({
+        error: 'Cannot delete student with payment history',
+        code: 'STUDENT_HAS_PAYMENTS',
+      });
     }
-    await prisma.student.delete({ where: { id } });
-    res.json({ message: 'تم حذف الطالب بنجاح. المدفوعات المسجلة محفوظة في الخزينة.' });
-  } catch (error) {
-    res.status(400).json({ error: 'فشل حذف الطالب' });
+
+    const student = await prisma.student.findUnique({ where: { id } });
+    if (!student || student.deletedAt) {
+      return res.status(404).json({ error: 'Student not found' });
+    }
+
+    await prisma.student.update({
+      where: { id },
+      data: { deletedAt: new Date() },
+    });
+    res.json({ success: true });
+  } catch (err) {
+    res.status(400).json({ error: 'Failed to delete student' });
   }
 });
 
@@ -215,7 +230,7 @@ app.post('/api/students/:id/promote', requireRoles('school_director', 'head_acco
     const oldAcademicYear = currentStudent.academicYear;
     const oldPaidAmount = currentStudent.payments
       .filter(p => !p.academicYear || p.academicYear === oldAcademicYear)
-      .reduce((sum, p) => sum + p.amount, 0);
+      .reduce((sum, p) => sum + Number(p.amount), 0);
 
     const [student] = await prisma.$transaction([
       prisma.student.update({
@@ -359,7 +374,7 @@ app.post('/api/students/bulk-promote', requireRoles('school_director', 'head_acc
       .map((p) => p.studentId);
 
     const studentsWithPayments = await prisma.student.findMany({
-      where: { id: { in: promotedIds } },
+      where: { id: { in: promotedIds }, deletedAt: null },
       include: { payments: { where: { NOT: { type: 'application_fee' } } } },
     });
 
@@ -369,7 +384,7 @@ app.post('/api/students/bulk-promote', requireRoles('school_director', 'head_acc
       const fromYear = promo.fromAcademicYear;
       const oldPaid = student.payments
         .filter((p) => !p.academicYear || p.academicYear === fromYear)
-        .reduce((sum, p) => sum + p.amount, 0);
+        .reduce((sum, p) => sum + Number(p.amount), 0);
       await prisma.studentYearlyFinance.upsert({
         where: { studentId_academicYear: { studentId: student.id, academicYear: fromYear } },
         create: {
@@ -500,6 +515,7 @@ app.post('/api/auth/logout', requireAuth, async (req, res) => {
 app.get('/api/users', async (req, res) => {
   try {
     const users = await prisma.user.findMany({
+      where: { deletedAt: null },
       select: {
         id: true,
         name: true,
@@ -624,13 +640,20 @@ app.patch('/api/users/:id', requireAuth, validate(UpdateUserSchema), async (req,
 // Delete user (admin only)
 app.delete('/api/users/:id', requireAuth, adminOnly, async (req, res) => {
   const id = Array.isArray(req.params.id) ? req.params.id[0] : req.params.id;
-  console.log(`🗑️ محاولة حذف المستخدم: ${id}`);
   try {
-    await prisma.user.delete({ where: { id } });
-    console.log('✅ تم حذف المستخدم بنجاح');
-    res.status(204).send();
-  } catch (error) {
-    console.error('❌ فشل حذف المستخدم:', error);
+    if (req.user?.userId === id) {
+      return res.status(400).json({ error: 'Cannot delete your own account' });
+    }
+    const user = await prisma.user.findUnique({ where: { id } });
+    if (!user || user.deletedAt) {
+      return res.status(404).json({ error: 'User not found' });
+    }
+    await prisma.user.update({
+      where: { id },
+      data: { deletedAt: new Date(), active: false },
+    });
+    res.json({ success: true });
+  } catch (err) {
     res.status(400).json({ error: 'Failed to delete user' });
   }
 });
@@ -705,7 +728,7 @@ app.post('/api/payments', requireOpenTreasury, async (req, res) => {
       for (const finance of yearlyFinances) {
         if (remainingAmount <= 0) break;
 
-        const balance = finance.totalFees - finance.paidAmount;
+        const balance = Number(finance.totalFees) - Number(finance.paidAmount);
         if (balance > 0) {
           const paymentToThisYear = Math.min(remainingAmount, balance);
           updates.push(
@@ -1130,7 +1153,7 @@ app.post('/api/inventory/issue', async (req, res) => {
           quantity,
           unitCostSnapshot: item.unitCost,
           unitPriceSnapshot: item.unitPrice,
-          totalAmount: item.unitPrice * quantity,
+          totalAmount: Number(item.unitPrice) * quantity,
           departmentName: departmentName || null,
           studentId: studentId || null,
           studentName: studentName || null,
@@ -1170,13 +1193,13 @@ app.post('/api/inventory/issue', async (req, res) => {
                   create: [
                     {
                       accountId: cash1001.id,
-                      debit: item.unitPrice * quantity,
+                      debit: Number(item.unitPrice) * quantity,
                       credit: 0
                     },
                     {
                       accountId: revenueAccount.id,
                       debit: 0,
-                      credit: item.unitPrice * quantity
+                      credit: Number(item.unitPrice) * quantity
                     }
                   ]
                 }
@@ -1193,13 +1216,13 @@ app.post('/api/inventory/issue', async (req, res) => {
                   create: [
                     {
                       accountId: cogs5001.id,
-                      debit: item.unitCost * quantity,
+                      debit: Number(item.unitCost) * quantity,
                       credit: 0
                     },
                     {
                       accountId: inventory1300.id,
                       debit: 0,
-                      credit: item.unitCost * quantity
+                      credit: Number(item.unitCost) * quantity
                     }
                   ]
                 }
@@ -1228,13 +1251,13 @@ app.post('/api/inventory/issue', async (req, res) => {
                   create: [
                     {
                       accountId: expense5002.id,
-                      debit: item.unitCost * quantity,
+                      debit: Number(item.unitCost) * quantity,
                       credit: 0
                     },
                     {
                       accountId: inventory1300.id,
                       debit: 0,
-                      credit: item.unitCost * quantity
+                      credit: Number(item.unitCost) * quantity
                     }
                   ]
                 }
@@ -1451,7 +1474,7 @@ app.patch('/api/admission/setup-fees/:id', async (req, res) => {
     // Server-side safety: check requester's limit
     const requester = await prisma.user.findUnique({ where: { id: discountRequesterId || '' } });
     const userLimit = requester?.discountLimitPercent || 0;
-    const finalDiscountStatus = (Number(discountPercentage || 0) > userLimit) ? 'pending' : (discountStatus || 'approved');
+    const finalDiscountStatus = (Number(discountPercentage || 0) > Number(userLimit)) ? 'pending' : (discountStatus || 'approved');
     const finalStudentStatus = (finalDiscountStatus === 'pending') ? 'pending_discount' : 'pending_approval';
 
     const student = await prisma.student.update({
@@ -1482,7 +1505,7 @@ app.get('/api/admission/pending-discounts', async (req, res) => {
   try {
     const user = approverId ? await prisma.user.findUnique({ where: { id: approverId as string } }) : null;
     
-    let whereClause: any = { discountStatus: 'pending' };
+    let whereClause: any = { discountStatus: 'pending', deletedAt: null };
     
     // If not a high-level manager, only show assigned ones
     if (user && !['school_director', 'head_accountant', 'system_admin'].includes(user.role)) {
@@ -1513,7 +1536,8 @@ app.patch('/api/admission/fix-discount-status', async (req, res) => {
       where: {
         discountAmount: { gt: 0 },
         discountStatus: { not: 'pending' },
-        status: 'pending_approval'
+        status: 'pending_approval',
+        deletedAt: null,
       }
     });
 
@@ -1555,12 +1579,12 @@ app.patch('/api/admission/action-discount/:id', async (req, res) => {
         return res.status(404).json({ error: 'بيانات غير صالحة' });
       }
 
-      const discountPct = student.discountPercentage || 
-        (student.totalFees + student.discountAmount > 0 
-          ? (student.discountAmount / (student.totalFees + student.discountAmount)) * 100 
+      const discountPct = Number(student.discountPercentage || 0) || 
+        (Number(student.totalFees) + Number(student.discountAmount) > 0 
+          ? (Number(student.discountAmount) / (Number(student.totalFees) + Number(student.discountAmount))) * 100 
           : 0);
 
-      if (discountPct > approver.discountLimitPercent) {
+      if (discountPct > Number(approver.discountLimitPercent)) {
         return res.status(403).json({ 
           error: `لا يمكنك اعتماد هذا الخصم. صلاحيتك ${approver.discountLimitPercent}% والخصم المطلوب ${discountPct.toFixed(1)}%` 
         });
@@ -1601,15 +1625,15 @@ app.patch('/api/admission/approve/:id', async (req, res) => {
     }
 
     // CRITICAL: Check approver's discount limit if student has a discount
-    if (approverId && existing.discountAmount > 0) {
+    if (approverId && Number(existing.discountAmount) > 0) {
       const approver = await prisma.user.findUnique({ where: { id: approverId } });
       if (approver) {
-        const discountPct = existing.discountPercentage || 
-          ((existing.totalFees + existing.discountAmount) > 0 
-            ? (existing.discountAmount / (existing.totalFees + existing.discountAmount)) * 100 
+        const discountPct = Number(existing.discountPercentage || 0) || 
+          ((Number(existing.totalFees) + Number(existing.discountAmount)) > 0 
+            ? (Number(existing.discountAmount) / (Number(existing.totalFees) + Number(existing.discountAmount))) * 100 
             : 0);
         
-        if (discountPct > approver.discountLimitPercent) {
+        if (discountPct > Number(approver.discountLimitPercent)) {
           return res.status(403).json({ 
             error: `لا يمكنك اعتماد هذا الطالب. صلاحيتك للخصم ${approver.discountLimitPercent}% والخصم المطبق ${discountPct.toFixed(1)}%` 
           });
@@ -1797,7 +1821,7 @@ app.post('/api/expenses', async (req, res) => {
     }
 
     const limitRecord = await prisma.expenseLimit.findUnique({ where: { role } });
-    const limit = limitRecord ? limitRecord.maxAmount : 0;
+    const limit = limitRecord ? Number(limitRecord.maxAmount) : 0;
 
     const requiresApproval = Number(amount) > limit;
     const status = requiresApproval ? 'pending_approval' : 'pending_treasury';
@@ -1912,7 +1936,7 @@ app.get('/api/treasury/status', async (req, res) => {
 
     const totalIncome = session.payments.reduce((sum: number, p: any) => sum + p.amount, 0);
     const totalExpenses = session.expenses.reduce((sum: number, e: any) => sum + e.amount, 0);
-    const currentBalance = session.openingBalance + totalIncome - totalExpenses;
+    const currentBalance = Number(session.openingBalance) + totalIncome - totalExpenses;
 
     const opener = session.openedBy
       ? await prisma.user.findUnique({ where: { id: session.openedBy }, select: { name: true } })
@@ -2020,7 +2044,7 @@ app.post('/api/treasury/close-request', async (req, res) => {
 
     const totalIncome = session.payments.reduce((sum: number, p: any) => sum + p.amount, 0);
     const totalExpenses = session.expenses.reduce((sum: number, e: any) => sum + e.amount, 0);
-    const expectedBalance = session.openingBalance + totalIncome - totalExpenses;
+    const expectedBalance = Number(session.openingBalance) + totalIncome - totalExpenses;
     const difference = Number(actualBalance) - expectedBalance;
 
     if (Math.abs(difference) < 0.01) {
@@ -2043,6 +2067,18 @@ app.post('/api/treasury/close-request', async (req, res) => {
       });
     }
 
+    // Lock the session immediately to prevent payments during the approval window
+    await prisma.treasurySession.update({
+      where: { id: session.id },
+      data: {
+        status: 'pending_close',
+        actualBalance: Number(actualBalance),
+        closingBalance: expectedBalance,
+        difference,
+        closedBy,
+      }
+    });
+
     res.json({
       status: 'needs_approval',
       expectedBalance,
@@ -2055,10 +2091,9 @@ app.post('/api/treasury/close-request', async (req, res) => {
   }
 });
 
-// POST: تقديم ملاحظة فرق وتحويل الجلسة إلى حالة pending_close
+// POST: إضافة ملاحظة الفرق إلى الجلسة المقفلة مسبقاً بواسطة close-request
 app.post('/api/treasury/pending-close', async (req, res) => {
-  const { actualBalance, closureNote, expectedBalance } = req.body;
-  const userId = req.user!.userId;
+  const { closureNote } = req.body;
 
   if (!closureNote || closureNote.trim().length < 10) {
     return res.status(400).json({ error: 'يجب كتابة سبب الفرق (10 أحرف على الأقل)' });
@@ -2068,45 +2103,26 @@ app.post('/api/treasury/pending-close', async (req, res) => {
     const today = new Date().toISOString().split('T')[0];
     const session = await prisma.treasurySession.findUnique({
       where: { date: today }
-      // no include needed — we use caller-supplied expectedBalance
     });
 
     if (!session) {
       return res.status(404).json({ error: 'لا توجد جلسة اليوم' });
     }
-    if (session.status === 'pending_close') {
-      return res.status(409).json({ error: 'طلب الإغلاق تم تقديمه بالفعل وفي انتظار موافقة المدير', code: 'ALREADY_PENDING' });
+    if (session.status !== 'pending_close') {
+      return res.status(400).json({ error: 'الجلسة ليست في حالة انتظار الإغلاق' });
     }
-    if (session.status !== 'open') {
-      return res.status(400).json({ error: 'الجلسة مغلقة بالفعل' });
-    }
-
-    if (session.openedBy !== userId) {
-      return res.status(403).json({ error: 'فقط من فتح الخزينة يمكنه تقديم طلب الإغلاق' });
-    }
-
-    const difference = Number(actualBalance) - Number(expectedBalance);
-
-    const closerUser = await prisma.user.findUnique({ where: { id: userId }, select: { name: true } });
 
     const updated = await prisma.treasurySession.update({
       where: { id: session.id },
-      data: {
-        status: 'pending_close',
-        actualBalance: Number(actualBalance),
-        closingBalance: Number(expectedBalance),
-        difference,
-        closedBy: closerUser?.name || userId,
-        closureNote: closureNote.trim()
-      }
+      data: { closureNote: closureNote.trim() }
     });
 
     res.json({
       status: 'pending_close',
       session: updated,
-      expectedBalance: Number(expectedBalance),
-      actualBalance: Number(actualBalance),
-      difference,
+      expectedBalance: Number(updated.closingBalance),
+      actualBalance: Number(updated.actualBalance),
+      difference: Number(updated.difference),
       sessionId: session.id
     });
   } catch (error) {
@@ -2182,7 +2198,7 @@ app.get('/api/treasury/sessions/:id', async (req, res) => {
 
     const totalIncome = session.payments.reduce((sum: number, p: any) => sum + p.amount, 0);
     const totalExpenses = session.expenses.reduce((sum: number, e: any) => sum + e.amount, 0);
-    const currentBalance = session.openingBalance + totalIncome - totalExpenses;
+    const currentBalance = Number(session.openingBalance) + totalIncome - totalExpenses;
 
     res.json({ session, totalIncome, totalExpenses, currentBalance });
   } catch (error) {
@@ -2261,7 +2277,7 @@ app.get('/api/database/backup', requireAuth, adminOnly, async (req, res) => {
       version: "1.0",
       timestamp: new Date().toISOString(),
       data: {
-        user: await prisma.user.findMany(),
+        user: await prisma.user.findMany({ where: { deletedAt: null } }),
         roleLimit: await prisma.roleLimit.findMany(),
         account: await prisma.account.findMany(),
         fiscalYear: await prisma.fiscalYear.findMany(),
@@ -2269,7 +2285,7 @@ app.get('/api/database/backup', requireAuth, adminOnly, async (req, res) => {
         costCenter: await prisma.costCenter.findMany(),
         journalEntry: await prisma.journalEntry.findMany(),
         journalEntryLine: await prisma.journalEntryLine.findMany(),
-        student: await prisma.student.findMany(),
+        student: await prisma.student.findMany({ where: { deletedAt: null } }),
         studentYearlyFinance: await prisma.studentYearlyFinance.findMany(),
         stageFee: await prisma.stageFee.findMany(),
         payment: await prisma.payment.findMany(),
@@ -2587,7 +2603,7 @@ app.patch('/api/students/:id/badge', async (req, res) => {
       const student = await prisma.student.findUnique({ where: { id } });
       if (!student) return res.status(404).json({ error: 'Student not found' });
 
-      const discountAmount = Math.round((student.totalFees * badge.discountPercentage) / 100);
+      const discountAmount = Math.round((Number(student.totalFees) * Number(badge.discountPercentage)) / 100);
       discountData = {
         badgeId,
         discountPercentage: badge.discountPercentage,
