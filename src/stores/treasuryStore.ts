@@ -6,6 +6,7 @@ interface TreasuryState {
   status: TreasuryStatus | null;
   sessions: TreasurySession[];
   loading: boolean;
+  sessionDetails: { payments: any[]; expenses: any[] } | null;
 
   // Actions
   fetchStatus: () => Promise<void>;
@@ -14,12 +15,14 @@ interface TreasuryState {
   submitPendingClose: (actualBalance: number, closureNote: string) => Promise<TreasuryCloseResult | null>;
   approveClose: (sessionId: string, closureNote: string) => Promise<boolean>;
   fetchSessions: () => Promise<void>;
+  fetchSessionDetails: (sessionId: string) => Promise<void>;
 }
 
 export const useTreasuryStore = create<TreasuryState>((set, get) => ({
   status: null,
   sessions: [],
   loading: false,
+  sessionDetails: null,
 
   fetchStatus: async () => {
     set({ loading: true });
@@ -113,6 +116,20 @@ export const useTreasuryStore = create<TreasuryState>((set, get) => ({
       set({ sessions: data });
     } catch (error) {
       console.error('Failed to fetch sessions:', error);
+    }
+  },
+
+  fetchSessionDetails: async (sessionId) => {
+    try {
+      const res = await fetch(`/api/treasury/sessions/${sessionId}`, {
+        headers: getAuthHeaders()
+      });
+      if (res.ok) {
+        const data = await res.json();
+        set({ sessionDetails: { payments: data.session.payments || [], expenses: data.session.expenses || [] } });
+      }
+    } catch (error) {
+      console.error('Failed to fetch session details:', error);
     }
   },
 }));

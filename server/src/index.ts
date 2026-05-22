@@ -1892,8 +1892,8 @@ app.get('/api/treasury/status', async (req, res) => {
     const session = await prisma.treasurySession.findUnique({
       where: { date: today },
       include: {
-        payments: true,
-        expenses: { where: { status: 'paid' } }
+        payments: { select: { amount: true } },
+        expenses: { where: { status: 'paid' }, select: { amount: true } }
       }
     });
 

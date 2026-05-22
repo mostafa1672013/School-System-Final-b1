@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { useTreasuryStore } from '@/stores/treasuryStore';
-import { useAuthStore, getAuthHeaders } from '@/stores/authStore';
+import { useAuthStore } from '@/stores/authStore';
 import { usePrintTreasuryReport } from '@/hooks/usePrintTreasuryReport';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -12,7 +12,7 @@ import { toast } from 'sonner';
 import { formatCurrency } from '@/lib/utils';
 
 export default function Treasury() {
-  const { status, loading, fetchStatus, openTreasury, requestClose, submitPendingClose, approveClose } = useTreasuryStore();
+  const { status, loading, fetchStatus, openTreasury, requestClose, submitPendingClose, approveClose, fetchSessionDetails, sessionDetails } = useTreasuryStore();
   const { user } = useAuthStore();
   const { printReport } = usePrintTreasuryReport();
 
@@ -56,6 +56,12 @@ export default function Treasury() {
     const authorized = status.session.openedBy === user.id;
     setIsAuthorized(authorized);
   }, [status, user]);
+
+  useEffect(() => {
+    if (status?.status === 'open' && status.session?.id) {
+      fetchSessionDetails(status.session.id);
+    }
+  }, [status?.session?.id, fetchSessionDetails]);
 
   // Show loading spinner before any status checks
   if (loading && !status) {
@@ -291,16 +297,11 @@ export default function Treasury() {
             </div>
             <div className="flex gap-3">
               <Button
-                onClick={async () => {
-                  const sessionDetails = await fetch(`/api/treasury/sessions/${status.session.id}`, {
-                    headers: getAuthHeaders()
-                  }).then((r) =>
-                    r.ok ? r.json() : { session: {} }
-                  );
+                onClick={() => {
                   printReport(
                     status.session,
-                    sessionDetails.session.payments || [],
-                    sessionDetails.session.expenses || [],
+                    sessionDetails?.payments || [],
+                    sessionDetails?.expenses || [],
                     { totalIncome, totalExpenses, currentBalance }
                   );
                 }}
@@ -393,8 +394,8 @@ export default function Treasury() {
                       </tr>
                     </thead>
                     <tbody>
-                      {status.session.payments && status.session.payments.length > 0 ? (
-                        status.session.payments.map((p: any) => (
+                      {sessionDetails?.payments && sessionDetails.payments.length > 0 ? (
+                        sessionDetails.payments.map((p: any) => (
                           <tr key={p.id} className="border-b hover:bg-gray-50">
                             <td className="p-3">{p.studentName}</td>
                             <td className="p-3 text-green-600 font-semibold">{formatCurrency(p.amount)}</td>
@@ -430,8 +431,8 @@ export default function Treasury() {
                       </tr>
                     </thead>
                     <tbody>
-                      {status.session.expenses && status.session.expenses.length > 0 ? (
-                        status.session.expenses.map((e: any) => (
+                      {sessionDetails?.expenses && sessionDetails.expenses.length > 0 ? (
+                        sessionDetails.expenses.map((e: any) => (
                           <tr key={e.id} className="border-b hover:bg-gray-50">
                             <td className="p-3">{e.description}</td>
                             <td className="p-3 text-red-600 font-semibold">{formatCurrency(e.amount)}</td>
