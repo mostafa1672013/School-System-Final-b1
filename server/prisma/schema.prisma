@@ -21,7 +21,8 @@ model Badge {
 
 model Student {
   id              String    @id @default(uuid())
-  nationalId      String    @unique
+  nationalId      String    @unique   // now stores encrypted value
+  nationalIdHash  String?   @unique   // HMAC hash for @unique lookups
   name            String
   photoUrl        String?
   stage           String
@@ -382,11 +383,12 @@ model TreasurySession {
   closingBalance   Decimal?  @db.Decimal(12, 2)
   actualBalance    Decimal?  @db.Decimal(12, 2)
   difference       Decimal?  @db.Decimal(12, 2)
-  status           String    @default("open") // open, pending_close, closed
+  status           String    @default("open") // open, pending_close, closed, pending_reopen
   openedBy         String
   closedBy         String?
   closureNote      String?
   approvedBy       String?
+  reopenRequestedBy String?
   openedAt         DateTime  @default(now())
   closedAt         DateTime?
   payments         Payment[]

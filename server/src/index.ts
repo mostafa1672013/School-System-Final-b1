@@ -11,6 +11,7 @@ import accountingRouter from './accounting-api';
 import { signToken, requireAuth, requireRoles, adminOnly, managementRoles, accountantRoles, socketAuth } from './middleware/auth';
 import { validate, LoginSchema, CreateUserSchema, UpdateUserSchema } from './validation/schemas';
 import { audit, getAuditContext } from './middleware/audit';
+import { encryptNationalId, decryptNationalId, hashNationalId } from './lib/crypto';
 
 dotenv.config();
 
@@ -136,7 +137,8 @@ app.get('/api/students', async (req, res) => {
       },
       orderBy: { createdAt: 'desc' }
     });
-    res.json(students);
+    const safeStudents = students.map(s => ({ ...s, nationalId: decryptNationalId(s.nationalId) }));
+    res.json(safeStudents);
   } catch (error) {
     res.status(500).json({ error: 'Failed to fetch students' });
   }
@@ -145,10 +147,13 @@ app.get('/api/students', async (req, res) => {
 // Create a new student
 app.post('/api/students', async (req, res) => {
   try {
+    const { nationalId, ...rest } = req.body;
+    const encryptedId = nationalId ? encryptNationalId(nationalId) : undefined;
+    const hashedId = nationalId ? hashNationalId(nationalId) : undefined;
     const student = await prisma.student.create({
-      data: req.body
+      data: { ...rest, ...(nationalId ? { nationalId: encryptedId, nationalIdHash: hashedId } : {}) }
     });
-    res.status(201).json(student);
+    res.status(201).json({ ...student, nationalId: student.nationalId ? decryptNationalId(student.nationalId) : student.nationalId });
   } catch (error) {
     res.status(400).json({ error: 'Failed to create student' });
   }
@@ -158,16 +163,22 @@ app.post('/api/students', async (req, res) => {
 app.patch('/api/students/:id', async (req, res) => {
   const id = Array.isArray(req.params.id) ? req.params.id[0] : req.params.id;
   try {
+    const { nationalId, ...rest } = req.body;
+    const extraData: Record<string, string> = {};
+    if (nationalId !== undefined) {
+      extraData.nationalId = encryptNationalId(nationalId);
+      extraData.nationalIdHash = hashNationalId(nationalId);
+    }
     const student = await prisma.student.update({
       where: { id },
-      data: req.body,
+      data: { ...rest, ...extraData },
       include: {
         yearlyFinance: {
           orderBy: { academicYear: 'asc' }
         }
       }
     });
-    res.json(student);
+    res.json({ ...student, nationalId: decryptNationalId(student.nationalId) });
   } catch (error) {
     console.error('Update student error:', error);
     res.status(400).json({ error: 'Failed to update student', details: String(error) });
@@ -1463,13 +1474,17 @@ app.delete('/api/stage-fees/:id', async (req, res) => {
 // 1. Initial Application
 app.post('/api/admission/apply', async (req, res) => {
   try {
+    const { nationalId, ...rest } = req.body;
+    const encryptedId = nationalId ? encryptNationalId(nationalId) : undefined;
+    const hashedId = nationalId ? hashNationalId(nationalId) : undefined;
     const student = await prisma.student.create({
       data: {
-        ...req.body,
+        ...rest,
+        ...(nationalId ? { nationalId: encryptedId, nationalIdHash: hashedId } : {}),
         status: 'applied'
       }
     });
-    res.status(201).json(student);
+    res.status(201).json({ ...student, nationalId: student.nationalId ? decryptNationalId(student.nationalId) : student.nationalId });
   } catch (error) {
     console.error('❌ Admission apply error:', error);
     res.status(400).json({ error: 'Failed to apply' });
@@ -1553,9 +1568,9 @@ app.get('/api/admission/pending-discounts', async (req, res) => {
       where: whereClause,
       orderBy: { updatedAt: 'desc' }
     });
-    
+
     console.log(`📋 Found ${students.length} pending discount requests`);
-    res.json(students);
+    res.json(students.map(s => ({ ...s, nationalId: decryptNationalId(s.nationalId) })));
   } catch (error) {
     console.error('❌ pending-discounts error:', error);
     res.status(500).json({ error: 'Failed to fetch pending discounts' });
@@ -1985,8 +2000,8 @@ app.get('/api/treasury/status', async (req, res) => {
       });
     }
 
-    const totalIncome = session.payments.reduce((sum: number, p: any) => sum + p.amount, 0);
-    const totalExpenses = session.expenses.reduce((sum: number, e: any) => sum + e.amount, 0);
+    const totalIncome = session.payments.reduce((sum: number, p: any) => sum + Number(p.amount), 0);
+    const totalExpenses = session.expenses.reduce((sum: number, e: any) => sum + Number(e.amount), 0);
     const currentBalance = Number(session.openingBalance) + totalIncome - totalExpenses;
 
     const opener = session.openedBy
@@ -2005,6 +2020,20 @@ app.get('/api/treasury/status', async (req, res) => {
         currentBalance,
         paymentsCount: session.payments.length,
         expensesCount: session.expenses.length
+      });
+    }
+
+    if (session.status === 'pending_reopen') {
+      const requester = session.reopenRequestedBy
+        ? await prisma.user.findUnique({ where: { id: session.reopenRequestedBy }, select: { name: true } })
+        : null;
+      return res.json({
+        status: 'pending_reopen',
+        session: {
+          ...session,
+          openedByName: opener?.name || session.openedBy,
+          reopenRequestedByName: requester?.name || session.reopenRequestedBy,
+        }
       });
     }
 
@@ -2102,8 +2131,8 @@ app.post('/api/treasury/close-request', async (req, res) => {
       });
     }
 
-    const totalIncome = session.payments.reduce((sum: number, p: any) => sum + p.amount, 0);
-    const totalExpenses = session.expenses.reduce((sum: number, e: any) => sum + e.amount, 0);
+    const totalIncome = session.payments.reduce((sum: number, p: any) => sum + Number(p.amount), 0);
+    const totalExpenses = session.expenses.reduce((sum: number, e: any) => sum + Number(e.amount), 0);
     const expectedBalance = Number(session.openingBalance) + totalIncome - totalExpenses;
     const difference = Number(actualBalance) - expectedBalance;
 
@@ -2244,6 +2273,72 @@ app.post('/api/treasury/close-approve', async (req, res) => {
   }
 });
 
+// POST: طلب إعادة فتح الخزينة المغلقة اليوم
+app.post('/api/treasury/reopen-request', async (req, res) => {
+  const userId = req.user!.userId;
+  try {
+    const today = new Date().toISOString().split('T')[0];
+    const session = await prisma.treasurySession.findUnique({ where: { date: today } });
+
+    if (!session || session.status !== 'closed') {
+      return res.status(400).json({ error: 'لا توجد جلسة مغلقة اليوم لطلب إعادة فتحها' });
+    }
+
+    const requester = await prisma.user.findUnique({ where: { id: userId }, select: { name: true, role: true } });
+    const allowedRoles = ['accountant', 'head_accountant', 'school_director', 'system_admin'];
+    if (!requester || !allowedRoles.includes(requester.role)) {
+      return res.status(403).json({ error: 'ليس لديك صلاحية طلب إعادة الفتح' });
+    }
+
+    const updated = await prisma.treasurySession.update({
+      where: { id: session.id },
+      data: { status: 'pending_reopen', reopenRequestedBy: userId }
+    });
+
+    res.json({ status: 'pending_reopen', session: updated });
+  } catch (error) {
+    res.status(400).json({ error: 'فشل تقديم طلب إعادة الفتح' });
+  }
+});
+
+// POST: الموافقة على إعادة فتح الخزينة (رئيس الحسابات أو مدير المدرسة فقط)
+app.post('/api/treasury/reopen-approve', async (req, res) => {
+  const approverId = req.user!.userId;
+  try {
+    const today = new Date().toISOString().split('T')[0];
+    const session = await prisma.treasurySession.findUnique({ where: { date: today } });
+
+    if (!session || session.status !== 'pending_reopen') {
+      return res.status(400).json({ error: 'لا يوجد طلب إعادة فتح معلق اليوم' });
+    }
+
+    const approver = await prisma.user.findUnique({ where: { id: approverId }, select: { name: true, role: true } });
+    const managerRoles = ['head_accountant', 'school_director', 'system_admin'];
+    if (!approver || !managerRoles.includes(approver.role)) {
+      return res.status(403).json({ error: 'فقط رئيس الحسابات أو مدير المدرسة يمكنه الموافقة على إعادة الفتح' });
+    }
+
+    const updated = await prisma.treasurySession.update({
+      where: { id: session.id },
+      data: {
+        status: 'open',
+        closingBalance: null,
+        actualBalance: null,
+        difference: null,
+        closedBy: null,
+        closedAt: null,
+        closureNote: null,
+        approvedBy: null,
+        reopenRequestedBy: null,
+      }
+    });
+
+    res.json({ status: 'open', session: updated });
+  } catch (error) {
+    res.status(400).json({ error: 'فشل الموافقة على إعادة الفتح' });
+  }
+});
+
 // GET: تاريخ جلسات الخزينة (للتقارير)
 app.get('/api/treasury/sessions', async (req, res) => {
   try {
@@ -2273,8 +2368,8 @@ app.get('/api/treasury/sessions/:id', async (req, res) => {
     });
     if (!session) return res.status(404).json({ error: 'الجلسة غير موجودة' });
 
-    const totalIncome = session.payments.reduce((sum: number, p: any) => sum + p.amount, 0);
-    const totalExpenses = session.expenses.reduce((sum: number, e: any) => sum + e.amount, 0);
+    const totalIncome = session.payments.reduce((sum: number, p: any) => sum + Number(p.amount), 0);
+    const totalExpenses = session.expenses.reduce((sum: number, e: any) => sum + Number(e.amount), 0);
     const currentBalance = Number(session.openingBalance) + totalIncome - totalExpenses;
 
     res.json({ session, totalIncome, totalExpenses, currentBalance });
@@ -2362,7 +2457,7 @@ app.get('/api/database/backup', requireAuth, adminOnly, async (req, res) => {
         costCenter: await prisma.costCenter.findMany(),
         journalEntry: await prisma.journalEntry.findMany(),
         journalEntryLine: await prisma.journalEntryLine.findMany(),
-        student: await prisma.student.findMany({ where: { deletedAt: null } }),
+        student: (await prisma.student.findMany({ where: { deletedAt: null } })).map(s => ({ ...s, nationalId: decryptNationalId(s.nationalId) })),
         studentYearlyFinance: await prisma.studentYearlyFinance.findMany(),
         stageFee: await prisma.stageFee.findMany(),
         payment: await prisma.payment.findMany({ where: { deletedAt: null } }),
