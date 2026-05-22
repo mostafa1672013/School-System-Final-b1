@@ -397,3 +397,21 @@ model SystemSetting {
   key   String @id
   value String
 }
+
+model AuditLog {
+  id         String   @id @default(uuid())
+  userId     String
+  userName   String
+  action     String   // CREATE | UPDATE | DELETE | LOGIN | LOGOUT | APPROVE | REJECT
+  entityType String   // Student | Payment | TreasurySession | User | Discount | Expense
+  entityId   String?
+  before     Json?
+  after      Json?
+  ip         String?
+  userAgent  String?
+  createdAt  DateTime @default(now())
+
+  @@index([entityType, entityId])
+  @@index([userId])
+  @@index([createdAt])
+}
