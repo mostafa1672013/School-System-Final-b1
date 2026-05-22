@@ -356,6 +356,7 @@ export interface TreasurySession {
   difference: number | null;
   status: TreasurySessionStatus;
   openedBy: string;
+  openedByName?: string;
   closedBy: string | null;
   closureNote: string | null;
   approvedBy: string | null;

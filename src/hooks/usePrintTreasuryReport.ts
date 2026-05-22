@@ -240,7 +240,7 @@ export function usePrintTreasuryReport() {
     <div class="footer">
       <div class="signature">
         <h4>أمين الخزينة</h4>
-        <p style="font-size: 12px;">${session.openedBy}</p>
+        <p style="font-size: 12px;">${session.openedByName || session.openedBy}</p>
         <div class="signature-line"></div>
       </div>
       <div class="signature">

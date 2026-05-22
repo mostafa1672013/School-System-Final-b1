@@ -1912,10 +1912,17 @@ app.get('/api/treasury/status', async (req, res) => {
     const totalExpenses = session.expenses.reduce((sum: number, e: any) => sum + e.amount, 0);
     const currentBalance = session.openingBalance + totalIncome - totalExpenses;
 
+    const opener = session.openedBy
+      ? await prisma.user.findUnique({ where: { id: session.openedBy }, select: { name: true } })
+      : null;
+
     if (session.status === 'pending_close') {
       return res.json({
         status: 'pending_close',
-        session,
+        session: {
+          ...session,
+          openedByName: opener?.name || session.openedBy,
+        },
         totalIncome,
         totalExpenses,
         currentBalance,
@@ -1926,7 +1933,10 @@ app.get('/api/treasury/status', async (req, res) => {
 
     res.json({
       status: 'open',
-      session,
+      session: {
+        ...session,
+        openedByName: opener?.name || session.openedBy,
+      },
       totalIncome,
       totalExpenses,
       currentBalance,
