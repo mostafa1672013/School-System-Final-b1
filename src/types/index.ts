@@ -219,16 +219,44 @@ export interface BusRoute {
   stops: string[];
 }
 
+export type SubscriberType = 'student' | 'employee' | 'supervisor';
+
 export interface BusSubscription {
   id: string;
-  studentId: string;
-  studentName: string;
+  code: string;
+  subscriberType: SubscriberType;
+  studentId?: string;
+  subscriberName: string;
   routeId: string;
-  routeName: string;
-  type: 'monthly' | 'annual';
+  route?: BusRoute;
+  academicYear: string;
   startDate: string;
-  endDate: string;
-  status: 'active' | 'expired' | 'cancelled';
+  endDate?: string;
+  fullFeeAmount: number;
+  discountPct: number;
+  actualAmount: number;
+  pickupAddress?: string;
+  pickupPhone?: string;
+  status: 'active' | 'suspended' | 'cancelled' | 'completed';
+  notes?: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface CreateSubscriptionInput {
+  subscriberType: SubscriberType;
+  studentId?: string;
+  subscriberName: string;
+  routeId: string;
+  academicYear: string;
+  startDate: string;
+  endDate?: string;
+  fullFeeAmount: number;
+  discountPct: number;
+  actualAmount: number;
+  pickupAddress?: string;
+  pickupPhone?: string;
+  notes?: string;
 }
 
 export interface Account {
@@ -345,7 +373,7 @@ export interface Expense {
 
 // ===== Treasury Types =====
 
-export type TreasurySessionStatus = 'open' | 'pending_close' | 'closed';
+export type TreasurySessionStatus = 'open' | 'pending_close' | 'closed' | 'pending_reopen';
 
 export interface TreasurySession {
   id: string;
@@ -357,6 +385,7 @@ export interface TreasurySession {
   status: TreasurySessionStatus;
   openedBy: string;
   openedByName?: string;
+  reopenRequestedByName?: string;
   closedBy: string | null;
   closureNote: string | null;
   approvedBy: string | null;
@@ -367,7 +396,7 @@ export interface TreasurySession {
 }
 
 export interface TreasuryStatus {
-  status: 'open' | 'pending_close' | 'no_session';
+  status: 'open' | 'pending_close' | 'no_session' | 'pending_reopen';
   session?: TreasurySession;
   totalIncome?: number;
   totalExpenses?: number;
@@ -377,6 +406,8 @@ export interface TreasuryStatus {
   suggestedOpeningBalance?: number | null;
   isFirstEver?: boolean;
   closedToday?: boolean;
+  userHasPreviousSession?: boolean;
+  reopenRequestedByName?: string;
 }
 
 export interface TreasuryCloseResult {
