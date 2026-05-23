@@ -644,45 +644,58 @@ router.patch('/approve/:id', async (req, res) => {
         });
         const codeToId = Object.fromEntries(revenueAccounts.map(a => [a.code, a.id]));
 
-        if (arAccount) {
-          // تحقق: هل يوجد قيد ذمة مسبق لهذا الطالب؟
-          const existingEntry = await tx.journalEntry.findFirst({
-            where: { referenceType: 'student_fees', referenceId: id }
-          });
+        if (!arAccount) throw new Error('AR account 1201 not found — cannot record student fees');
 
-          if (!existingEntry) {
-            const totalFeesAmt = feesBreakdown.reduce((s, f) => s + f.amount, 0);
-            const jeCount = await tx.journalEntry.count();
-            const entryNumber = `JE-${new Date().getFullYear()}-${String(jeCount + 1).padStart(6, '0')}`;
-            const today = new Date().toISOString().split('T')[0];
+        // تحقق: هل يوجد قيد ذمة مسبق لهذا الطالب؟
+        const existingEntry = await tx.journalEntry.findFirst({
+          where: { referenceType: 'student_fees', referenceId: id }
+        });
 
-            await tx.journalEntry.create({
-              data: {
-                entryNumber,
-                entryDate:     today,
-                description:   `إثبات رسوم الطالب: ${existing.name} — العام ${existing.academicYear}`,
-                referenceType: 'student_fees',
-                referenceId:   id,
-                status:        'posted',
-                createdBy:     approverId || 'system',
-                postedAt:      new Date(),
-                postedBy:      approverId || 'system',
-                lines: {
-                  create: [
-                    // مدين: ذمم الطالب (1201)
-                    { accountId: arAccount.id, debit: totalFeesAmt, credit: 0, lineNumber: 1, description: `رسوم ${existing.name}` },
-                    // دائن: إيرادات حسب نوع الرسوم
-                    ...feesBreakdown.map((f, idx) => ({
-                      accountId:   codeToId[f.code],
-                      debit:       0,
-                      credit:      f.amount,
-                      lineNumber:  idx + 2,
-                      description: `إيراد نوع ${f.code}`
-                    }))
-                  ]
+        if (!existingEntry) {
+          const totalFeesAmt = feesBreakdown.reduce((s, f) => s + f.amount, 0);
+          const today = new Date().toISOString().split('T')[0];
+
+          // Retry on unique constraint violation (entryNumber collision under concurrent load)
+          let je: any;
+          let retries = 0;
+          while (!je && retries < 3) {
+            const count = await tx.journalEntry.count();
+            const entryNumber = `JE-${new Date().getFullYear()}-${String(count + 1).padStart(6, '0')}`;
+            try {
+              je = await tx.journalEntry.create({
+                data: {
+                  entryNumber,
+                  entryDate:     today,
+                  description:   `إثبات رسوم الطالب: ${existing.name} — العام ${existing.academicYear}`,
+                  referenceType: 'student_fees',
+                  referenceId:   id,
+                  status:        'posted',
+                  createdBy:     approverId || 'system',
+                  postedAt:      new Date(),
+                  postedBy:      approverId || 'system',
+                  lines: {
+                    create: [
+                      // مدين: ذمم الطالب (1201)
+                      { accountId: arAccount.id, debit: totalFeesAmt, credit: 0, lineNumber: 1, description: `رسوم ${existing.name}` },
+                      // دائن: إيرادات حسب نوع الرسوم
+                      ...feesBreakdown.map((f, idx) => ({
+                        accountId:   codeToId[f.code],
+                        debit:       0,
+                        credit:      f.amount,
+                        lineNumber:  idx + 2,
+                        description: `إيراد نوع ${f.code}`
+                      }))
+                    ]
+                  }
                 }
+              });
+            } catch (err: any) {
+              if (err?.code === 'P2002' && retries < 2) {
+                retries++;
+              } else {
+                throw err;
               }
-            });
+            }
           }
         }
       }
