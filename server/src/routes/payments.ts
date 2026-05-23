@@ -2,6 +2,7 @@ import express, { Router } from 'express';
 import { PrismaClient } from '@prisma/client';
 import { requireAuth } from '../middleware/auth';
 import { audit, getAuditContext } from '../middleware/audit';
+import { getActivePeriodId } from '../lib/accounting-helpers';
 
 const router = Router();
 const prisma = new PrismaClient();
@@ -141,6 +142,8 @@ router.post('/payments', requireOpenTreasury, async (req, res) => {
     // 3. Execute transaction: Create payment, update yearly records, update student summary
     const jeCount = await prisma.journalEntry.count();
     const jeNumber = `JE-${new Date().getFullYear()}-${String(jeCount + 1).padStart(6, '0')}`;
+    const paymentDate = new Date(date).toISOString().split('T')[0];
+    const jePeriodId = await getActivePeriodId(prisma, paymentDate);
     const [payment] = await prisma.$transaction([
       prisma.payment.create({
         data: { studentId, studentName, amount, type, method, date: new Date(date), receiptNumber, collectedBy, notes, academicYear, walletPhoneNumber, sessionId: session.id, userId }
@@ -156,6 +159,7 @@ router.post('/payments', requireOpenTreasury, async (req, res) => {
             status: 'posted',
             postedAt: new Date(),
             createdBy: userId,
+            periodId: jePeriodId ?? undefined,
             lines: {
               create: [
                 { accountId: debitAccount.id,  debit: amount, credit: 0,      lineNumber: 1 },
@@ -305,15 +309,18 @@ router.patch('/expenses/:id/pay', requireOpenTreasury, async (req, res) => {
       if (creditAccount) {
         const count = await tx.journalEntry.count();
         const entryNumber = `JE-${new Date().getFullYear()}-${String(count + 1).padStart(6, '0')}`;
+        const today = new Date().toISOString().split('T')[0];
+        const periodId = await getActivePeriodId(tx as any, today);
         await tx.journalEntry.create({
           data: {
             entryNumber,
-            entryDate: new Date().toISOString().split('T')[0],
+            entryDate: today,
             description: `صرف مصروف نقدية (${exp.id.slice(0,8)}) - ${exp.description}`,
             referenceType: 'expense',
             referenceId: exp.id,
             status: 'posted',
             postedAt: new Date(),
+            periodId: periodId ?? undefined,
             lines: {
               create: [
                 { accountId: exp.accountId, debit: exp.amount, credit: 0 },

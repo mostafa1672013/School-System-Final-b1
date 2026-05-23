@@ -1,6 +1,7 @@
 import { Router } from 'express';
 import { PrismaClient } from '@prisma/client';
 import { requireAuth } from '../middleware/auth';
+import { getActivePeriodId } from '../lib/accounting-helpers';
 
 const router = Router();
 const prisma = new PrismaClient();
@@ -285,11 +286,13 @@ router.post('/invoices', requireAuth, async (req, res) => {
       if (invAccount && apAccount) {
         const count = await tx.journalEntry.count();
         const entryNumber = `JE-${new Date().getFullYear()}-${String(count + 1).padStart(6, '0')}`;
-        
+        const entryDate = new Date(date).toISOString().split('T')[0];
+        const periodId = await getActivePeriodId(tx as any, entryDate);
+
         const je = await tx.journalEntry.create({
           data: {
             entryNumber,
-            entryDate: new Date(date).toISOString().split('T')[0],
+            entryDate,
             description: `فاتورة مشتريات #${invoiceNumber} - المورد: ${invoice.supplier.name}`,
             referenceType: 'purchase_invoice',
             referenceId: invoice.id,
@@ -297,6 +300,7 @@ router.post('/invoices', requireAuth, async (req, res) => {
             createdBy,
             postedAt: new Date(),
             postedBy: createdBy,
+            periodId: periodId ?? undefined,
             lines: {
               create: [
                 { accountId: invAccount.id, debit: netAmount, credit: 0, lineNumber: 1, description: 'قيمة المخزون المستلم' },
@@ -385,11 +389,13 @@ router.post('/payments', requireAuth, async (req, res) => {
       if (apAccount && cashAccount) {
         const count = await tx.journalEntry.count();
         const entryNumber = `JE-${new Date().getFullYear()}-${String(count + 1).padStart(6, '0')}`;
-        
+        const today = new Date().toISOString().split('T')[0];
+        const periodId = await getActivePeriodId(tx as any, today);
+
         const je = await tx.journalEntry.create({
           data: {
             entryNumber,
-            entryDate: new Date().toISOString().split('T')[0],
+            entryDate: today,
             description: `سداد دفعة للمورد: ${supplier.name} ${invoiceId ? 'عن فاتورة' : 'دفعة مقدمة'}`,
             referenceType: 'supplier_payment',
             referenceId: payment.id,
@@ -397,7 +403,7 @@ router.post('/payments', requireAuth, async (req, res) => {
             createdBy,
             postedAt: new Date(),
             postedBy: createdBy,
-            periodId: null, // Should ideally be looked up
+            periodId: periodId ?? undefined,
             lines: {
               create: [
                 { accountId: apAccount.id, debit: amount, credit: 0, lineNumber: 1, description: `سداد للمورد ${supplier.name}` },
