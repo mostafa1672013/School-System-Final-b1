@@ -692,9 +692,10 @@ router.post('/treasury/close-approve', async (req, res) => {
       return res.status(400).json({ error: 'الجلسة ليست في حالة انتظار الموافقة' });
     }
 
-    // سجّل حدث الإغلاق في audit log وحدّث الجلسة في معاملة واحدة لضمان الذرية
-    const [, closed] = await prisma.$transaction([
-      prisma.treasurySessionAudit.create({
+    // سجّل الإغلاق + تحديث الجلسة + قيد الفرق في معاملة واحدة لضمان الذرية التامة
+    const closed = await prisma.$transaction(async (tx) => {
+      // 1. Audit record
+      await tx.treasurySessionAudit.create({
         data: {
           sessionId:      session.id,
           eventType:      'close_approved',
@@ -706,8 +707,10 @@ router.post('/treasury/close-approve', async (req, res) => {
           closureNote:    session.closureNote,
           performedBy:    approvedByUserId
         }
-      }),
-      prisma.treasurySession.update({
+      });
+
+      // 2. Close session
+      const updatedSession = await tx.treasurySession.update({
         where: { id: sessionId },
         data: {
           status:     'closed',
@@ -715,8 +718,65 @@ router.post('/treasury/close-approve', async (req, res) => {
           closedAt:   new Date()
           // actualBalance, closingBalance, difference, closedBy, closureNote already set in pending-close step
         }
-      })
-    ]);
+      });
+
+      // 3. Difference JE — created inside the same transaction so it rolls back with the session on failure
+      const diff = Number(session.difference ?? 0);
+      if (Math.abs(diff) >= 0.01) {
+        const today = new Date().toISOString().split('T')[0];
+
+        // عجز → Dr. مصروف طوارئ (5902)  Cr. خزينة (1001)
+        // زيادة → Dr. خزينة (1001)  Cr. إيرادات أخرى (4006)
+        const isShortage = diff < 0;
+        const counterCode = isShortage ? '5902' : '4006';
+        const cashAccount    = await tx.account.findUnique({ where: { code: '1001' } });
+        const counterAccount = await tx.account.findUnique({ where: { code: counterCode } });
+
+        if (!cashAccount || !counterAccount) {
+          throw new Error(`حساب الخزينة أو حساب الطرف المقابل غير موجود (${counterCode})`);
+        }
+
+        // Idempotency: skip if a JE already exists for this session (e.g. retry)
+        const existingJe = await tx.journalEntry.findFirst({
+          where: { referenceType: 'treasury_difference', referenceId: sessionId }
+        });
+
+        if (!existingJe) {
+          const jeCount = await tx.journalEntry.count();
+          const entryNumber = `JE-${new Date().getFullYear()}-${String(jeCount + 1).padStart(6, '0')}`;
+          const absDiff = Math.abs(diff);
+          const periodId = await getActivePeriodId(tx as any, today);
+
+          await tx.journalEntry.create({
+            data: {
+              entryNumber,
+              entryDate:     today,
+              periodId:      periodId ?? undefined,
+              description:   `فرق جرد الخزينة — جلسة ${sessionId.slice(0, 8)} — ${isShortage ? 'عجز' : 'زيادة'}`,
+              referenceType: 'treasury_difference',
+              referenceId:   sessionId,
+              status:        'posted',
+              postedAt:      new Date(),
+              postedBy:      approvedByUserId,
+              createdBy:     approvedByUserId,
+              lines: {
+                create: isShortage
+                  ? [
+                      { accountId: counterAccount.id, debit: absDiff, credit: 0,       lineNumber: 1, description: 'عجز خزينة' },
+                      { accountId: cashAccount.id,    debit: 0,       credit: absDiff, lineNumber: 2, description: 'نقص رصيد نقدي' }
+                    ]
+                  : [
+                      { accountId: cashAccount.id,    debit: absDiff, credit: 0,       lineNumber: 1, description: 'زيادة رصيد نقدي' },
+                      { accountId: counterAccount.id, debit: 0,       credit: absDiff, lineNumber: 2, description: 'زيادة خزينة' }
+                    ]
+              }
+            }
+          });
+        }
+      }
+
+      return updatedSession;
+    });
 
     await audit(
       getAuditContext(req),
@@ -726,52 +786,6 @@ router.post('/treasury/close-approve', async (req, res) => {
       { status: 'pending_close' },
       { status: 'closed', closingBalance: String(closed.closingBalance) },
     );
-
-    // إنشاء قيد فرق الخزينة إن وُجد فرق
-    const diff = Number(session.difference ?? 0);
-    if (Math.abs(diff) >= 0.01) {
-      const today = new Date().toISOString().split('T')[0];
-      const cashAccount = await prisma.account.findUnique({ where: { code: '1001' } });
-
-      // عجز → Dr. مصروف طوارئ (5902)  Cr. خزينة (1001)
-      // زيادة → Dr. خزينة (1001)  Cr. إيرادات أخرى (4006)
-      const isShortage = diff < 0;
-      const counterCode = isShortage ? '5902' : '4006';
-      const counterAccount = await prisma.account.findUnique({ where: { code: counterCode } });
-
-      if (cashAccount && counterAccount) {
-        const jeCount = await prisma.journalEntry.count();
-        const entryNumber = `JE-${new Date().getFullYear()}-${String(jeCount + 1).padStart(6, '0')}`;
-        const absDiff = Math.abs(diff);
-        const periodId = await getActivePeriodId(prisma, today);
-
-        await prisma.journalEntry.create({
-          data: {
-            entryNumber,
-            entryDate:     today,
-            periodId:      periodId ?? undefined,
-            description:   `فرق جرد الخزينة — جلسة ${sessionId.slice(0, 8)} — ${isShortage ? 'عجز' : 'زيادة'}`,
-            referenceType: 'treasury_difference',
-            referenceId:   sessionId,
-            status:        'posted',
-            postedAt:      new Date(),
-            postedBy:      approvedByUserId,
-            createdBy:     approvedByUserId,
-            lines: {
-              create: isShortage
-                ? [
-                    { accountId: counterAccount.id, debit: absDiff, credit: 0,       lineNumber: 1, description: 'عجز خزينة' },
-                    { accountId: cashAccount.id,    debit: 0,       credit: absDiff, lineNumber: 2, description: 'نقص رصيد نقدي' }
-                  ]
-                : [
-                    { accountId: cashAccount.id,    debit: absDiff, credit: 0,       lineNumber: 1, description: 'زيادة رصيد نقدي' },
-                    { accountId: counterAccount.id, debit: 0,       credit: absDiff, lineNumber: 2, description: 'زيادة خزينة' }
-                  ]
-            }
-          }
-        });
-      }
-    }
 
     res.json({ status: 'closed', session: closed });
   } catch (error) {
