@@ -230,6 +230,92 @@ model BusSubscription {
   @@index([academicYear, status])
 }
 
+model RentalCompany {
+  id                    String           @id @default(uuid())
+  code                  String           @unique
+  nameAr                String
+  nameEn                String?
+  contactPerson         String?
+  phone                 String?
+  email                 String?
+  address               String?
+  taxId                 String?
+  bankName              String?
+  bankAccountNumber     String?
+  notes                 String?
+  isActive              Boolean          @default(true)
+  createdAt             DateTime         @default(now())
+  updatedAt             DateTime         @updatedAt
+  contracts             RentalContract[]
+  drivers               ExternalDriver[]
+}
+
+model RentalContract {
+  id                   String         @id @default(uuid())
+  companyId            String
+  company              RentalCompany  @relation(fields: [companyId], references: [id])
+  contractNumber       String         @unique
+  title                String?
+  startDate            DateTime
+  endDate              DateTime
+  monthlyFeePerBus     Decimal        @db.Decimal(12, 2)
+  busesCount           Int
+  includesDriver       Boolean        @default(true)
+  includesFuel         Boolean        @default(true)
+  includesMaintenance  Boolean        @default(true)
+  includesInsurance    Boolean        @default(true)
+  paymentFrequency     String         @default("monthly")
+  paymentDueDay        Int?
+  status               String         @default("active")
+  notes                String?
+  createdAt            DateTime       @default(now())
+  updatedAt            DateTime       @updatedAt
+  buses                FleetBus[]
+
+  @@index([companyId])
+  @@index([status])
+}
+
+model FleetBus {
+  id                 String          @id @default(uuid())
+  code               String          @unique
+  plateNumber        String          @unique
+  capacity           Int
+  ownershipType      String          @default("rented_full")
+  rentalContractId   String?
+  rentalContract     RentalContract? @relation(fields: [rentalContractId], references: [id])
+  make               String?
+  model              String?
+  year               Int?
+  color              String?
+  status             String          @default("active")
+  insuranceExpiry    DateTime?
+  licenseExpiry      DateTime?
+  notes              String?
+  createdAt          DateTime        @default(now())
+  updatedAt          DateTime        @updatedAt
+
+  @@index([status])
+  @@index([rentalContractId])
+}
+
+model ExternalDriver {
+  id             String        @id @default(uuid())
+  code           String        @unique
+  fullName       String
+  phone          String?
+  companyId      String
+  company        RentalCompany @relation(fields: [companyId], references: [id])
+  licenseNumber  String?
+  licenseExpiry  DateTime?
+  isActive       Boolean       @default(true)
+  notes          String?
+  createdAt      DateTime      @default(now())
+
+  @@index([companyId])
+  @@index([isActive])
+}
+
 model User {
   id        String   @id @default(uuid())
   name      String
