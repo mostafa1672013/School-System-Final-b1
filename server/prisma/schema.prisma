@@ -418,3 +418,16 @@ model AuditLog {
   @@index([userId])
   @@index([createdAt])
 }
+
+model UserRole {
+  id         String    @id @default(uuid())
+  userId     String
+  role       String
+  assignedAt DateTime  @default(now())
+  assignedBy String?
+  expiresAt  DateTime?
+  notes      String?
+
+  @@unique([userId, role])
+  @@index([userId])
+}

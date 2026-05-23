@@ -64,11 +64,27 @@ export async function requireAuth(req: Request, res: Response, next: NextFunctio
   }
 }
 
-// ---- requireRoles: factory for role-based guards ----
-export function requireRoles(...roles: string[]) {
-  return (req: Request, res: Response, next: NextFunction) => {
+// ---- requireRoles: factory for role-based guards (multi-role aware) ----
+export function requireRoles(...allowedRoles: string[]) {
+  return async (req: Request, res: Response, next: NextFunction) => {
     if (!req.user) return res.status(401).json({ error: 'Authentication required' });
-    if (!roles.includes(req.user.role)) {
+
+    // Check UserRole table for multi-role support
+    const userRoles = await prisma.userRole.findMany({
+      where: {
+        userId: req.user.userId,
+        OR: [{ expiresAt: null }, { expiresAt: { gt: new Date() } }],
+      },
+      select: { role: true },
+    });
+
+    // Build role set: from UserRole table + fallback to JWT role
+    const roleSet = new Set([
+      ...userRoles.map(r => r.role),
+      req.user.role, // backward compat fallback
+    ]);
+
+    if (!allowedRoles.some(r => roleSet.has(r))) {
       return res.status(403).json({ error: 'Insufficient permissions' });
     }
     next();

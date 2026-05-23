@@ -18,6 +18,8 @@ import feesRouter from './routes/fees';
 import installmentsRouter from './routes/installments';
 import databaseRouter from './routes/database';
 import miscRouter from './routes/misc';
+import userRolesRouter from './routes/user-roles';
+import auditLogRouter from './routes/audit-log';
 
 dotenv.config();
 
@@ -120,6 +122,12 @@ app.use('/api', miscRouter);
 
 // Accounting (fiscal years, periods, cost centers, journal entries, reports)
 app.use('/api', accountingRouter);
+
+// User Roles (multi-role management)
+app.use('/api/user-roles', userRolesRouter);
+
+// Audit Log (read-only for management roles)
+app.use('/api/audit', auditLogRouter);
 
 // Health check endpoint
 app.get('/health', (_req, res) => {
