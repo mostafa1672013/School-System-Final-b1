@@ -103,8 +103,14 @@ router.patch('/bus-routes/:id', async (req, res) => {
 
 async function generateSubCode(): Promise<string> {
   const year = new Date().getFullYear();
-  const count = await prisma.busSubscription.count();
-  return `SUB-${year}-${String(count + 1).padStart(4, '0')}`;
+  // Find the last code issued this year to avoid count-collision
+  const last = await prisma.busSubscription.findFirst({
+    where: { code: { startsWith: `SUB-${year}-` } },
+    orderBy: { code: 'desc' },
+  });
+  if (!last) return `SUB-${year}-0001`;
+  const lastNum = parseInt(last.code.split('-')[2] ?? '0', 10);
+  return `SUB-${year}-${String(lastNum + 1).padStart(4, '0')}`;
 }
 
 router.get('/bus-subscriptions', requireAuth, async (req, res) => {
@@ -126,37 +132,78 @@ router.get('/bus-subscriptions', requireAuth, async (req, res) => {
   }
 });
 
-router.post('/bus-subscriptions', requireAuth, async (req, res) => {
+const busTransportRoles = requireRoles('system_admin', 'school_director', 'head_accountant', 'bus_supervisor');
+
+router.post('/bus-subscriptions', requireAuth, busTransportRoles, async (req, res) => {
   try {
     const code = await generateSubCode();
+    const {
+      subscriberType, studentId, subscriberName, routeId,
+      academicYear, startDate, endDate,
+      fullFeeAmount, discountPct, actualAmount,
+      pickupAddress, pickupPhone, notes,
+    } = req.body;
     const sub = await prisma.busSubscription.create({
-      data: { ...req.body, code },
+      data: {
+        code,
+        subscriberType, studentId, subscriberName, routeId,
+        academicYear,
+        startDate: new Date(startDate),
+        endDate: endDate ? new Date(endDate) : null,
+        fullFeeAmount, discountPct, actualAmount,
+        pickupAddress, pickupPhone, notes,
+      },
       include: { route: true },
     });
     console.log('✅ اشتراك جديد:', sub.code);
-    res.json(sub);
+    res.status(201).json(sub);
   } catch (error) {
     console.error('Create subscription error:', error);
     res.status(500).json({ error: 'Failed to create subscription' });
   }
 });
 
-router.patch('/bus-subscriptions/:id', requireAuth, async (req, res) => {
+router.patch('/bus-subscriptions/:id', requireAuth, busTransportRoles, async (req, res) => {
   const id = Array.isArray(req.params.id) ? req.params.id[0] : req.params.id;
   try {
+    const {
+      subscriberType, subscriberName, routeId,
+      startDate, endDate,
+      fullFeeAmount, discountPct, actualAmount,
+      pickupAddress, pickupPhone, status, notes,
+    } = req.body;
+
+    const updateData: any = {
+      ...(subscriberType !== undefined && { subscriberType }),
+      ...(subscriberName !== undefined && { subscriberName }),
+      ...(routeId !== undefined && { routeId }),
+      ...(startDate !== undefined && { startDate: new Date(startDate) }),
+      ...(endDate !== undefined && { endDate: new Date(endDate) }),
+      ...(fullFeeAmount !== undefined && { fullFeeAmount }),
+      ...(discountPct !== undefined && { discountPct }),
+      ...(actualAmount !== undefined && { actualAmount }),
+      ...(pickupAddress !== undefined && { pickupAddress }),
+      ...(pickupPhone !== undefined && { pickupPhone }),
+      ...(status !== undefined && { status }),
+      ...(notes !== undefined && { notes }),
+    };
+
     const sub = await prisma.busSubscription.update({
       where: { id },
-      data: req.body,
+      data: updateData,
       include: { route: true },
     });
     res.json(sub);
-  } catch (error) {
+  } catch (error: any) {
     console.error('Update subscription error:', error);
+    if (error?.code === 'P2025') {
+      return res.status(404).json({ error: 'Subscription not found' });
+    }
     res.status(500).json({ error: 'Failed to update subscription' });
   }
 });
 
-router.delete('/bus-subscriptions/:id', requireAuth, async (req, res) => {
+router.delete('/bus-subscriptions/:id', requireAuth, busTransportRoles, async (req, res) => {
   const id = Array.isArray(req.params.id) ? req.params.id[0] : req.params.id;
   try {
     await prisma.busSubscription.update({
@@ -164,7 +211,11 @@ router.delete('/bus-subscriptions/:id', requireAuth, async (req, res) => {
       data: { status: 'cancelled' },
     });
     res.json({ success: true });
-  } catch (error) {
+  } catch (error: any) {
+    console.error('Cancel subscription error:', error);
+    if (error?.code === 'P2025') {
+      return res.status(404).json({ error: 'Subscription not found' });
+    }
     res.status(500).json({ error: 'Failed to cancel subscription' });
   }
 });
