@@ -30,8 +30,8 @@ router.post('/expenses', requireAuth, accountantRoles, async (req, res) => {
   const role = req.user!.role;
   try {
     const limitRecord = await prisma.expenseLimit.findUnique({ where: { role } });
-    const limit = limitRecord ? limitRecord.maxAmount : 0;
-    const requiresApproval = amount > limit;
+    const limit = limitRecord ? Number(limitRecord.maxAmount) : 0;
+    const requiresApproval = Number(amount) > limit;
     const status = requiresApproval ? 'pending_approval' : 'pending_treasury';
     const expense = await prisma.expense.create({
       data: { amount: Number(amount), date, description, accountId, paymentMethod, requestedBy, notes, status }
@@ -75,7 +75,7 @@ router.patch('/expenses/:id/pay', requireAuth, accountantRoles, async (req, res)
         data: { status: 'paid', paidBy, paidByUserId: userId, sessionId },
         include: { account: true }
       });
-      const creditCode = exp.paymentMethod === 'cash' ? '111001' : '111002';
+      const creditCode = exp.paymentMethod === 'cash' ? '1001' : '1002';
       const creditAccount = await tx.account.findUnique({ where: { code: creditCode } });
       if (creditAccount) {
         const today = new Date().toISOString().split('T')[0];
@@ -421,8 +421,8 @@ router.get('/reports/trial-balance', async (req, res) => {
           balanceMap.set(key, { account: line.account, totalDebit: 0, totalCredit: 0 });
         }
         const bal = balanceMap.get(key)!;
-        bal.totalDebit += line.debit;
-        bal.totalCredit += line.credit;
+        bal.totalDebit += Number(line.debit);
+        bal.totalCredit += Number(line.credit);
       }
     }
 
@@ -473,7 +473,10 @@ router.get('/reports/account-ledger', async (req, res) => {
     for (const entry of entries) {
       for (const line of entry.lines) {
         if (line.accountId === account.id) {
-          runningBalance += line.debit - line.credit;
+          const isDebitNormal = account.normalBalance === 'debit';
+          runningBalance += isDebitNormal
+            ? Number(line.debit) - Number(line.credit)
+            : Number(line.credit) - Number(line.debit);
           ledgerLines.push({
             entryDate: entry.entryDate,
             entryNumber: entry.entryNumber,
@@ -521,7 +524,7 @@ router.get('/reports/income-statement', async (req, res) => {
         if (!accountMap.has(key)) {
           accountMap.set(key, { account: line.account, net: 0 });
         }
-        accountMap.get(key)!.net += line.debit - line.credit;
+        accountMap.get(key)!.net += Number(line.debit) - Number(line.credit);
       }
     }
 
