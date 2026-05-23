@@ -123,7 +123,7 @@ export default function BusManagement() {
   }, [subForm.studentId, subForm.subscriberType, students]);
 
   const activeSubscriptions = subscriptions.filter((s) => s.status === 'active');
-  const totalBusRevenue = activeSubscriptions.reduce((sum, s) => sum + s.actualAmount, 0);
+  const totalBusRevenue = activeSubscriptions.reduce((sum, s) => sum + Number(s.actualAmount), 0);
 
   const selectedRouteData = routes.find((r) => r.id === selectedRoute);
   const routeSubscribers = selectedRoute ? getRouteSubscribers(selectedRoute) : [];
@@ -810,7 +810,14 @@ export default function BusManagement() {
       </Tabs>
 
       {/* ─── CHANGE SUBSCRIPTION DIALOG ─── */}
-      <Dialog open={changeDialogOpen} onOpenChange={setChangeDialogOpen}>
+      <Dialog open={changeDialogOpen} onOpenChange={(open) => {
+        setChangeDialogOpen(open);
+        if (!open) {
+          setSelectedSubForChange(null);
+          setChangeType('route_change');
+          setChangeForm({ newRouteId: '', effectiveDate: new Date().toISOString().split('T')[0], reason: '' });
+        }
+      }}>
         <DialogContent className="max-w-lg">
           <DialogHeader>
             <DialogTitle className="font-[Noto_Kufi_Arabic]">
