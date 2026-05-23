@@ -190,15 +190,38 @@ model ItemCategory {
 }
 
 model BusRoute {
-  id           String   @id @default(uuid())
-  name         String
-  driverName   String
-  driverPhone  String
-  busNumber    String
-  capacity     Int
-  monthlyFee   Decimal  @db.Decimal(12, 2)
-  annualFee    Decimal  @db.Decimal(12, 2)
-  stops        String[] @default([])
+  id            String              @id @default(uuid())
+  name          String
+  driverName    String
+  driverPhone   String
+  busNumber     String
+  capacity      Int
+  monthlyFee    Decimal             @db.Decimal(12, 2)
+  annualFee     Decimal             @db.Decimal(12, 2)
+  stops         String[]            @default([])
+  subscriptions BusSubscription[]
+}
+
+model BusSubscription {
+  id              String    @id @default(uuid())
+  code            String    @unique
+  subscriberType  String    // 'student' | 'employee' | 'supervisor'
+  studentId       String?
+  subscriberName  String
+  routeId         String
+  route           BusRoute  @relation(fields: [routeId], references: [id])
+  academicYear    String
+  startDate       DateTime
+  endDate         DateTime?
+  fullFeeAmount   Decimal   @db.Decimal(12, 2)
+  discountPct     Decimal   @default(0) @db.Decimal(5, 2)
+  actualAmount    Decimal   @db.Decimal(12, 2)
+  pickupAddress   String?
+  pickupPhone     String?
+  status          String    @default("active")
+  notes           String?
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
 }
 
 model User {
