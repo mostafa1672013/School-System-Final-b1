@@ -66,4 +66,15 @@ describe('ProRata Calculator', () => {
     expect(result.difference).toBe(0);
     expect(result.direction).toBe('no_change');
   });
+
+  test('cancellation with admin fee reduces refund', () => {
+    const refund = calculateCancellationRefund({
+      netFeePaid: 3000,
+      cancellationDate: new Date('2027-01-01'),
+      academicYearEnd: new Date('2027-06-30'),
+      cancellationFee: 200,
+    });
+    // 1800 refund minus 200 cancellation fee = 1600
+    expect(refund).toBe(1600);
+  });
 });

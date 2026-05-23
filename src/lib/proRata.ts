@@ -14,6 +14,9 @@ function calculateMonthsRemaining(fromDate: Date, toDate: Date): number {
   if (fromDate >= toDate) return 0;
   let months = (toDate.getFullYear() - fromDate.getFullYear()) * 12
     + (toDate.getMonth() - fromDate.getMonth());
+  // Business rule: if subscription starts on the 1st, count the start month fully.
+  // If it starts mid-month and the start day is later than the year-end day,
+  // the final partial month is dropped.
   if (fromDate.getDate() === 1) {
     months += 1;
   } else if (fromDate.getDate() > toDate.getDate()) {
