@@ -14,7 +14,7 @@ import { useTransportStore } from '@/stores/transportStore';
 import { useStudentsStore } from '@/stores/studentsStore';
 import { formatCurrency } from '@/lib/utils';
 import StatCard from '@/components/features/StatCard';
-import type { SubscriberType } from '@/types';
+import type { SubscriberType, BusRoute } from '@/types';
 
 const DISCOUNT_BY_TYPE: Record<SubscriberType, number> = {
   student: 0,
@@ -124,7 +124,7 @@ export default function BusManagement() {
     setRouteForm({ name: '', driverName: '', driverPhone: '', busNumber: '', capacity: 20, monthlyFee: 0, annualFee: 0, stops: [] });
   };
 
-  const openEditDialog = (route: any) => {
+  const openEditDialog = (route: BusRoute) => {
     setEditingRouteId(route.id);
     setRouteForm({
       name: route.name, driverName: route.driverName, driverPhone: route.driverPhone,
@@ -550,6 +550,9 @@ export default function BusManagement() {
           </div>
 
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            {isFleetLoading && companies.length === 0 && (
+              <div className="col-span-2 flex justify-center py-8"><Loader2 className="size-5 animate-spin text-muted-foreground" /></div>
+            )}
             {companies.map((company) => (
               <div key={company.id} className="rounded-lg border p-4 space-y-2">
                 <div className="flex items-center justify-between">
@@ -633,7 +636,9 @@ export default function BusManagement() {
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {contracts.length === 0 ? (
+                {isFleetLoading ? (
+                  <TableRow><TableCell colSpan={6} className="text-center py-8"><Loader2 className="size-5 animate-spin mx-auto" /></TableCell></TableRow>
+                ) : contracts.length === 0 ? (
                   <TableRow><TableCell colSpan={6} className="text-center py-8 text-muted-foreground">لا توجد عقود</TableCell></TableRow>
                 ) : (
                   contracts.map((c) => (
