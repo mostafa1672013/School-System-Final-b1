@@ -224,6 +224,7 @@ model BusSubscription {
   notes           String?
   createdAt       DateTime  @default(now())
   updatedAt       DateTime  @updatedAt
+  changes         SubscriptionChange[]
 
   @@index([routeId])
   @@index([studentId])
@@ -271,6 +272,7 @@ model RentalContract {
   createdAt            DateTime       @default(now())
   updatedAt            DateTime       @updatedAt
   buses                FleetBus[]
+  invoices             RentalInvoice[]
 
   @@index([companyId])
   @@index([status])
@@ -314,6 +316,54 @@ model ExternalDriver {
 
   @@index([companyId])
   @@index([isActive])
+}
+
+model SubscriptionChange {
+  id                   String          @id @default(uuid())
+  subscriptionId       String
+  subscription         BusSubscription @relation(fields: [subscriptionId], references: [id])
+  changeType           String          // route_change|cancel|suspend|reactivate
+  changeDate           DateTime        @default(now())
+  effectiveDate        DateTime
+  previousRouteId      String?
+  newRouteId           String?
+  previousFullFee      Decimal?        @db.Decimal(12, 2)
+  newFullFee           Decimal?        @db.Decimal(12, 2)
+  monthsRemaining      Int?
+  previousRemaining    Decimal?        @db.Decimal(12, 2)
+  newRemaining         Decimal?        @db.Decimal(12, 2)
+  proRataDifference    Decimal?        @db.Decimal(12, 2)
+  direction            String?         // subscriber_pays|school_refunds|no_change
+  changeReason         String?
+  status               String          @default("pending")
+  notes                String?
+  createdAt            DateTime        @default(now())
+  createdBy            String?
+
+  @@index([subscriptionId])
+}
+
+model RentalInvoice {
+  id                   String          @id @default(uuid())
+  code                 String          @unique
+  contractId           String
+  contract             RentalContract  @relation(fields: [contractId], references: [id])
+  invoiceDate          DateTime
+  periodFrom           DateTime
+  periodTo             DateTime
+  baseAmount           Decimal         @db.Decimal(12, 2)
+  discountAmount       Decimal         @default(0) @db.Decimal(12, 2)
+  taxAmount            Decimal         @default(0) @db.Decimal(12, 2)
+  totalAmount          Decimal         @db.Decimal(12, 2)
+  status               String          @default("pending_review")
+  paymentDate          DateTime?
+  notes                String?
+  attachmentUrl        String?
+  createdAt            DateTime        @default(now())
+  updatedAt            DateTime        @updatedAt
+
+  @@index([contractId])
+  @@index([status])
 }
 
 model User {

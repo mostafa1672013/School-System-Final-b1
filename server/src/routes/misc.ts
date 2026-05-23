@@ -421,4 +421,164 @@ router.post('/external-drivers', requireAuth, busTransportRoles, async (req, res
   }
 });
 
+// ── Subscription Changes ──────────────────────────────────────────────────
+
+router.get('/subscription-changes', requireAuth, async (req, res) => {
+  try {
+    const { subscriptionId } = req.query as Record<string, string>;
+    const where: any = {};
+    if (subscriptionId) where.subscriptionId = subscriptionId;
+    const changes = await prisma.subscriptionChange.findMany({
+      where,
+      include: { subscription: { include: { route: true } } },
+      orderBy: { createdAt: 'desc' },
+      take: 100,
+    });
+    res.json(changes);
+  } catch (error) {
+    console.error('Fetch subscription changes error:', error);
+    res.status(500).json({ error: 'Failed to fetch subscription changes' });
+  }
+});
+
+router.post('/subscription-changes', requireAuth, busTransportRoles, async (req, res) => {
+  try {
+    const {
+      subscriptionId, changeType, effectiveDate,
+      previousRouteId, newRouteId, changeReason,
+      previousFullFee, newFullFee,
+      monthsRemaining, previousRemaining, newRemaining,
+      proRataDifference, direction, notes,
+    } = req.body as Record<string, any>;
+
+    if (!subscriptionId || !changeType || !effectiveDate) {
+      return res.status(400).json({ error: 'subscriptionId, changeType, effectiveDate are required' });
+    }
+
+    const sub = await prisma.busSubscription.findUnique({ where: { id: subscriptionId } });
+    if (!sub) return res.status(404).json({ error: 'Subscription not found' });
+
+    const change = await prisma.subscriptionChange.create({
+      data: {
+        subscriptionId,
+        changeType,
+        effectiveDate: new Date(effectiveDate),
+        previousRouteId: previousRouteId ?? sub.routeId,
+        newRouteId: newRouteId ?? null,
+        previousFullFee: previousFullFee != null ? previousFullFee : null,
+        newFullFee: newFullFee != null ? newFullFee : null,
+        monthsRemaining: monthsRemaining != null ? Number(monthsRemaining) : null,
+        previousRemaining: previousRemaining != null ? previousRemaining : null,
+        newRemaining: newRemaining != null ? newRemaining : null,
+        proRataDifference: proRataDifference != null ? proRataDifference : null,
+        direction: direction ?? null,
+        changeReason: changeReason ?? null,
+        notes: notes ?? null,
+        createdBy: req.user?.userId ?? null,
+        status: 'pending',
+      },
+    });
+
+    // Apply cancel immediately
+    if (changeType === 'cancel') {
+      await prisma.busSubscription.update({
+        where: { id: subscriptionId },
+        data: { status: 'cancelled', endDate: new Date(effectiveDate) },
+      });
+    }
+
+    res.status(201).json(change);
+  } catch (error) {
+    console.error('Create subscription change error:', error);
+    res.status(500).json({ error: 'Failed to create subscription change' });
+  }
+});
+
+// ── Rental Invoices ───────────────────────────────────────────────────────
+
+async function generateInvoiceCode(): Promise<string> {
+  const year = new Date().getFullYear();
+  const prefix = `INV-${year}-`;
+  const last = await prisma.rentalInvoice.findFirst({
+    where: { code: { startsWith: prefix } },
+    orderBy: { code: 'desc' },
+  });
+  const seq = last ? parseInt(last.code.slice(prefix.length), 10) + 1 : 1;
+  return `${prefix}${String(seq).padStart(4, '0')}`;
+}
+
+router.get('/rental-invoices', requireAuth, async (req, res) => {
+  try {
+    const invoices = await prisma.rentalInvoice.findMany({
+      include: { contract: { include: { company: true } } },
+      orderBy: { invoiceDate: 'desc' },
+    });
+    res.json(invoices);
+  } catch (error) {
+    console.error('Fetch rental invoices error:', error);
+    res.status(500).json({ error: 'Failed to fetch rental invoices' });
+  }
+});
+
+router.post('/rental-invoices', requireAuth, busTransportRoles, async (req, res) => {
+  try {
+    const {
+      contractId, invoiceDate, periodFrom, periodTo,
+      baseAmount, discountAmount, taxAmount, totalAmount,
+      status, notes, attachmentUrl,
+    } = req.body as Record<string, any>;
+
+    if (!contractId || !invoiceDate || !periodFrom || !periodTo || totalAmount == null) {
+      return res.status(400).json({ error: 'contractId, invoiceDate, periodFrom, periodTo, totalAmount are required' });
+    }
+
+    const code = await generateInvoiceCode();
+    const invoice = await prisma.rentalInvoice.create({
+      data: {
+        code,
+        contractId,
+        invoiceDate: new Date(invoiceDate),
+        periodFrom: new Date(periodFrom),
+        periodTo: new Date(periodTo),
+        baseAmount: Number(baseAmount),
+        discountAmount: discountAmount != null ? Number(discountAmount) : 0,
+        taxAmount: taxAmount != null ? Number(taxAmount) : 0,
+        totalAmount: Number(totalAmount),
+        status: status ?? 'pending_review',
+        notes: notes ?? null,
+        attachmentUrl: attachmentUrl ?? null,
+      },
+      include: { contract: { include: { company: true } } },
+    });
+    res.status(201).json(invoice);
+  } catch (error) {
+    console.error('Create rental invoice error:', error);
+    res.status(500).json({ error: 'Failed to create rental invoice' });
+  }
+});
+
+router.patch('/rental-invoices/:id', requireAuth, busTransportRoles, async (req, res) => {
+  const id = Array.isArray(req.params.id) ? req.params.id[0] : req.params.id;
+  try {
+    const { status, paymentDate, notes, discountAmount, taxAmount, totalAmount } = req.body as Record<string, any>;
+    const invoice = await prisma.rentalInvoice.update({
+      where: { id },
+      data: {
+        ...(status != null && { status }),
+        ...(paymentDate != null && { paymentDate: new Date(paymentDate) }),
+        ...(notes != null && { notes }),
+        ...(discountAmount != null && { discountAmount: Number(discountAmount) }),
+        ...(taxAmount != null && { taxAmount: Number(taxAmount) }),
+        ...(totalAmount != null && { totalAmount: Number(totalAmount) }),
+      },
+      include: { contract: { include: { company: true } } },
+    });
+    res.json(invoice);
+  } catch (error: any) {
+    if (error?.code === 'P2025') return res.status(404).json({ error: 'Invoice not found' });
+    console.error('Update rental invoice error:', error);
+    res.status(500).json({ error: 'Failed to update rental invoice' });
+  }
+});
+
 export default router;
