@@ -149,11 +149,13 @@ router.post('/payments', requireOpenTreasury, async (req, res) => {
         prisma.journalEntry.create({
           data: {
             entryNumber: jeNumber,
+            entryDate: new Date(date).toISOString().split('T')[0],
             description: `تحصيل رسوم (${receiptNumber}) - الطالب: ${studentName}`,
             referenceType: 'payment',
             referenceId: receiptNumber,
             status: 'posted',
             postedAt: new Date(),
+            createdBy: userId,
             lines: {
               create: [
                 { accountId: debitAccount.id,  debit: amount, credit: 0,      lineNumber: 1 },
