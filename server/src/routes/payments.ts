@@ -320,11 +320,13 @@ router.patch('/expenses/:id/pay', requireOpenTreasury, async (req, res) => {
             referenceId: exp.id,
             status: 'posted',
             postedAt: new Date(),
+            postedBy: paidBy,
+            createdBy: paidBy,
             periodId: periodId ?? undefined,
             lines: {
               create: [
-                { accountId: exp.accountId, debit: exp.amount, credit: 0 },
-                { accountId: creditAccount.id, debit: 0, credit: exp.amount }
+                { accountId: exp.accountId, debit: exp.amount, credit: 0, lineNumber: 1 },
+                { accountId: creditAccount.id, debit: 0, credit: exp.amount, lineNumber: 2 }
               ]
             }
           }
@@ -334,6 +336,7 @@ router.patch('/expenses/:id/pay', requireOpenTreasury, async (req, res) => {
     });
     res.json(expense);
   } catch (error) {
+    console.error(error);
     res.status(400).json({ error: 'Failed to process payment' });
   }
 });

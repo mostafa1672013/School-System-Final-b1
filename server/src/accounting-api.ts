@@ -270,39 +270,40 @@ router.post('/journal-entries', async (req, res) => {
       }
     }
 
-    const [{ count }] = await prisma.$queryRaw<[{ count: bigint }]>`
-      SELECT COUNT(*)::bigint as count FROM journal_entries
-    `;
-    const entryNumber = `JE-${new Date().getFullYear()}-${String(Number(count) + 1).padStart(6, '0')}`;
     const status = autoPost ? 'posted' : 'draft';
 
-    const entry = await prisma.journalEntry.create({
-      data: {
-        entryNumber,
-        entryDate: entryDate || new Date().toISOString().split('T')[0],
-        description,
-        notes,
-        referenceType,
-        referenceId,
-        periodId: periodId || null,
-        status,
-        createdBy,
-        postedAt: autoPost ? new Date() : null,
-        postedBy: autoPost ? createdBy : null,
-        lines: {
-          create: lines.map((l: any, idx: number) => ({
-            accountId: l.accountId,
-            debit: Number(l.debit) || 0,
-            credit: Number(l.credit) || 0,
-            description: l.description || null,
-            costCenterId: l.costCenterId || null,
-            lineNumber: idx + 1
-          }))
+    const entry = await prisma.$transaction(async (tx) => {
+      const count = await tx.journalEntry.count();
+      const entryNumber = `JE-${new Date().getFullYear()}-${String(count + 1).padStart(6, '0')}`;
+
+      return tx.journalEntry.create({
+        data: {
+          entryNumber,
+          entryDate: entryDate || new Date().toISOString().split('T')[0],
+          description,
+          notes,
+          referenceType,
+          referenceId,
+          periodId: periodId || null,
+          status,
+          createdBy,
+          postedAt: autoPost ? new Date() : null,
+          postedBy: autoPost ? createdBy : null,
+          lines: {
+            create: lines.map((l: any, idx: number) => ({
+              accountId: l.accountId,
+              debit: Number(l.debit) || 0,
+              credit: Number(l.credit) || 0,
+              description: l.description || null,
+              costCenterId: l.costCenterId || null,
+              lineNumber: idx + 1
+            }))
+          }
+        },
+        include: {
+          lines: { include: { account: true }, orderBy: { lineNumber: 'asc' } }
         }
-      },
-      include: {
-        lines: { include: { account: true }, orderBy: { lineNumber: 'asc' } }
-      }
+      });
     });
     res.status(201).json(entry);
   } catch (error: any) {
