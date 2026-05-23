@@ -142,7 +142,7 @@ router.post('/bus-subscriptions', requireAuth, async (req, res) => {
 });
 
 router.patch('/bus-subscriptions/:id', requireAuth, async (req, res) => {
-  const { id } = req.params;
+  const id = Array.isArray(req.params.id) ? req.params.id[0] : req.params.id;
   try {
     const sub = await prisma.busSubscription.update({
       where: { id },
@@ -157,7 +157,7 @@ router.patch('/bus-subscriptions/:id', requireAuth, async (req, res) => {
 });
 
 router.delete('/bus-subscriptions/:id', requireAuth, async (req, res) => {
-  const { id } = req.params;
+  const id = Array.isArray(req.params.id) ? req.params.id[0] : req.params.id;
   try {
     await prisma.busSubscription.update({
       where: { id },
