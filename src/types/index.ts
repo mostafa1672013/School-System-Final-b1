@@ -259,6 +259,82 @@ export interface CreateSubscriptionInput {
   notes?: string;
 }
 
+export interface RentalCompany {
+  id: string;
+  code: string;
+  nameAr: string;
+  nameEn?: string;
+  contactPerson?: string;
+  phone?: string;
+  email?: string;
+  address?: string;
+  taxId?: string;
+  bankName?: string;
+  bankAccountNumber?: string;
+  notes?: string;
+  isActive: boolean;
+  createdAt: string;
+  updatedAt: string;
+  _count?: { contracts: number; drivers: number };
+}
+
+export interface RentalContract {
+  id: string;
+  companyId: string;
+  company?: RentalCompany;
+  contractNumber: string;
+  title?: string;
+  startDate: string;
+  endDate: string;
+  monthlyFeePerBus: number;
+  busesCount: number;
+  includesDriver: boolean;
+  includesFuel: boolean;
+  includesMaintenance: boolean;
+  includesInsurance: boolean;
+  paymentFrequency: string;
+  paymentDueDay?: number;
+  status: 'draft' | 'active' | 'expired' | 'terminated';
+  notes?: string;
+  createdAt: string;
+  updatedAt: string;
+  _count?: { buses: number };
+}
+
+export interface FleetBus {
+  id: string;
+  code: string;
+  plateNumber: string;
+  capacity: number;
+  ownershipType: 'rented_full' | 'rented_no_driver' | 'owned';
+  rentalContractId?: string;
+  rentalContract?: RentalContract;
+  make?: string;
+  model?: string;
+  year?: number;
+  color?: string;
+  status: 'active' | 'maintenance' | 'retired';
+  insuranceExpiry?: string;
+  licenseExpiry?: string;
+  notes?: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface ExternalDriver {
+  id: string;
+  code: string;
+  fullName: string;
+  phone?: string;
+  companyId: string;
+  company?: RentalCompany;
+  licenseNumber?: string;
+  licenseExpiry?: string;
+  isActive: boolean;
+  notes?: string;
+  createdAt: string;
+}
+
 export interface Account {
   id: string;
   code: string;
