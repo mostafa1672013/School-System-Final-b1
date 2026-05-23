@@ -270,8 +270,10 @@ router.post('/journal-entries', async (req, res) => {
       }
     }
 
-    const count = await prisma.journalEntry.count();
-    const entryNumber = `JE-${new Date().getFullYear()}-${String(count + 1).padStart(6, '0')}`;
+    const [{ count }] = await prisma.$queryRaw<[{ count: bigint }]>`
+      SELECT COUNT(*)::bigint as count FROM journal_entries
+    `;
+    const entryNumber = `JE-${new Date().getFullYear()}-${String(Number(count) + 1).padStart(6, '0')}`;
     const status = autoPost ? 'posted' : 'draft';
 
     const entry = await prisma.journalEntry.create({

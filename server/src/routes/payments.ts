@@ -301,10 +301,17 @@ router.patch('/expenses/:id/pay', requireOpenTreasury, async (req, res) => {
       const creditAccount = await tx.account.findUnique({ where: { code: creditCode } });
 
       if (creditAccount) {
+        const count = await tx.journalEntry.count();
+        const entryNumber = `JE-${new Date().getFullYear()}-${String(count + 1).padStart(6, '0')}`;
         await tx.journalEntry.create({
           data: {
+            entryNumber,
+            entryDate: new Date().toISOString().split('T')[0],
             description: `صرف مصروف نقدية (${exp.id.slice(0,8)}) - ${exp.description}`,
+            referenceType: 'expense',
             referenceId: exp.id,
+            status: 'posted',
+            postedAt: new Date(),
             lines: {
               create: [
                 { accountId: exp.accountId, debit: exp.amount, credit: 0 },
