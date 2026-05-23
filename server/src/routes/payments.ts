@@ -61,6 +61,18 @@ router.get('/payments', async (req, res) => {
   }
 });
 
+function getRevenueCreditCode(type: string): string {
+  const map: Record<string, string> = {
+    tuition:         '4001',
+    books:           '4002',
+    uniform:         '4003',
+    bus:             '4004',
+    application_fee: '4005',
+    arrears:         '4001',
+  };
+  return map[type] ?? '4006';
+}
+
 router.post('/payments', requireOpenTreasury, async (req, res) => {
   const { studentId, studentName, amount, type, method, date, receiptNumber, collectedBy, notes, academicYear, walletPhoneNumber, userId } = req.body;
   const session = (req as any).treasurySession;
@@ -102,15 +114,7 @@ router.post('/payments', requireOpenTreasury, async (req, res) => {
     const updates: ReturnType<typeof prisma.studentYearlyFinance.update>[] = [];
 
     const debitCode = method === 'cash' ? '1001' : '1002';
-    // ─── منطق القيد المحاسبي ───────────────────────────────────────────────
-    // التحصيل = Dr. خزينة (1001/1002)  Cr. ذمم الطالب (1201)
-    //   ← يُقفل الذمة التي فُتحت عند الاعتماد
-    //
-    // رسوم القبول (application_fee) استثناء:
-    //   ← لا يوجد قيد ذمة مسبق، لذا يُحتسب مباشرة Dr. خزينة / Cr. إيرادات
-    // ───────────────────────────────────────────────────────────────────────
-    const isAppFee = type === 'application_fee';
-    const creditCode = isAppFee ? '4005' : '1201';
+    const creditCode = getRevenueCreditCode(type);
 
     const debitAccount  = await prisma.account.findUnique({ where: { code: debitCode } });
     const creditAccount = await prisma.account.findUnique({ where: { code: creditCode } });
@@ -135,6 +139,8 @@ router.post('/payments', requireOpenTreasury, async (req, res) => {
     }
 
     // 3. Execute transaction: Create payment, update yearly records, update student summary
+    const jeCount = await prisma.journalEntry.count();
+    const jeNumber = `JE-${new Date().getFullYear()}-${String(jeCount + 1).padStart(6, '0')}`;
     const [payment] = await prisma.$transaction([
       prisma.payment.create({
         data: { studentId, studentName, amount, type, method, date: new Date(date), receiptNumber, collectedBy, notes, academicYear, walletPhoneNumber, sessionId: session.id, userId }
@@ -142,12 +148,16 @@ router.post('/payments', requireOpenTreasury, async (req, res) => {
       ...(debitAccount && creditAccount ? [
         prisma.journalEntry.create({
           data: {
-            description: `تحصيل إيرادات (${receiptNumber}) - الطالب: ${studentName}`,
+            entryNumber: jeNumber,
+            description: `تحصيل رسوم (${receiptNumber}) - الطالب: ${studentName}`,
+            referenceType: 'payment',
             referenceId: receiptNumber,
+            status: 'posted',
+            postedAt: new Date(),
             lines: {
               create: [
-                { accountId: debitAccount.id, debit: amount, credit: 0 },
-                { accountId: creditAccount.id, debit: 0, credit: amount }
+                { accountId: debitAccount.id,  debit: amount, credit: 0,      lineNumber: 1 },
+                { accountId: creditAccount.id, debit: 0,      credit: amount, lineNumber: 2 }
               ]
             }
           }
@@ -663,30 +673,31 @@ router.post('/treasury/close-approve', async (req, res) => {
       return res.status(400).json({ error: 'الجلسة ليست في حالة انتظار الموافقة' });
     }
 
-    // سجّل حدث الإغلاق في audit log
-    await prisma.treasurySessionAudit.create({
-      data: {
-        sessionId:      session.id,
-        eventType:      'close_approved',
-        closingBalance: session.closingBalance,
-        actualBalance:  session.actualBalance,
-        difference:     session.difference,
-        closedBy:       session.closedBy,
-        approvedBy:     approver.name,
-        closureNote:    session.closureNote,
-        performedBy:    approvedByUserId
-      }
-    });
-
-    const closed = await prisma.treasurySession.update({
-      where: { id: sessionId },
-      data: {
-        status: 'closed',
-        approvedBy: approver.name,
-        closedAt: new Date()
-        // actualBalance, closingBalance, difference, closedBy, closureNote already set in pending-close step
-      }
-    });
+    // سجّل حدث الإغلاق في audit log وحدّث الجلسة في معاملة واحدة لضمان الذرية
+    const [, closed] = await prisma.$transaction([
+      prisma.treasurySessionAudit.create({
+        data: {
+          sessionId:      session.id,
+          eventType:      'close_approved',
+          closingBalance: session.closingBalance,
+          actualBalance:  session.actualBalance,
+          difference:     session.difference,
+          closedBy:       session.closedBy,
+          approvedBy:     approver.name,
+          closureNote:    session.closureNote,
+          performedBy:    approvedByUserId
+        }
+      }),
+      prisma.treasurySession.update({
+        where: { id: sessionId },
+        data: {
+          status:     'closed',
+          approvedBy: approver.name,
+          closedAt:   new Date()
+          // actualBalance, closingBalance, difference, closedBy, closureNote already set in pending-close step
+        }
+      })
+    ]);
 
     await audit(
       getAuditContext(req),
@@ -748,35 +759,36 @@ router.post('/treasury/reopen-approve', async (req, res) => {
       return res.status(403).json({ error: 'فقط رئيس الحسابات أو مدير المدرسة يمكنه الموافقة على إعادة الفتح' });
     }
 
-    // احفظ بيانات الإغلاق قبل مسحها
-    await prisma.treasurySessionAudit.create({
-      data: {
-        sessionId:      session.id,
-        eventType:      'reopened',
-        closingBalance: session.closingBalance,
-        actualBalance:  session.actualBalance,
-        difference:     session.difference,
-        closedBy:       session.closedBy,
-        approvedBy:     session.approvedBy,
-        closureNote:    session.closureNote,
-        performedBy:    approverId
-      }
-    });
-
-    const updated = await prisma.treasurySession.update({
-      where: { id: session.id },
-      data: {
-        status: 'open',
-        closingBalance: null,
-        actualBalance: null,
-        difference: null,
-        closedBy: null,
-        closedAt: null,
-        closureNote: null,
-        approvedBy: null,
-        reopenRequestedBy: null,
-      }
-    });
+    // احفظ بيانات الإغلاق قبل مسحها، وأعِد فتح الجلسة في معاملة واحدة لضمان الذرية
+    const [, updated] = await prisma.$transaction([
+      prisma.treasurySessionAudit.create({
+        data: {
+          sessionId:      session.id,
+          eventType:      'reopened',
+          closingBalance: session.closingBalance,
+          actualBalance:  session.actualBalance,
+          difference:     session.difference,
+          closedBy:       session.closedBy,
+          approvedBy:     session.approvedBy,
+          closureNote:    session.closureNote,
+          performedBy:    approverId
+        }
+      }),
+      prisma.treasurySession.update({
+        where: { id: session.id },
+        data: {
+          status:            'open',
+          closingBalance:    null,
+          actualBalance:     null,
+          difference:        null,
+          closedBy:          null,
+          closedAt:          null,
+          closureNote:       null,
+          approvedBy:        null,
+          reopenRequestedBy: null,
+        }
+      })
+    ]);
 
     res.json({ status: 'open', session: updated });
   } catch (error) {
