@@ -98,6 +98,77 @@ router.patch('/bus-routes/:id', async (req, res) => {
   }
 });
 
+// ===== BUS SUBSCRIPTIONS =====
+// Mounted at /api/bus-subscriptions
+
+async function generateSubCode(): Promise<string> {
+  const year = new Date().getFullYear();
+  const count = await prisma.busSubscription.count();
+  return `SUB-${year}-${String(count + 1).padStart(4, '0')}`;
+}
+
+router.get('/bus-subscriptions', async (req, res) => {
+  try {
+    const { routeId, status, academicYear } = req.query as Record<string, string>;
+    const where: any = {};
+    if (routeId) where.routeId = routeId;
+    if (status) where.status = status;
+    if (academicYear) where.academicYear = academicYear;
+    const subs = await prisma.busSubscription.findMany({
+      where,
+      include: { route: true },
+      orderBy: { createdAt: 'desc' },
+    });
+    res.json(subs);
+  } catch (error) {
+    console.error('Fetch subscriptions error:', error);
+    res.status(500).json({ error: 'Failed to fetch subscriptions' });
+  }
+});
+
+router.post('/bus-subscriptions', async (req, res) => {
+  try {
+    const code = await generateSubCode();
+    const sub = await prisma.busSubscription.create({
+      data: { ...req.body, code },
+      include: { route: true },
+    });
+    console.log('✅ اشتراك جديد:', sub.code);
+    res.json(sub);
+  } catch (error) {
+    console.error('Create subscription error:', error);
+    res.status(500).json({ error: 'Failed to create subscription' });
+  }
+});
+
+router.patch('/bus-subscriptions/:id', async (req, res) => {
+  const { id } = req.params;
+  try {
+    const sub = await prisma.busSubscription.update({
+      where: { id },
+      data: req.body,
+      include: { route: true },
+    });
+    res.json(sub);
+  } catch (error) {
+    console.error('Update subscription error:', error);
+    res.status(500).json({ error: 'Failed to update subscription' });
+  }
+});
+
+router.delete('/bus-subscriptions/:id', async (req, res) => {
+  const { id } = req.params;
+  try {
+    await prisma.busSubscription.update({
+      where: { id },
+      data: { status: 'cancelled' },
+    });
+    res.json({ success: true });
+  } catch (error) {
+    res.status(500).json({ error: 'Failed to cancel subscription' });
+  }
+});
+
 // ===== SETTINGS =====
 // Mounted at /api/settings
 
