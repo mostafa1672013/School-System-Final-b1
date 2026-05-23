@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { toast } from 'sonner';
-import { Bus, MapPin, Phone, Users, Plus, X, Loader2, Edit, Building2, FileText, Car } from 'lucide-react';
+import { Bus, MapPin, Phone, Users, Plus, X, Loader2, Edit, Building2, FileText, Car, ArrowLeftRight, Receipt } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -9,12 +9,15 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from 
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
+import { Textarea } from '@/components/ui/textarea';
 import { useBusStore } from '@/stores/busStore';
 import { useTransportStore } from '@/stores/transportStore';
 import { useStudentsStore } from '@/stores/studentsStore';
 import { formatCurrency } from '@/lib/utils';
+import { calculateChangeDifference, calculateCancellationRefund } from '@/lib/proRata';
+import { getAuthHeaders } from '@/stores/authStore';
 import StatCard from '@/components/features/StatCard';
-import type { SubscriberType, BusRoute } from '@/types';
+import type { SubscriberType, BusRoute, BusSubscription } from '@/types';
 
 const DISCOUNT_BY_TYPE: Record<SubscriberType, number> = {
   student: 0,
@@ -76,6 +79,23 @@ export default function BusManagement() {
     notes: '',
   };
   const [subForm, setSubForm] = useState(defaultSubForm);
+
+  const [changeDialogOpen, setChangeDialogOpen] = useState(false);
+  const [selectedSubForChange, setSelectedSubForChange] = useState<BusSubscription | null>(null);
+  const [changeType, setChangeType] = useState<'route_change' | 'cancel'>('route_change');
+  const [changeForm, setChangeForm] = useState({
+    newRouteId: '',
+    effectiveDate: new Date().toISOString().split('T')[0],
+    reason: '',
+  });
+  const [invoices, setInvoices] = useState<any[]>([]);
+  const [invoiceForm, setInvoiceForm] = useState({
+    contractId: '', invoiceDate: '', periodFrom: '', periodTo: '',
+    baseAmount: 0, taxAmount: 0, discountAmount: 0, notes: '',
+  });
+  const [invoiceDialogOpen, setInvoiceDialogOpen] = useState(false);
+  const ACADEMIC_YEAR_END = new Date('2026-06-30');
+
   const [routeForm, setRouteForm] = useState({
     name: '', driverName: '', driverPhone: '', busNumber: '',
     capacity: 20, monthlyFee: 0, annualFee: 0, stops: [] as string[],
@@ -87,6 +107,13 @@ export default function BusManagement() {
   }, [fetchRoutes, fetchSubscriptions]);
 
   useEffect(() => { fetchAll(); }, [fetchAll]);
+
+  useEffect(() => {
+    fetch('/api/rental-invoices', { headers: getAuthHeaders() })
+      .then((r) => r.json())
+      .then(setInvoices)
+      .catch(() => {});
+  }, []);
 
   useEffect(() => {
     if (subForm.subscriberType === 'student' && subForm.studentId) {
@@ -169,11 +196,12 @@ export default function BusManagement() {
       </div>
 
       <Tabs defaultValue="routes">
-        <TabsList className="grid grid-cols-4 w-full max-w-xl">
+        <TabsList className="grid grid-cols-5 w-full max-w-2xl">
           <TabsTrigger value="routes" className="gap-1.5"><Bus className="size-3.5" />الخطوط</TabsTrigger>
           <TabsTrigger value="fleet" className="gap-1.5"><Car className="size-3.5" />الأسطول</TabsTrigger>
           <TabsTrigger value="companies" className="gap-1.5"><Building2 className="size-3.5" />الشركات</TabsTrigger>
           <TabsTrigger value="contracts" className="gap-1.5"><FileText className="size-3.5" />العقود</TabsTrigger>
+          <TabsTrigger value="invoices" className="gap-1.5"><Receipt className="size-3.5" />الفواتير</TabsTrigger>
         </TabsList>
 
         {/* ─── ROUTES TAB ─── */}
@@ -406,10 +434,22 @@ export default function BusManagement() {
                               <span className="font-medium">{sub.subscriberName}</span>
                               {sub.pickupAddress && <p className="text-xs text-muted-foreground">{sub.pickupAddress}</p>}
                             </div>
-                            <div className="flex items-center gap-2">
+                            <div className="flex items-center gap-1">
                               <Badge variant="secondary" className="text-xs">
                                 {SUBSCRIBER_LABEL[sub.subscriberType as SubscriberType] ?? sub.subscriberType}
                               </Badge>
+                              <button
+                                onClick={() => {
+                                  setSelectedSubForChange(sub);
+                                  setChangeType('route_change');
+                                  setChangeForm({ newRouteId: '', effectiveDate: new Date().toISOString().split('T')[0], reason: '' });
+                                  setChangeDialogOpen(true);
+                                }}
+                                className="text-blue-500 hover:text-blue-700"
+                                title="تغيير الاشتراك"
+                              >
+                                <ArrowLeftRight className="size-3.5" />
+                              </button>
                               <button
                                 onClick={() => { cancelSubscription(sub.id); toast.success('تم إلغاء الاشتراك'); }}
                                 className="text-red-500 hover:text-red-700"
@@ -660,7 +700,250 @@ export default function BusManagement() {
             </Table>
           </div>
         </TabsContent>
+        {/* ─── INVOICES TAB ─── */}
+        <TabsContent value="invoices" className="mt-6 space-y-4">
+          <div className="flex justify-end">
+            <Dialog open={invoiceDialogOpen} onOpenChange={setInvoiceDialogOpen}>
+              <DialogTrigger asChild>
+                <Button><Plus className="size-4 ml-2" />إضافة فاتورة إيجار</Button>
+              </DialogTrigger>
+              <DialogContent className="max-w-lg">
+                <DialogHeader><DialogTitle className="font-[Noto_Kufi_Arabic]">فاتورة إيجار باصات</DialogTitle></DialogHeader>
+                <form onSubmit={async (e) => {
+                  e.preventDefault();
+                  const total = invoiceForm.baseAmount + invoiceForm.taxAmount - invoiceForm.discountAmount;
+                  const res = await fetch('/api/rental-invoices', {
+                    method: 'POST',
+                    headers: getAuthHeaders(),
+                    body: JSON.stringify({ ...invoiceForm, totalAmount: total, status: 'pending_review' }),
+                  });
+                  if (res.ok) {
+                    const inv = await res.json();
+                    setInvoices((prev) => [inv, ...prev]);
+                    toast.success(`تم إضافة الفاتورة ${inv.code}`);
+                    setInvoiceDialogOpen(false);
+                    setInvoiceForm({ contractId: '', invoiceDate: '', periodFrom: '', periodTo: '', baseAmount: 0, taxAmount: 0, discountAmount: 0, notes: '' });
+                  }
+                }} className="space-y-4">
+                  <div className="space-y-2">
+                    <Label>العقد</Label>
+                    <Select value={invoiceForm.contractId} onValueChange={(v) => setInvoiceForm({ ...invoiceForm, contractId: v })}>
+                      <SelectTrigger><SelectValue placeholder="اختر العقد" /></SelectTrigger>
+                      <SelectContent>
+                        {contracts.map((c) => (
+                          <SelectItem key={c.id} value={c.id}>{c.contractNumber} — {c.company?.nameAr}</SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  <div className="grid grid-cols-3 gap-3">
+                    <div className="space-y-2"><Label>تاريخ الفاتورة</Label><Input type="date" required value={invoiceForm.invoiceDate} onChange={(e) => setInvoiceForm({ ...invoiceForm, invoiceDate: e.target.value })} /></div>
+                    <div className="space-y-2"><Label>من</Label><Input type="date" required value={invoiceForm.periodFrom} onChange={(e) => setInvoiceForm({ ...invoiceForm, periodFrom: e.target.value })} /></div>
+                    <div className="space-y-2"><Label>إلى</Label><Input type="date" required value={invoiceForm.periodTo} onChange={(e) => setInvoiceForm({ ...invoiceForm, periodTo: e.target.value })} /></div>
+                  </div>
+                  <div className="grid grid-cols-3 gap-3">
+                    <div className="space-y-2"><Label>المبلغ الأساسي</Label><Input type="number" min={0} required value={invoiceForm.baseAmount} onChange={(e) => setInvoiceForm({ ...invoiceForm, baseAmount: Number(e.target.value) })} /></div>
+                    <div className="space-y-2"><Label>الضريبة</Label><Input type="number" min={0} value={invoiceForm.taxAmount} onChange={(e) => setInvoiceForm({ ...invoiceForm, taxAmount: Number(e.target.value) })} /></div>
+                    <div className="space-y-2"><Label>الخصم</Label><Input type="number" min={0} value={invoiceForm.discountAmount} onChange={(e) => setInvoiceForm({ ...invoiceForm, discountAmount: Number(e.target.value) })} /></div>
+                  </div>
+                  <div className="bg-muted/50 p-3 rounded-lg text-sm text-center">
+                    الإجمالي: <strong>{formatCurrency(invoiceForm.baseAmount + invoiceForm.taxAmount - invoiceForm.discountAmount)}</strong>
+                  </div>
+                  <div className="flex justify-end gap-3">
+                    <Button type="button" variant="outline" onClick={() => setInvoiceDialogOpen(false)}>إلغاء</Button>
+                    <Button type="submit" disabled={!invoiceForm.contractId}>إضافة</Button>
+                  </div>
+                </form>
+              </DialogContent>
+            </Dialog>
+          </div>
+
+          <div className="rounded-lg border">
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead>الكود</TableHead>
+                  <TableHead>الشركة</TableHead>
+                  <TableHead>الفترة</TableHead>
+                  <TableHead>الإجمالي</TableHead>
+                  <TableHead>الحالة</TableHead>
+                  <TableHead></TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {invoices.length === 0 ? (
+                  <TableRow><TableCell colSpan={6} className="text-center py-8 text-muted-foreground">لا توجد فواتير</TableCell></TableRow>
+                ) : (
+                  invoices.map((inv: any) => (
+                    <TableRow key={inv.id}>
+                      <TableCell className="font-mono">{inv.code}</TableCell>
+                      <TableCell>{inv.contract?.company?.nameAr}</TableCell>
+                      <TableCell className="text-xs">{new Date(inv.periodFrom).toLocaleDateString('ar-EG')} — {new Date(inv.periodTo).toLocaleDateString('ar-EG')}</TableCell>
+                      <TableCell>{formatCurrency(inv.totalAmount)}</TableCell>
+                      <TableCell>
+                        <Badge variant={inv.status === 'paid' ? 'default' : inv.status === 'approved' ? 'secondary' : 'outline'}>
+                          {inv.status === 'paid' ? 'مدفوعة' : inv.status === 'approved' ? 'معتمدة' : 'بانتظار المراجعة'}
+                        </Badge>
+                      </TableCell>
+                      <TableCell>
+                        {inv.status === 'pending_review' && (
+                          <Button size="sm" variant="outline" onClick={async () => {
+                            const res = await fetch(`/api/rental-invoices/${inv.id}`, {
+                              method: 'PATCH', headers: getAuthHeaders(),
+                              body: JSON.stringify({ status: 'approved' }),
+                            });
+                            if (res.ok) {
+                              const updated = await res.json();
+                              setInvoices((prev) => prev.map((i: any) => i.id === inv.id ? updated : i));
+                              toast.success('تم اعتماد الفاتورة');
+                            }
+                          }}>اعتماد</Button>
+                        )}
+                      </TableCell>
+                    </TableRow>
+                  ))
+                )}
+              </TableBody>
+            </Table>
+          </div>
+        </TabsContent>
       </Tabs>
+
+      {/* ─── CHANGE SUBSCRIPTION DIALOG ─── */}
+      <Dialog open={changeDialogOpen} onOpenChange={setChangeDialogOpen}>
+        <DialogContent className="max-w-lg">
+          <DialogHeader>
+            <DialogTitle className="font-[Noto_Kufi_Arabic]">
+              تغيير اشتراك: {selectedSubForChange?.subscriberName}
+            </DialogTitle>
+          </DialogHeader>
+
+          {selectedSubForChange && (() => {
+            const selectedNewRoute = routes.find((r) => r.id === changeForm.newRouteId);
+            const proRata = changeType === 'route_change' && selectedNewRoute
+              ? calculateChangeDifference({
+                  previousFullFee: Number(selectedSubForChange.fullFeeAmount),
+                  previousDiscountPct: Number(selectedSubForChange.discountPct),
+                  newFullFee: Number(selectedNewRoute.annualFee),
+                  newDiscountPct: Number(selectedSubForChange.discountPct),
+                  changeEffectiveDate: new Date(changeForm.effectiveDate),
+                  academicYearEnd: ACADEMIC_YEAR_END,
+                })
+              : changeType === 'cancel'
+              ? {
+                  difference: -calculateCancellationRefund({
+                    netFeePaid: Number(selectedSubForChange.actualAmount),
+                    cancellationDate: new Date(changeForm.effectiveDate),
+                    academicYearEnd: ACADEMIC_YEAR_END,
+                  }),
+                  direction: 'school_refunds' as const,
+                  monthsRemaining: 0, proportion: 0,
+                  previousRemaining: 0, newRemaining: 0, totalMonths: 10,
+                }
+              : null;
+
+            return (
+              <div className="space-y-4">
+                <div className="bg-muted/50 p-3 rounded-lg text-sm">
+                  <p>الخط الحالي: <strong>{selectedSubForChange.route?.name || '—'}</strong></p>
+                  <p>الرسوم المدفوعة: <strong>{formatCurrency(Number(selectedSubForChange.actualAmount))}</strong></p>
+                </div>
+
+                <div className="space-y-2">
+                  <Label>نوع التغيير</Label>
+                  <Select value={changeType} onValueChange={(v) => setChangeType(v as 'route_change' | 'cancel')}>
+                    <SelectTrigger><SelectValue /></SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="route_change">تغيير الخط</SelectItem>
+                      <SelectItem value="cancel">إلغاء الاشتراك</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+
+                {changeType === 'route_change' && (
+                  <div className="space-y-2">
+                    <Label>الخط الجديد</Label>
+                    <Select value={changeForm.newRouteId} onValueChange={(v) => setChangeForm((f) => ({ ...f, newRouteId: v }))}>
+                      <SelectTrigger><SelectValue placeholder="اختر الخط الجديد" /></SelectTrigger>
+                      <SelectContent>
+                        {routes.filter((r) => r.id !== selectedSubForChange.routeId).map((r) => (
+                          <SelectItem key={r.id} value={r.id}>{r.name} — {formatCurrency(Number(r.annualFee))}</SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                )}
+
+                <div className="space-y-2">
+                  <Label>تاريخ التطبيق</Label>
+                  <Input type="date" value={changeForm.effectiveDate} onChange={(e) => setChangeForm((f) => ({ ...f, effectiveDate: e.target.value }))} />
+                </div>
+
+                {proRata && proRata.difference !== 0 && (
+                  <div className={`p-3 rounded-lg text-sm border ${proRata.direction === 'subscriber_pays' ? 'bg-orange-50 border-orange-200' : 'bg-green-50 border-green-200'}`}>
+                    <p className="font-bold mb-1">حساب الفرق (Pro-Rata)</p>
+                    <p>الأشهر المتبقية: {proRata.monthsRemaining} من {proRata.totalMonths}</p>
+                    {changeType === 'route_change' && (
+                      <>
+                        <p>المبلغ المتبقي السابق: {formatCurrency(proRata.previousRemaining)}</p>
+                        <p>المبلغ المتبقي الجديد: {formatCurrency(proRata.newRemaining)}</p>
+                      </>
+                    )}
+                    <p className="font-bold mt-1">
+                      {proRata.direction === 'subscriber_pays'
+                        ? `➕ يستحق إضافي: ${formatCurrency(proRata.difference)}`
+                        : `➖ مبلغ مسترد: ${formatCurrency(Math.abs(proRata.difference))}`}
+                    </p>
+                  </div>
+                )}
+
+                <div className="space-y-2">
+                  <Label>سبب التغيير</Label>
+                  <Textarea value={changeForm.reason} onChange={(e) => setChangeForm((f) => ({ ...f, reason: e.target.value }))} rows={2} />
+                </div>
+
+                <div className="flex justify-end gap-3">
+                  <Button type="button" variant="outline" onClick={() => setChangeDialogOpen(false)}>إلغاء</Button>
+                  <Button
+                    onClick={async () => {
+                      const selectedNewRoute = routes.find((r) => r.id === changeForm.newRouteId);
+                      const res = await fetch('/api/subscription-changes', {
+                        method: 'POST',
+                        headers: getAuthHeaders(),
+                        body: JSON.stringify({
+                          subscriptionId: selectedSubForChange.id,
+                          changeType,
+                          effectiveDate: changeForm.effectiveDate,
+                          newRouteId: changeForm.newRouteId || null,
+                          changeReason: changeForm.reason,
+                          previousFullFee: proRata?.previousRemaining != null ? Number(selectedSubForChange.fullFeeAmount) : undefined,
+                          newFullFee: proRata?.newRemaining != null ? (changeType === 'route_change' && selectedNewRoute ? Number(selectedNewRoute.annualFee) : undefined) : undefined,
+                          monthsRemaining: proRata?.monthsRemaining,
+                          previousRemaining: proRata?.previousRemaining,
+                          newRemaining: proRata?.newRemaining,
+                          proRataDifference: proRata?.difference,
+                          direction: proRata?.direction,
+                        }),
+                      });
+                      if (res.ok) {
+                        toast.success('تم تسجيل التغيير بنجاح');
+                        setChangeDialogOpen(false);
+                        fetchSubscriptions({ academicYear: CURRENT_YEAR });
+                      } else {
+                        toast.error('فشل تسجيل التغيير');
+                      }
+                    }}
+                    disabled={changeType === 'route_change' && !changeForm.newRouteId}
+                    variant={changeType === 'cancel' ? 'destructive' : 'default'}
+                  >
+                    {changeType === 'cancel' ? 'تأكيد الإلغاء' : 'تأكيد التغيير'}
+                  </Button>
+                </div>
+              </div>
+            );
+          })()}
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
