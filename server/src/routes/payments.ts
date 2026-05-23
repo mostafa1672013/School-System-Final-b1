@@ -789,6 +789,7 @@ router.post('/treasury/close-approve', async (req, res) => {
 
     res.json({ status: 'closed', session: closed });
   } catch (error) {
+    console.error(error);
     res.status(400).json({ error: 'فشل إغلاق الخزينة' });
   }
 });
