@@ -102,16 +102,17 @@ router.post('/payments', requireOpenTreasury, async (req, res) => {
     const updates: ReturnType<typeof prisma.studentYearlyFinance.update>[] = [];
 
     const debitCode = method === 'cash' ? '1001' : '1002';
-    let creditCode = '4006';
-    switch (type) {
-      case 'tuition': creditCode = '4001'; break;
-      case 'books': creditCode = '4002'; break;
-      case 'uniform': creditCode = '4003'; break;
-      case 'bus': creditCode = '4004'; break;
-      case 'application_fee': creditCode = '4005'; break;
-    }
+    // ─── منطق القيد المحاسبي ───────────────────────────────────────────────
+    // التحصيل = Dr. خزينة (1001/1002)  Cr. ذمم الطالب (1201)
+    //   ← يُقفل الذمة التي فُتحت عند الاعتماد
+    //
+    // رسوم القبول (application_fee) استثناء:
+    //   ← لا يوجد قيد ذمة مسبق، لذا يُحتسب مباشرة Dr. خزينة / Cr. إيرادات
+    // ───────────────────────────────────────────────────────────────────────
+    const isAppFee = type === 'application_fee';
+    const creditCode = isAppFee ? '4005' : '1201';
 
-    const debitAccount = await prisma.account.findUnique({ where: { code: debitCode } });
+    const debitAccount  = await prisma.account.findUnique({ where: { code: debitCode } });
     const creditAccount = await prisma.account.findUnique({ where: { code: creditCode } });
 
     // 2. Allocate payment to oldest years first (if not application fee or arrears)
@@ -662,6 +663,21 @@ router.post('/treasury/close-approve', async (req, res) => {
       return res.status(400).json({ error: 'الجلسة ليست في حالة انتظار الموافقة' });
     }
 
+    // سجّل حدث الإغلاق في audit log
+    await prisma.treasurySessionAudit.create({
+      data: {
+        sessionId:      session.id,
+        eventType:      'close_approved',
+        closingBalance: session.closingBalance,
+        actualBalance:  session.actualBalance,
+        difference:     session.difference,
+        closedBy:       session.closedBy,
+        approvedBy:     approver.name,
+        closureNote:    session.closureNote,
+        performedBy:    approvedByUserId
+      }
+    });
+
     const closed = await prisma.treasurySession.update({
       where: { id: sessionId },
       data: {
@@ -731,6 +747,21 @@ router.post('/treasury/reopen-approve', async (req, res) => {
     if (!approver || !managerRoles.includes(approver.role)) {
       return res.status(403).json({ error: 'فقط رئيس الحسابات أو مدير المدرسة يمكنه الموافقة على إعادة الفتح' });
     }
+
+    // احفظ بيانات الإغلاق قبل مسحها
+    await prisma.treasurySessionAudit.create({
+      data: {
+        sessionId:      session.id,
+        eventType:      'reopened',
+        closingBalance: session.closingBalance,
+        actualBalance:  session.actualBalance,
+        difference:     session.difference,
+        closedBy:       session.closedBy,
+        approvedBy:     session.approvedBy,
+        closureNote:    session.closureNote,
+        performedBy:    approverId
+      }
+    });
 
     const updated = await prisma.treasurySession.update({
       where: { id: session.id },
