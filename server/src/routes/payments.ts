@@ -136,7 +136,7 @@ router.post('/payments', requireOpenTreasury, async (req, res) => {
     // 3. Execute transaction: Create payment, update yearly records, update student summary
     const [payment] = await prisma.$transaction([
       prisma.payment.create({
-        data: { studentId, studentName, amount, type, method, date, receiptNumber, collectedBy, notes, academicYear, walletPhoneNumber, sessionId: session.id, userId }
+        data: { studentId, studentName, amount, type, method, date: new Date(date), receiptNumber, collectedBy, notes, academicYear, walletPhoneNumber, sessionId: session.id, userId }
       }),
       ...(debitAccount && creditAccount ? [
         prisma.journalEntry.create({
@@ -233,7 +233,7 @@ router.post('/expenses', async (req, res) => {
     const expense = await prisma.expense.create({
       data: {
         amount: Number(amount),
-        date,
+        date: new Date(date),
         description,
         accountId,
         paymentMethod,

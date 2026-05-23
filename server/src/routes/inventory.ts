@@ -255,7 +255,7 @@ router.post('/receive', async (req, res) => {
           notes: notes || null,
           performedBy,
           performedByUserId: performedByUserId || null,
-          date: new Date().toISOString().split('T')[0]
+          date: new Date()
         }
       });
 
@@ -364,7 +364,7 @@ router.post('/issue', async (req, res) => {
           notes: notes || null,
           performedBy,
           performedByUserId: performedByUserId || null,
-          date: new Date().toISOString().split('T')[0]
+          date: new Date()
         }
       });
 
