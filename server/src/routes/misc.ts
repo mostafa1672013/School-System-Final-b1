@@ -107,7 +107,7 @@ async function generateSubCode(): Promise<string> {
   return `SUB-${year}-${String(count + 1).padStart(4, '0')}`;
 }
 
-router.get('/bus-subscriptions', async (req, res) => {
+router.get('/bus-subscriptions', requireAuth, async (req, res) => {
   try {
     const { routeId, status, academicYear } = req.query as Record<string, string>;
     const where: any = {};
@@ -126,7 +126,7 @@ router.get('/bus-subscriptions', async (req, res) => {
   }
 });
 
-router.post('/bus-subscriptions', async (req, res) => {
+router.post('/bus-subscriptions', requireAuth, async (req, res) => {
   try {
     const code = await generateSubCode();
     const sub = await prisma.busSubscription.create({
@@ -141,7 +141,7 @@ router.post('/bus-subscriptions', async (req, res) => {
   }
 });
 
-router.patch('/bus-subscriptions/:id', async (req, res) => {
+router.patch('/bus-subscriptions/:id', requireAuth, async (req, res) => {
   const { id } = req.params;
   try {
     const sub = await prisma.busSubscription.update({
@@ -156,7 +156,7 @@ router.patch('/bus-subscriptions/:id', async (req, res) => {
   }
 });
 
-router.delete('/bus-subscriptions/:id', async (req, res) => {
+router.delete('/bus-subscriptions/:id', requireAuth, async (req, res) => {
   const { id } = req.params;
   try {
     await prisma.busSubscription.update({
