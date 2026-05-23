@@ -56,6 +56,8 @@ router.delete('/badges/:id', requireRoles('system_admin', 'school_director'), as
   }
 });
 
+const busTransportRoles = requireRoles('system_admin', 'school_director', 'head_accountant', 'bus_supervisor');
+
 // ===== BUS ROUTES =====
 // Mounted at /api/bus-routes
 
@@ -68,11 +70,12 @@ router.get('/bus-routes', async (req, res) => {
   }
 });
 
-router.post('/bus-routes', async (req, res) => {
+router.post('/bus-routes', requireAuth, busTransportRoles, async (req, res) => {
   console.log('🚌 محاولة إنشاء خط باص جديد:', req.body.name);
   try {
+    const { name, driverName, driverPhone, busNumber, capacity, monthlyFee, annualFee, stops } = req.body;
     const route = await prisma.busRoute.create({
-      data: req.body
+      data: { name, driverName, driverPhone, busNumber, capacity, monthlyFee, annualFee, stops },
     });
     console.log('✅ تم إنشاء الخط بنجاح:', route.id);
     res.json(route);
@@ -82,7 +85,7 @@ router.post('/bus-routes', async (req, res) => {
   }
 });
 
-router.patch('/bus-routes/:id', async (req, res) => {
+router.patch('/bus-routes/:id', requireAuth, busTransportRoles, async (req, res) => {
   const id = Array.isArray(req.params.id) ? req.params.id[0] : req.params.id;
   console.log(`📝 محاولة تعديل الخط: ${id}`, req.body);
   try {
@@ -131,8 +134,6 @@ router.get('/bus-subscriptions', requireAuth, async (req, res) => {
     res.status(500).json({ error: 'Failed to fetch subscriptions' });
   }
 });
-
-const busTransportRoles = requireRoles('system_admin', 'school_director', 'head_accountant', 'bus_supervisor');
 
 router.post('/bus-subscriptions', requireAuth, busTransportRoles, async (req, res) => {
   try {
@@ -271,8 +272,9 @@ router.post('/rental-companies', requireAuth, busTransportRoles, async (req, res
   try {
     const count = await prisma.rentalCompany.count();
     const code = `RC-${String(count + 1).padStart(3, '0')}`;
+    const { nameAr, nameEn, contactPerson, phone, email, address, taxId, bankName, bankAccountNumber, notes, isActive } = req.body;
     const company = await prisma.rentalCompany.create({
-      data: { ...req.body, code },
+      data: { code, nameAr, nameEn, contactPerson: contactPerson ?? null, phone: phone ?? null, email: email ?? null, address: address ?? null, taxId: taxId ?? null, bankName: bankName ?? null, bankAccountNumber: bankAccountNumber ?? null, notes: notes ?? null, isActive: isActive ?? true },
       include: { _count: { select: { contracts: true, drivers: true } } },
     });
     res.status(201).json(company);
@@ -360,8 +362,9 @@ router.post('/buses', requireAuth, busTransportRoles, async (req, res) => {
   try {
     const count = await prisma.fleetBus.count();
     const code = `BUS-${String(count + 1).padStart(3, '0')}`;
+    const { plateNumber, capacity, ownershipType, rentalContractId, make, model, year, color, status, insuranceExpiry, licenseExpiry, notes } = req.body;
     const bus = await prisma.fleetBus.create({
-      data: { ...req.body, code },
+      data: { code, plateNumber, capacity, ownershipType, rentalContractId: rentalContractId ?? null, make: make ?? null, model: model ?? null, year: year ?? null, color: color ?? null, status: status ?? undefined, insuranceExpiry: insuranceExpiry ? new Date(insuranceExpiry) : null, licenseExpiry: licenseExpiry ? new Date(licenseExpiry) : null, notes: notes ?? null },
       include: { rentalContract: { include: { company: true } } },
     });
     res.status(201).json(bus);
@@ -410,8 +413,9 @@ router.post('/external-drivers', requireAuth, busTransportRoles, async (req, res
   try {
     const count = await prisma.externalDriver.count();
     const code = `DRV-${String(count + 1).padStart(3, '0')}`;
+    const { fullName, phone, companyId, licenseNumber, licenseExpiry, isActive, notes } = req.body;
     const driver = await prisma.externalDriver.create({
-      data: { ...req.body, code },
+      data: { code, fullName, phone: phone ?? null, companyId: companyId ?? null, licenseNumber: licenseNumber ?? null, licenseExpiry: licenseExpiry ? new Date(licenseExpiry) : null, isActive: isActive ?? true, notes: notes ?? null },
       include: { company: true },
     });
     res.status(201).json(driver);
