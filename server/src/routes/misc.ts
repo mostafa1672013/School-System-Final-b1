@@ -251,4 +251,174 @@ router.put('/settings/academic-year', requireRoles('school_director', 'head_acco
   }
 });
 
+// ===== RENTAL COMPANIES =====
+
+router.get('/rental-companies', requireAuth, async (req, res) => {
+  try {
+    const companies = await prisma.rentalCompany.findMany({
+      where: { isActive: true },
+      include: { _count: { select: { contracts: true, drivers: true } } },
+      orderBy: { nameAr: 'asc' },
+    });
+    res.json(companies);
+  } catch (error) {
+    console.error('Fetch rental companies error:', error);
+    res.status(500).json({ error: 'Failed to fetch rental companies' });
+  }
+});
+
+router.post('/rental-companies', requireAuth, busTransportRoles, async (req, res) => {
+  try {
+    const count = await prisma.rentalCompany.count();
+    const code = `RC-${String(count + 1).padStart(3, '0')}`;
+    const company = await prisma.rentalCompany.create({
+      data: { ...req.body, code },
+      include: { _count: { select: { contracts: true, drivers: true } } },
+    });
+    res.status(201).json(company);
+  } catch (error) {
+    console.error('Create rental company error:', error);
+    res.status(500).json({ error: 'Failed to create rental company' });
+  }
+});
+
+router.patch('/rental-companies/:id', requireAuth, busTransportRoles, async (req, res) => {
+  const id = Array.isArray(req.params.id) ? req.params.id[0] : req.params.id;
+  try {
+    const company = await prisma.rentalCompany.update({
+      where: { id },
+      data: req.body,
+    });
+    res.json(company);
+  } catch (error: any) {
+    console.error('Update rental company error:', error);
+    if (error?.code === 'P2025') return res.status(404).json({ error: 'Company not found' });
+    res.status(500).json({ error: 'Failed to update rental company' });
+  }
+});
+
+// ===== RENTAL CONTRACTS =====
+
+router.get('/rental-contracts', requireAuth, async (req, res) => {
+  try {
+    const contracts = await prisma.rentalContract.findMany({
+      include: { company: true, _count: { select: { buses: true } } },
+      orderBy: { createdAt: 'desc' },
+    });
+    res.json(contracts);
+  } catch (error) {
+    console.error('Fetch rental contracts error:', error);
+    res.status(500).json({ error: 'Failed to fetch rental contracts' });
+  }
+});
+
+router.post('/rental-contracts', requireAuth, busTransportRoles, async (req, res) => {
+  try {
+    const contract = await prisma.rentalContract.create({
+      data: req.body,
+      include: { company: true },
+    });
+    res.status(201).json(contract);
+  } catch (error) {
+    console.error('Create rental contract error:', error);
+    res.status(500).json({ error: 'Failed to create rental contract' });
+  }
+});
+
+router.patch('/rental-contracts/:id', requireAuth, busTransportRoles, async (req, res) => {
+  const id = Array.isArray(req.params.id) ? req.params.id[0] : req.params.id;
+  try {
+    const contract = await prisma.rentalContract.update({
+      where: { id },
+      data: req.body,
+      include: { company: true },
+    });
+    res.json(contract);
+  } catch (error: any) {
+    console.error('Update rental contract error:', error);
+    if (error?.code === 'P2025') return res.status(404).json({ error: 'Contract not found' });
+    res.status(500).json({ error: 'Failed to update rental contract' });
+  }
+});
+
+// ===== FLEET BUSES =====
+
+router.get('/buses', requireAuth, async (req, res) => {
+  try {
+    const buses = await prisma.fleetBus.findMany({
+      include: { rentalContract: { include: { company: true } } },
+      orderBy: { code: 'asc' },
+    });
+    res.json(buses);
+  } catch (error) {
+    console.error('Fetch buses error:', error);
+    res.status(500).json({ error: 'Failed to fetch buses' });
+  }
+});
+
+router.post('/buses', requireAuth, busTransportRoles, async (req, res) => {
+  try {
+    const count = await prisma.fleetBus.count();
+    const code = `BUS-${String(count + 1).padStart(3, '0')}`;
+    const bus = await prisma.fleetBus.create({
+      data: { ...req.body, code },
+      include: { rentalContract: { include: { company: true } } },
+    });
+    res.status(201).json(bus);
+  } catch (error) {
+    console.error('Create bus error:', error);
+    res.status(500).json({ error: 'Failed to create bus' });
+  }
+});
+
+router.patch('/buses/:id', requireAuth, busTransportRoles, async (req, res) => {
+  const id = Array.isArray(req.params.id) ? req.params.id[0] : req.params.id;
+  try {
+    const bus = await prisma.fleetBus.update({
+      where: { id },
+      data: req.body,
+      include: { rentalContract: { include: { company: true } } },
+    });
+    res.json(bus);
+  } catch (error: any) {
+    console.error('Update bus error:', error);
+    if (error?.code === 'P2025') return res.status(404).json({ error: 'Bus not found' });
+    res.status(500).json({ error: 'Failed to update bus' });
+  }
+});
+
+// ===== EXTERNAL DRIVERS =====
+
+router.get('/external-drivers', requireAuth, async (req, res) => {
+  try {
+    const { companyId } = req.query;
+    const where: any = { isActive: true };
+    if (typeof companyId === 'string') where.companyId = companyId;
+    const drivers = await prisma.externalDriver.findMany({
+      where,
+      include: { company: true },
+      orderBy: { fullName: 'asc' },
+    });
+    res.json(drivers);
+  } catch (error) {
+    console.error('Fetch drivers error:', error);
+    res.status(500).json({ error: 'Failed to fetch drivers' });
+  }
+});
+
+router.post('/external-drivers', requireAuth, busTransportRoles, async (req, res) => {
+  try {
+    const count = await prisma.externalDriver.count();
+    const code = `DRV-${String(count + 1).padStart(3, '0')}`;
+    const driver = await prisma.externalDriver.create({
+      data: { ...req.body, code },
+      include: { company: true },
+    });
+    res.status(201).json(driver);
+  } catch (error) {
+    console.error('Create driver error:', error);
+    res.status(500).json({ error: 'Failed to create driver' });
+  }
+});
+
 export default router;
