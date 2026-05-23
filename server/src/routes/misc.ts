@@ -521,36 +521,46 @@ router.get('/rental-invoices', requireAuth, async (req, res) => {
 });
 
 router.post('/rental-invoices', requireAuth, busTransportRoles, async (req, res) => {
+  const {
+    contractId, invoiceDate, periodFrom, periodTo,
+    baseAmount, discountAmount, taxAmount, totalAmount,
+    status, notes, attachmentUrl,
+  } = req.body as Record<string, any>;
+
+  if (!contractId || !invoiceDate || !periodFrom || !periodTo || totalAmount == null) {
+    return res.status(400).json({ error: 'contractId, invoiceDate, periodFrom, periodTo, totalAmount are required' });
+  }
+
   try {
-    const {
-      contractId, invoiceDate, periodFrom, periodTo,
-      baseAmount, discountAmount, taxAmount, totalAmount,
-      status, notes, attachmentUrl,
-    } = req.body as Record<string, any>;
-
-    if (!contractId || !invoiceDate || !periodFrom || !periodTo || totalAmount == null) {
-      return res.status(400).json({ error: 'contractId, invoiceDate, periodFrom, periodTo, totalAmount are required' });
+    let invoice: any = null;
+    let attempts = 0;
+    while (!invoice && attempts < 3) {
+      attempts++;
+      try {
+        const code = await generateInvoiceCode();
+        invoice = await prisma.rentalInvoice.create({
+          data: {
+            code,
+            contractId,
+            invoiceDate: new Date(invoiceDate),
+            periodFrom: new Date(periodFrom),
+            periodTo: new Date(periodTo),
+            baseAmount: Number(baseAmount),
+            discountAmount: discountAmount != null ? Number(discountAmount) : 0,
+            taxAmount: taxAmount != null ? Number(taxAmount) : 0,
+            totalAmount: Number(totalAmount),
+            status: status ?? 'pending_review',
+            notes: notes ?? null,
+            attachmentUrl: attachmentUrl ?? null,
+          },
+          include: { contract: { include: { company: true } } },
+        });
+      } catch (innerErr: any) {
+        if (innerErr?.code === 'P2002' && attempts < 3) continue;
+        throw innerErr;
+      }
     }
-
-    const code = await generateInvoiceCode();
-    const invoice = await prisma.rentalInvoice.create({
-      data: {
-        code,
-        contractId,
-        invoiceDate: new Date(invoiceDate),
-        periodFrom: new Date(periodFrom),
-        periodTo: new Date(periodTo),
-        baseAmount: Number(baseAmount),
-        discountAmount: discountAmount != null ? Number(discountAmount) : 0,
-        taxAmount: taxAmount != null ? Number(taxAmount) : 0,
-        totalAmount: Number(totalAmount),
-        status: status ?? 'pending_review',
-        notes: notes ?? null,
-        attachmentUrl: attachmentUrl ?? null,
-      },
-      include: { contract: { include: { company: true } } },
-    });
-    res.status(201).json(invoice);
+    return res.status(201).json(invoice);
   } catch (error) {
     console.error('Create rental invoice error:', error);
     res.status(500).json({ error: 'Failed to create rental invoice' });
