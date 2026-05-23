@@ -74,9 +74,10 @@ model Student {
   deletedAt       DateTime?
   createdAt       DateTime  @default(now())
   updatedAt       DateTime  @updatedAt
-  payments        Payment[]
-  yearlyFinance   StudentYearlyFinance[]
-  installmentPlan InstallmentPlan?
+  payments         Payment[]
+  yearlyFinance    StudentYearlyFinance[]
+  installmentPlan  InstallmentPlan?
+  busSubscriptions BusSubscription[]
 }
 
 model StageFee {
@@ -207,6 +208,7 @@ model BusSubscription {
   code            String    @unique
   subscriberType  String    // 'student' | 'employee' | 'supervisor'
   studentId       String?
+  student         Student?  @relation(fields: [studentId], references: [id], onDelete: SetNull)
   subscriberName  String
   routeId         String
   route           BusRoute  @relation(fields: [routeId], references: [id])
@@ -222,6 +224,10 @@ model BusSubscription {
   notes           String?
   createdAt       DateTime  @default(now())
   updatedAt       DateTime  @updatedAt
+
+  @@index([routeId])
+  @@index([studentId])
+  @@index([academicYear, status])
 }
 
 model User {
