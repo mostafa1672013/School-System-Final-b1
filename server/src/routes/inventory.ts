@@ -348,6 +348,17 @@ router.post('/issue', async (req, res) => {
         throw new Error(`الكمية المتاحة ${item.quantity} أقل من المطلوبة ${quantity}`);
       }
 
+      let openSession: { id: string } | null = null;
+      if (subType === 'sale') {
+        openSession = await tx.treasurySession.findFirst({
+          where: { status: 'open' },
+          select: { id: true }
+        });
+        if (!openSession) {
+          throw new Error('لا توجد خزينة مفتوحة. يجب فتح الخزينة قبل إتمام عمليات البيع.');
+        }
+      }
+
       // Update item quantity
       const updatedItem = await tx.inventoryItem.update({
         where: { id: itemId },
@@ -496,6 +507,39 @@ router.post('/issue', async (req, res) => {
       } catch (journalError) {
         console.warn('⚠️ Journal entry creation failed:', journalError);
         // Continue anyway
+      }
+
+      // Create Payment record for treasury tracking (sale only)
+      if (subType === 'sale' && openSession && studentId) {
+        const paymentTypeMap: Record<string, string> = {
+          books: 'books', كتب: 'books',
+          uniform: 'uniform', زي: 'uniform',
+        };
+        const paymentType = paymentTypeMap[item.category ?? ''] ?? 'other';
+        const receiptNumber = `INV-${new Date().getFullYear()}-${randomUUID().slice(0, 8)}`;
+
+        await tx.payment.create({
+          data: {
+            studentId: studentId || null,
+            studentName: studentName || 'غير محدد',
+            amount: Number(item.unitPrice) * quantity,
+            type: paymentType,
+            method: 'cash',
+            date: new Date(),
+            receiptNumber,
+            collectedBy: performedBy,
+            userId: performedByUserId || null,
+            sessionId: openSession.id,
+            notes: `بيع مخزون: ${item.name} (${quantity} ${item.unit})`,
+          }
+        });
+
+        if (studentId) {
+          await tx.student.update({
+            where: { id: studentId },
+            data: { paidAmount: { increment: Number(item.unitPrice) * quantity } }
+          });
+        }
       }
 
       return { item: updatedItem, transaction };
