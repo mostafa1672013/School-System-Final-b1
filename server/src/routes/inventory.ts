@@ -213,7 +213,7 @@ router.get('/transactions', async (req, res) => {
 // POST: Receive stock (stock-in)
 router.post('/receive', async (req, res) => {
   try {
-    const { itemId, quantity, supplierName, unitCost, notes, performedBy, performedByUserId } = req.body;
+    const { itemId, quantity, supplierName, unitCost, notes, performedBy, performedByUserId, subType } = req.body;
 
     if (!itemId || !quantity || !performedBy) {
       return res.status(400).json({ error: 'الصنف والكمية والموظف مطلوبين' });
@@ -221,6 +221,12 @@ router.post('/receive', async (req, res) => {
 
     if (quantity <= 0) {
       return res.status(400).json({ error: 'الكمية يجب أن تكون أكبر من صفر' });
+    }
+    
+    // منع المشتريات المباشرة لتطبيق دورة المشتريات الجديدة
+    const actualSubType = subType || 'purchase';
+    if (actualSubType === 'purchase') {
+      return res.status(403).json({ error: 'تم إيقاف الشراء المباشر. يرجى استخدام نظام المشتريات (طلب -> أمر شراء -> إذن استلام) لإضافة مخزون جديد.' });
     }
 
     // Use transaction to ensure data consistency
@@ -267,7 +273,8 @@ router.post('/receive', async (req, res) => {
         if (asset1300 && liability2001) {
           const journalEntry = await tx.journalEntry.create({
             data: {
-              date: new Date(),
+              entryNumber: `JE-INV-${Date.now()}`,
+              entryDate: new Date().toISOString().split('T')[0],
               description: `استلام مخزون: ${item.name} (${quantity} ${item.unit})`,
               referenceId: transaction.id,
               lines: {
@@ -390,7 +397,8 @@ router.post('/issue', async (req, res) => {
             // Entry 1: DR Cash | CR Revenue
             const journalEntry1 = await tx.journalEntry.create({
               data: {
-                date: new Date(),
+                entryNumber: `JE-INV-${Date.now()}`,
+                entryDate: new Date().toISOString().split('T')[0],
                 description: `بيع مخزون: ${item.name} لطالب (${quantity} ${item.unit})`,
                 referenceId: transaction.id,
                 lines: {
@@ -413,7 +421,8 @@ router.post('/issue', async (req, res) => {
             // Entry 2: DR COGS | CR Inventory
             const journalEntry2 = await tx.journalEntry.create({
               data: {
-                date: new Date(),
+                entryNumber: `JE-COGS-${Date.now()}`,
+                entryDate: new Date().toISOString().split('T')[0],
                 description: `تكلفة بضاعة مباعة: ${item.name} (${quantity} ${item.unit})`,
                 referenceId: transaction.id,
                 lines: {
@@ -448,7 +457,8 @@ router.post('/issue', async (req, res) => {
           if (expense5002 && inventory1300) {
             const journalEntry = await tx.journalEntry.create({
               data: {
-                date: new Date(),
+                entryNumber: `JE-INV-${Date.now()}`,
+                entryDate: new Date().toISOString().split('T')[0],
                 description: `صرف مستلزمات: ${item.name} للقسم ${departmentName || 'غير محدد'} (${quantity} ${item.unit})`,
                 referenceId: transaction.id,
                 lines: {
