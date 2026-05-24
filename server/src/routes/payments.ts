@@ -303,7 +303,9 @@ router.patch('/expenses/:id/pay', requireOpenTreasury, async (req, res) => {
         include: { account: true }
       });
 
-      const creditCode = exp.paymentMethod === 'cash' ? '1001' : '1002';
+      const creditCode = exp.paymentMethod === 'cash' ? '1001'
+        : exp.paymentMethod === 'wallet' ? '1002'
+        : '1003'; // bank_transfer → حساب بنكي جاري
       const creditAccount = await tx.account.findUnique({ where: { code: creditCode } });
 
       if (creditAccount) {
