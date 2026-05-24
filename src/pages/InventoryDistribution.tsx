@@ -5,7 +5,7 @@ import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { getAuthHeaders } from '@/stores/authStore';
+import { getAuthHeaders, useAuthStore } from '@/stores/authStore';
 import { useSettingsStore } from '@/stores/settingsStore';
 import { formatCurrency } from '@/lib/utils';
 import type { GradeDistributionSummary, StudentDeliveryStatus } from '@/types';
@@ -18,6 +18,7 @@ const TERMS = [
 ];
 
 export default function InventoryDistribution() {
+  const { user } = useAuthStore();
   const { activeAcademicYear } = useSettingsStore();
   const [selectedYear, setSelectedYear] = useState(activeAcademicYear || '2025-2026');
   const [selectedTerm, setSelectedTerm] = useState('1');
@@ -66,7 +67,7 @@ export default function InventoryDistribution() {
         method: 'POST',
         headers: getAuthHeaders(),
         body: JSON.stringify({
-          requestedBy: 'system',
+          requestedBy: (user as any)?.id || (user as any)?.userId || 'system',
           department: `${summary.stage} صف ${summary.grade}`,
           notes: `طلب شراء تلقائي لتغطية عجز ${summary.stage} صف ${summary.grade} — ترم ${selectedTerm}`,
           items: deficitItems.map(item => ({

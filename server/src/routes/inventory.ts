@@ -1,6 +1,7 @@
 import { Router } from 'express';
 import { PrismaClient } from '@prisma/client';
 import { randomUUID } from 'crypto';
+import { requireAuth, warehouseRoles, accountingAndWarehouse } from '../middleware/auth';
 
 const router = Router();
 const prisma = new PrismaClient();
@@ -212,7 +213,7 @@ router.get('/transactions', async (req, res) => {
 });
 
 // POST: Receive stock (stock-in)
-router.post('/receive', async (req, res) => {
+router.post('/receive', requireAuth, warehouseRoles, async (req, res) => {
   try {
     const { itemId, quantity, supplierName, unitCost, notes, performedBy, performedByUserId, subType } = req.body;
 
@@ -267,47 +268,37 @@ router.post('/receive', async (req, res) => {
       });
 
       // Create journal entry with correct credit account based on subType:
-      // purchase → CR 2001 (Accounts Payable), adjustment → CR 5003 (Inventory Adjustment), opening_balance → CR 3001 (Retained Earnings)
-      try {
-        const asset1300 = await tx.account.findUnique({ where: { code: '1300' } });
-        const creditCode = actualSubType === 'opening_balance' ? '3001' : '5003';
-        const creditAccount = await tx.account.findUnique({ where: { code: creditCode } });
-        const year = new Date().getFullYear();
+      // adjustment → CR 5003 (Inventory Adjustment), opening_balance → CR 3001 (Retained Earnings)
+      const asset1300 = await tx.account.findUnique({ where: { code: '1300' } });
+      const creditCode = actualSubType === 'opening_balance' ? '3001' : '5003';
+      const creditAccount = await tx.account.findUnique({ where: { code: creditCode } });
+      if (!asset1300) throw new Error('حساب المخزون 1300 غير موجود');
+      if (!creditAccount) throw new Error(`حساب ${creditCode} غير موجود`);
 
-        if (asset1300 && creditAccount) {
-          const totalCost = (unitCost ?? Number(item.unitCost)) * quantity;
-          const journalEntry = await tx.journalEntry.create({
-            data: {
-              entryNumber: `JE-${year}-${randomUUID().slice(0, 8)}`,
-              entryDate: new Date().toISOString().split('T')[0],
-              description: `${actualSubType === 'opening_balance' ? 'رصيد افتتاحي' : actualSubType === 'adjustment' ? 'تسوية مخزون' : 'استلام مخزون'}: ${item.name} (${quantity} ${item.unit})`,
-              referenceType: actualSubType === 'opening_balance' ? 'inventory_opening_balance'
-              : actualSubType === 'adjustment' ? 'inventory_adjustment'
-              : 'inventory_receive',
-              referenceId: transaction.id,
-              status: 'posted',
-              postedAt: new Date(),
-              lines: {
-                create: [
-                  { accountId: asset1300.id, debit: totalCost, credit: 0, lineNumber: 1 },
-                  { accountId: creditAccount.id, debit: 0, credit: totalCost, lineNumber: 2 }
-                ]
-              }
-            }
-          });
-
-          // Update transaction with journal entry ID
-          await tx.inventoryTransaction.update({
-            where: { id: transaction.id },
-            data: { journalEntryId: journalEntry.id }
-          });
-        } else {
-          console.warn(`⚠️ Account 1300 or ${creditCode} not found. Receive without journal entry.`);
+      const year = new Date().getFullYear();
+      const totalCost = (unitCost ?? Number(item.unitCost)) * quantity;
+      const journalEntry = await tx.journalEntry.create({
+        data: {
+          entryNumber: `JE-${year}-${randomUUID().slice(0, 8)}`,
+          entryDate: new Date().toISOString().split('T')[0],
+          description: `${actualSubType === 'opening_balance' ? 'رصيد افتتاحي' : 'تسوية مخزون'}: ${item.name} (${quantity} ${item.unit})`,
+          referenceType: actualSubType === 'opening_balance' ? 'inventory_opening_balance' : 'inventory_adjustment',
+          referenceId: transaction.id,
+          status: 'posted',
+          postedAt: new Date(),
+          lines: {
+            create: [
+              { accountId: asset1300.id, debit: totalCost, credit: 0, lineNumber: 1 },
+              { accountId: creditAccount.id, debit: 0, credit: totalCost, lineNumber: 2 }
+            ]
+          }
         }
-      } catch (journalError) {
-        console.warn('⚠️ Journal entry creation failed:', journalError);
-        // Continue anyway - graceful degradation
-      }
+      });
+
+      await tx.inventoryTransaction.update({
+        where: { id: transaction.id },
+        data: { journalEntryId: journalEntry.id }
+      });
 
       return { item: updatedItem, transaction };
     });
@@ -320,7 +311,7 @@ router.post('/receive', async (req, res) => {
 });
 
 // POST: Issue stock (stock-out)
-router.post('/issue', async (req, res) => {
+router.post('/issue', requireAuth, accountingAndWarehouse, async (req, res) => {
   try {
     const { itemId, quantity, subType, departmentName, studentId, studentName, notes, performedBy, performedByUserId } = req.body;
 
@@ -393,132 +384,94 @@ router.post('/issue', async (req, res) => {
       });
 
       // Create journal entries based on subType
-      try {
-        if (subType === 'sale') {
-          // Double entry: Revenue + COGS
-          const cash1001 = await tx.account.findUnique({ where: { code: '1001' } });
-          const inventory1300 = await tx.account.findUnique({ where: { code: '1300' } });
-          const cogs5001 = await tx.account.findUnique({ where: { code: '5001' } });
+      const year = new Date().getFullYear();
+      if (subType === 'sale') {
+        // Double entry: Revenue + COGS
+        const cash1001 = await tx.account.findUnique({ where: { code: '1001' } });
+        const inventory1300 = await tx.account.findUnique({ where: { code: '1300' } });
+        const cogs5001 = await tx.account.findUnique({ where: { code: '5001' } });
 
-          // Map category to revenue account
-          let revenueAccount;
-          if (item.category === 'books' || item.category === 'كتب') {
-            revenueAccount = await tx.account.findUnique({ where: { code: '4002' } });
-          } else if (item.category === 'uniform' || item.category === 'زي') {
-            revenueAccount = await tx.account.findUnique({ where: { code: '4003' } });
-          } else {
-            revenueAccount = await tx.account.findUnique({ where: { code: '4006' } });
+        const revenueCode = (item.category === 'books' || item.category === 'كتب') ? '4002'
+          : (item.category === 'uniform' || item.category === 'زي') ? '4003' : '4006';
+        const revenueAccount = await tx.account.findUnique({ where: { code: revenueCode } });
+
+        if (!cash1001) throw new Error('حساب النقدية 1001 غير موجود');
+        if (!revenueAccount) throw new Error(`حساب الإيرادات ${revenueCode} غير موجود`);
+        if (!inventory1300) throw new Error('حساب المخزون 1300 غير موجود');
+        if (!cogs5001) throw new Error('حساب تكلفة المبيعات 5001 غير موجود');
+
+        // Entry 1: DR Cash | CR Revenue
+        const journalEntry1 = await tx.journalEntry.create({
+          data: {
+            entryNumber: `JE-${year}-${randomUUID().slice(0, 8)}`,
+            entryDate: new Date().toISOString().split('T')[0],
+            description: `بيع مخزون: ${item.name} لطالب (${quantity} ${item.unit})`,
+            referenceType: 'inventory_sale',
+            referenceId: transaction.id,
+            status: 'posted',
+            postedAt: new Date(),
+            lines: {
+              create: [
+                { accountId: cash1001.id, debit: Number(item.unitPrice) * quantity, credit: 0, lineNumber: 1 },
+                { accountId: revenueAccount.id, debit: 0, credit: Number(item.unitPrice) * quantity, lineNumber: 2 }
+              ]
+            }
           }
+        });
 
-          if (cash1001 && revenueAccount && inventory1300 && cogs5001) {
-            const year = new Date().getFullYear();
-            // Entry 1: DR Cash | CR Revenue
-            const journalEntry1 = await tx.journalEntry.create({
-              data: {
-                entryNumber: `JE-${year}-${randomUUID().slice(0, 8)}`,
-                entryDate: new Date().toISOString().split('T')[0],
-                description: `بيع مخزون: ${item.name} لطالب (${quantity} ${item.unit})`,
-                referenceType: 'inventory_sale',
-                referenceId: transaction.id,
-                status: 'posted',
-                postedAt: new Date(),
-                lines: {
-                  create: [
-                    {
-                      accountId: cash1001.id,
-                      debit: Number(item.unitPrice) * quantity,
-                      credit: 0
-                    },
-                    {
-                      accountId: revenueAccount.id,
-                      debit: 0,
-                      credit: Number(item.unitPrice) * quantity
-                    }
-                  ]
-                }
-              }
-            });
-
-            // Entry 2: DR COGS | CR Inventory
-            const journalEntry2 = await tx.journalEntry.create({
-              data: {
-                entryNumber: `JE-${year}-${randomUUID().slice(0, 8)}`,
-                entryDate: new Date().toISOString().split('T')[0],
-                description: `تكلفة بضاعة مباعة: ${item.name} (${quantity} ${item.unit})`,
-                referenceType: 'inventory_sale',
-                referenceId: transaction.id,
-                status: 'posted',
-                postedAt: new Date(),
-                lines: {
-                  create: [
-                    {
-                      accountId: cogs5001.id,
-                      debit: Number(item.unitCost) * quantity,
-                      credit: 0
-                    },
-                    {
-                      accountId: inventory1300.id,
-                      debit: 0,
-                      credit: Number(item.unitCost) * quantity
-                    }
-                  ]
-                }
-              }
-            });
-
-            await tx.inventoryTransaction.update({
-              where: { id: transaction.id },
-              data: { journalEntryId: journalEntry1.id }
-            });
-          } else {
-            console.warn('⚠️ Required accounts not found for sale entry.');
+        // Entry 2: DR COGS | CR Inventory
+        await tx.journalEntry.create({
+          data: {
+            entryNumber: `JE-${year}-${randomUUID().slice(0, 8)}`,
+            entryDate: new Date().toISOString().split('T')[0],
+            description: `تكلفة بضاعة مباعة: ${item.name} (${quantity} ${item.unit})`,
+            referenceType: 'inventory_sale',
+            referenceId: transaction.id,
+            status: 'posted',
+            postedAt: new Date(),
+            lines: {
+              create: [
+                { accountId: cogs5001.id, debit: Number(item.unitCost) * quantity, credit: 0, lineNumber: 1 },
+                { accountId: inventory1300.id, debit: 0, credit: Number(item.unitCost) * quantity, lineNumber: 2 }
+              ]
+            }
           }
-        } else if (subType === 'consumption') {
-          // Single entry: DR Expense | CR Inventory
-          const expense5002 = await tx.account.findUnique({ where: { code: '5002' } });
-          const inventory1300 = await tx.account.findUnique({ where: { code: '1300' } });
+        });
 
-          if (expense5002 && inventory1300) {
-            const year = new Date().getFullYear();
-            const journalEntry = await tx.journalEntry.create({
-              data: {
-                entryNumber: `JE-${year}-${randomUUID().slice(0, 8)}`,
-                entryDate: new Date().toISOString().split('T')[0],
-                description: `صرف مستلزمات: ${item.name} للقسم ${departmentName || 'غير محدد'} (${quantity} ${item.unit})`,
-                referenceType: 'inventory_consumption',
-                referenceId: transaction.id,
-                status: 'posted',
-                postedAt: new Date(),
-                lines: {
-                  create: [
-                    {
-                      accountId: expense5002.id,
-                      debit: Number(item.unitCost) * quantity,
-                      credit: 0,
-                      lineNumber: 1
-                    },
-                    {
-                      accountId: inventory1300.id,
-                      debit: 0,
-                      credit: Number(item.unitCost) * quantity,
-                      lineNumber: 2
-                    }
-                  ]
-                }
-              }
-            });
+        await tx.inventoryTransaction.update({
+          where: { id: transaction.id },
+          data: { journalEntryId: journalEntry1.id }
+        });
+      } else if (subType === 'consumption') {
+        // Single entry: DR Expense | CR Inventory
+        const expense5002 = await tx.account.findUnique({ where: { code: '5002' } });
+        const inventory1300 = await tx.account.findUnique({ where: { code: '1300' } });
 
-            await tx.inventoryTransaction.update({
-              where: { id: transaction.id },
-              data: { journalEntryId: journalEntry.id }
-            });
-          } else {
-            console.warn('⚠️ Required accounts not found for consumption entry.');
+        if (!expense5002) throw new Error('حساب مصروفات التشغيل 5002 غير موجود');
+        if (!inventory1300) throw new Error('حساب المخزون 1300 غير موجود');
+
+        const journalEntry = await tx.journalEntry.create({
+          data: {
+            entryNumber: `JE-${year}-${randomUUID().slice(0, 8)}`,
+            entryDate: new Date().toISOString().split('T')[0],
+            description: `صرف مستلزمات: ${item.name} للقسم ${departmentName || 'غير محدد'} (${quantity} ${item.unit})`,
+            referenceType: 'inventory_consumption',
+            referenceId: transaction.id,
+            status: 'posted',
+            postedAt: new Date(),
+            lines: {
+              create: [
+                { accountId: expense5002.id, debit: Number(item.unitCost) * quantity, credit: 0, lineNumber: 1 },
+                { accountId: inventory1300.id, debit: 0, credit: Number(item.unitCost) * quantity, lineNumber: 2 }
+              ]
+            }
           }
-        }
-      } catch (journalError) {
-        console.warn('⚠️ Journal entry creation failed:', journalError);
-        // Continue anyway
+        });
+
+        await tx.inventoryTransaction.update({
+          where: { id: transaction.id },
+          data: { journalEntryId: journalEntry.id }
+        });
       }
 
       // Create Payment record for treasury tracking (sale only)
@@ -534,12 +487,15 @@ router.post('/issue', async (req, res) => {
           where: { id: studentId },
           select: { academicYear: true }
         });
+        if (!student) throw new Error('الطالب غير موجود');
+        if (!student.academicYear) throw new Error('الطالب لا ينتمي لسنة دراسية محددة');
 
+        const saleAmount = Number(item.unitPrice) * quantity;
         await tx.payment.create({
           data: {
-            studentId: studentId || null,
+            studentId,
             studentName: studentName || 'غير محدد',
-            amount: Number(item.unitPrice) * quantity,
+            amount: saleAmount,
             type: paymentType,
             method: 'cash',
             date: new Date(),
@@ -547,23 +503,20 @@ router.post('/issue', async (req, res) => {
             collectedBy: performedBy,
             userId: performedByUserId || null,
             sessionId: openSession.id,
-            academicYear: student?.academicYear || null,
+            academicYear: student.academicYear,
             notes: `بيع مخزون: ${item.name} (${quantity} ${item.unit})`,
           }
         });
 
         await tx.student.update({
           where: { id: studentId },
-          data: { paidAmount: { increment: Number(item.unitPrice) * quantity } }
+          data: { paidAmount: { increment: saleAmount } }
         });
 
-        // Update StudentYearlyFinance for the student's current academic year
-        if (student?.academicYear) {
-          await tx.studentYearlyFinance.updateMany({
-            where: { studentId, academicYear: student.academicYear },
-            data: { paidAmount: { increment: Number(item.unitPrice) * quantity } }
-          });
-        }
+        await tx.studentYearlyFinance.updateMany({
+          where: { studentId, academicYear: student.academicYear },
+          data: { paidAmount: { increment: saleAmount } }
+        });
       }
 
       return { item: updatedItem, transaction };

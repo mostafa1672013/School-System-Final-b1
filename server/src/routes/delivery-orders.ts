@@ -9,7 +9,7 @@ const prisma = new PrismaClient();
 async function generateDeliveryCode(tx: any): Promise<string> {
   const count = await tx.deliveryOrder.count();
   const year = new Date().getFullYear();
-  return `DO-${year}-${String(count + 1).padStart(5, '0')}`;
+  return `DO-${year}-${String(count + 1).padStart(5, '0')}-${randomUUID().slice(0, 4).toUpperCase()}`;
 }
 
 // GET list with filters
@@ -422,75 +422,78 @@ router.patch('/:id/return/:itemId', requireAuth, warehouseRoles, async (req, res
           data: { paidAmount: { decrement: returnAmount } }
         });
 
-        // Issue 1: revenue reversal journal entries for external return
+        // Revenue reversal journal entries for external return
         const cash1001 = await tx.account.findUnique({ where: { code: '1001' } });
         const cat = orderItem.inventoryItem.category ?? '';
         const revCode = (cat === 'books' || cat === 'كتب') ? '4002'
           : (cat === 'uniform' || cat === 'زي') ? '4003' : '4006';
         const revAccount = await tx.account.findUnique({ where: { code: revCode } });
-        if (cash1001 && revAccount) {
-          await tx.journalEntry.create({
-            data: {
-              entryNumber: `JE-${year}-${randomUUID().slice(0, 8)}`,
-              entryDate: now.toISOString().split('T')[0],
-              description: `عكس إيراد إرجاع ${orderItem.itemName} (${order.code})`,
-              referenceType: 'delivery_order',
-              referenceId: order.id,
-              status: 'posted', postedAt: now,
-              lines: {
-                create: [
-                  { accountId: revAccount.id, debit: returnAmount, credit: 0, lineNumber: 1 },
-                  { accountId: cash1001.id, debit: 0, credit: returnAmount, lineNumber: 2 }
-                ]
-              }
+        if (!cash1001) throw new Error('حساب النقدية 1001 غير موجود');
+        if (!revAccount) throw new Error(`حساب الإيرادات ${revCode} غير موجود`);
+
+        await tx.journalEntry.create({
+          data: {
+            entryNumber: `JE-${year}-${randomUUID().slice(0, 8)}`,
+            entryDate: now.toISOString().split('T')[0],
+            description: `عكس إيراد إرجاع ${orderItem.itemName} (${order.code})`,
+            referenceType: 'delivery_order',
+            referenceId: order.id,
+            status: 'posted', postedAt: now,
+            lines: {
+              create: [
+                { accountId: revAccount.id, debit: returnAmount, credit: 0, lineNumber: 1 },
+                { accountId: cash1001.id, debit: 0, credit: returnAmount, lineNumber: 2 }
+              ]
             }
-          });
-        }
+          }
+        });
 
         const costAmount = Number(orderItem.inventoryItem.unitCost) * orderItem.quantity;
-        const inventory1300 = await tx.account.findUnique({ where: { code: '1300' } });
-        const cogs5001 = await tx.account.findUnique({ where: { code: '5001' } });
-        if (inventory1300 && cogs5001) {
-          await tx.journalEntry.create({
-            data: {
-              entryNumber: `JE-${year}-${randomUUID().slice(0, 8)}`,
-              entryDate: now.toISOString().split('T')[0],
-              description: `عكس تكلفة إرجاع ${orderItem.itemName} (${order.code})`,
-              referenceType: 'delivery_order',
-              referenceId: order.id,
-              status: 'posted', postedAt: now,
-              lines: {
-                create: [
-                  { accountId: inventory1300.id, debit: costAmount, credit: 0, lineNumber: 1 },
-                  { accountId: cogs5001.id, debit: 0, credit: costAmount, lineNumber: 2 }
-                ]
-              }
+        const inventory1300r = await tx.account.findUnique({ where: { code: '1300' } });
+        const cogs5001r = await tx.account.findUnique({ where: { code: '5001' } });
+        if (!inventory1300r) throw new Error('حساب المخزون 1300 غير موجود');
+        if (!cogs5001r) throw new Error('حساب تكلفة المبيعات 5001 غير موجود');
+
+        await tx.journalEntry.create({
+          data: {
+            entryNumber: `JE-${year}-${randomUUID().slice(0, 8)}`,
+            entryDate: now.toISOString().split('T')[0],
+            description: `عكس تكلفة إرجاع ${orderItem.itemName} (${order.code})`,
+            referenceType: 'delivery_order',
+            referenceId: order.id,
+            status: 'posted', postedAt: now,
+            lines: {
+              create: [
+                { accountId: inventory1300r.id, debit: costAmount, credit: 0, lineNumber: 1 },
+                { accountId: cogs5001r.id, debit: 0, credit: costAmount, lineNumber: 2 }
+              ]
             }
-          });
-        }
+          }
+        });
       } else {
-        // Issue 1: COGS reversal only for within_fees return
+        // COGS reversal only for within_fees return
         const costAmount = Number(orderItem.inventoryItem.unitCost) * orderItem.quantity;
         const inventory1300 = await tx.account.findUnique({ where: { code: '1300' } });
         const cogs5001 = await tx.account.findUnique({ where: { code: '5001' } });
-        if (inventory1300 && cogs5001) {
-          await tx.journalEntry.create({
-            data: {
-              entryNumber: `JE-${year}-${randomUUID().slice(0, 8)}`,
-              entryDate: now.toISOString().split('T')[0],
-              description: `عكس تكلفة إرجاع ${orderItem.itemName} ضمن المصاريف (${order.code})`,
-              referenceType: 'delivery_order',
-              referenceId: order.id,
-              status: 'posted', postedAt: now,
-              lines: {
-                create: [
-                  { accountId: inventory1300.id, debit: costAmount, credit: 0, lineNumber: 1 },
-                  { accountId: cogs5001.id, debit: 0, credit: costAmount, lineNumber: 2 }
-                ]
-              }
+        if (!inventory1300) throw new Error('حساب المخزون 1300 غير موجود');
+        if (!cogs5001) throw new Error('حساب تكلفة المبيعات 5001 غير موجود');
+
+        await tx.journalEntry.create({
+          data: {
+            entryNumber: `JE-${year}-${randomUUID().slice(0, 8)}`,
+            entryDate: now.toISOString().split('T')[0],
+            description: `عكس تكلفة إرجاع ${orderItem.itemName} ضمن المصاريف (${order.code})`,
+            referenceType: 'delivery_order',
+            referenceId: order.id,
+            status: 'posted', postedAt: now,
+            lines: {
+              create: [
+                { accountId: inventory1300.id, debit: costAmount, credit: 0, lineNumber: 1 },
+                { accountId: cogs5001.id, debit: 0, credit: costAmount, lineNumber: 2 }
+              ]
             }
-          });
-        }
+          }
+        });
       }
 
       await tx.deliveryOrderItem.update({
