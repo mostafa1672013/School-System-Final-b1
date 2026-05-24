@@ -1,4 +1,4 @@
-export type UserRole = 'system_admin' | 'school_director' | 'head_accountant' | 'accountant' | 'warehouse_keeper' | 'bus_supervisor' | 'student_affairs';
+export type UserRole = 'system_admin' | 'school_director' | 'head_accountant' | 'accountant' | 'treasury_accountant' | 'warehouse_keeper' | 'bus_supervisor' | 'student_affairs';
 
 export interface Badge {
   id: string;
@@ -10,6 +10,13 @@ export interface Badge {
   createdAt: string;
   updatedAt: string;
   _count?: { students: number };
+}
+
+export interface UserPermission {
+  resource: string;
+  canRead: boolean;
+  canWrite: boolean;
+  canDelete: boolean;
 }
 
 export interface User {
@@ -25,6 +32,7 @@ export interface User {
   lastLoginAt?: Date | null;
   lastLogoutAt?: Date | null;
   createdAt?: Date;
+  permissions?: UserPermission[];
 }
 
 export type StudentStatus = 'applied' | 'under_testing' | 'fee_setup' | 'pending_approval' | 'active' | 'admitted' | 'inactive' | 'graduated' | 'transferred';
@@ -498,4 +506,138 @@ export interface TreasuryCloseResult {
 export interface SystemSetting {
   key: string;
   value: string;
+}
+
+export interface AuditLog {
+  id: string;
+  userId: string;
+  userName: string;
+  action: string;
+  entityType: string;
+  entityId?: string | null;
+  before?: any;
+  after?: any;
+  ip?: string | null;
+  userAgent?: string | null;
+  createdAt: string;
+}
+
+export interface AuditLogsResponse {
+  logs: AuditLog[];
+  total: number;
+  page: number;
+  pageSize: number;
+  totalPages: number;
+}
+
+// ========================
+// Inventory Distribution
+// ========================
+
+export interface GradeItemListEntry {
+  id: string;
+  listId: string;
+  inventoryItemId: string;
+  inventoryItem?: {
+    id: string;
+    name: string;
+    unit: string;
+    category: string;
+    quantity: number;
+    grade?: string;
+    unitPrice: number;
+  };
+  quantity: number;
+  preferredSupplierId?: string;
+  preferredSupplier?: { id: string; name: string };
+  notes?: string;
+  createdAt: string;
+}
+
+export interface GradeItemList {
+  id: string;
+  stage: string;
+  grade: string;
+  track: string;
+  academicYear: string;
+  term: string;
+  createdBy: string;
+  createdAt: string;
+  updatedAt: string;
+  entries: GradeItemListEntry[];
+}
+
+export type DeliveryOrderStatus = 'pending' | 'confirmed' | 'delivered' | 'cancelled';
+export type DeliveryChargeType = 'within_fees' | 'external';
+
+export interface DeliveryOrderItem {
+  id: string;
+  orderId: string;
+  inventoryItemId: string;
+  inventoryItem?: { id: string; name: string; unit: string; grade?: string; quantity: number };
+  itemName: string;
+  quantity: number;
+  unitPrice: number;
+  totalAmount: number;
+  deliveredAt?: string;
+  returnedAt?: string;
+  returnNotes?: string;
+  createdAt: string;
+}
+
+export interface DeliveryOrder {
+  id: string;
+  code: string;
+  studentId: string;
+  student?: { id: string; name: string; stage: string; grade: string; track: string };
+  academicYear: string;
+  term: string;
+  status: DeliveryOrderStatus;
+  chargeType: DeliveryChargeType;
+  requestedBy: string;
+  confirmedBy?: string;
+  deliveredBy?: string;
+  totalAmount: number;
+  notes?: string;
+  createdAt: string;
+  updatedAt: string;
+  items: DeliveryOrderItem[];
+}
+
+export interface DistributionItemStat {
+  inventoryItemId: string;
+  itemName: string;
+  unit: string;
+  quantityPerStudent: number;
+  preferredSupplierId?: string;
+  required: number;
+  currentStock: number;
+  delivered: number;
+  deficit: number;
+  needsPurchase: boolean;
+}
+
+export interface GradeDistributionSummary {
+  listId: string;
+  stage: string;
+  grade: string;
+  track: string;
+  term: string;
+  studentCount: number;
+  items: DistributionItemStat[];
+}
+
+export interface StudentDeliveryStatus {
+  studentId: string;
+  studentName: string;
+  status: 'delivered' | 'in_progress' | 'not_started';
+  receivedItems: Array<{
+    itemName: string;
+    inventoryItemId: string;
+    quantity: number;
+    deliveredAt: string;
+    orderCode: string;
+  }>;
+  pendingOrdersCount: number;
+  confirmedOrdersCount: number;
 }
