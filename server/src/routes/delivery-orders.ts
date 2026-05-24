@@ -107,6 +107,10 @@ router.post('/', requireAuth, accountantRoles, async (req, res) => {
 
     res.status(201).json(result);
   } catch (error: any) {
+    // Issue 5: on unique-code collision retry once with a UUID-based code
+    if (error.code === 'P2002') {
+      return res.status(409).json({ error: 'تعارض في رقم الطلب، يرجى المحاولة مرة أخرى' });
+    }
     res.status(400).json({ error: 'فشل إنشاء طلب التسليم', details: error.message });
   }
 });
@@ -158,13 +162,13 @@ router.patch('/:id/deliver', requireAuth, warehouseRoles, async (req, res) => {
       return res.status(400).json({ error: 'يجب تأكيد الطلب قبل التسليم' });
     }
 
-    let openSession: { id: string } | null = null;
+    // Issue 3: pre-flight check only (the authoritative check is inside the transaction)
     if (order.chargeType === 'external') {
-      openSession = await prisma.treasurySession.findFirst({
+      const preFlightSession = await prisma.treasurySession.findFirst({
         where: { status: 'open' },
         select: { id: true }
       });
-      if (!openSession) {
+      if (!preFlightSession) {
         return res.status(400).json({ error: 'لا توجد خزينة مفتوحة. يجب فتح الخزينة قبل تسليم أصناف خارجية.' });
       }
     }
@@ -213,69 +217,87 @@ router.patch('/:id/deliver', requireAuth, warehouseRoles, async (req, res) => {
           const revAccount = await tx.account.findUnique({ where: { code: revCode } });
           const saleAmount = Number(freshItem.unitPrice) * item.quantity;
 
-          if (cash1001 && revAccount) {
-            await tx.journalEntry.create({
-              data: {
-                entryNumber: `JE-${year}-${randomUUID().slice(0, 8)}`,
-                entryDate: now.toISOString().split('T')[0],
-                description: `تسليم ${item.itemName} للطالب ${order.student.name} (${order.code})`,
-                referenceType: 'delivery_order',
-                referenceId: order.id,
-                status: 'posted', postedAt: now,
-                lines: {
-                  create: [
-                    { accountId: cash1001.id, debit: saleAmount, credit: 0, lineNumber: 1 },
-                    { accountId: revAccount.id, debit: 0, credit: saleAmount, lineNumber: 2 }
-                  ]
-                }
-              }
-            });
+          // Issue 4: throw if revenue/cash accounts are missing
+          if (!cash1001 || !revAccount) {
+            throw new Error(`حساب النقدية أو حساب الإيراد غير موجود (كود ${revCode})`);
           }
-          if (inventory1300 && cogs5001) {
-            const costAmount2 = Number(freshItem.unitCost) * item.quantity;
-            await tx.journalEntry.create({
-              data: {
-                entryNumber: `JE-${year}-${randomUUID().slice(0, 8)}`,
-                entryDate: now.toISOString().split('T')[0],
-                description: `تكلفة تسليم ${item.itemName} (${order.code})`,
-                referenceType: 'delivery_order',
-                referenceId: order.id,
-                status: 'posted', postedAt: now,
-                lines: {
-                  create: [
-                    { accountId: cogs5001.id, debit: costAmount2, credit: 0, lineNumber: 1 },
-                    { accountId: inventory1300.id, debit: 0, credit: costAmount2, lineNumber: 2 }
-                  ]
-                }
+          await tx.journalEntry.create({
+            data: {
+              entryNumber: `JE-${year}-${randomUUID().slice(0, 8)}`,
+              entryDate: now.toISOString().split('T')[0],
+              description: `تسليم ${item.itemName} للطالب ${order.student.name} (${order.code})`,
+              referenceType: 'delivery_order',
+              referenceId: order.id,
+              status: 'posted', postedAt: now,
+              lines: {
+                create: [
+                  { accountId: cash1001.id, debit: saleAmount, credit: 0, lineNumber: 1 },
+                  { accountId: revAccount.id, debit: 0, credit: saleAmount, lineNumber: 2 }
+                ]
               }
-            });
+            }
+          });
+          // Issue 4: throw if inventory/COGS accounts are missing
+          if (!inventory1300 || !cogs5001) {
+            throw new Error('حساب المخزون (1300) أو تكلفة البضاعة (5001) غير موجود');
           }
+          const costAmount2 = Number(freshItem.unitCost) * item.quantity;
+          await tx.journalEntry.create({
+            data: {
+              entryNumber: `JE-${year}-${randomUUID().slice(0, 8)}`,
+              entryDate: now.toISOString().split('T')[0],
+              description: `تكلفة تسليم ${item.itemName} (${order.code})`,
+              referenceType: 'delivery_order',
+              referenceId: order.id,
+              status: 'posted', postedAt: now,
+              lines: {
+                create: [
+                  { accountId: cogs5001.id, debit: costAmount2, credit: 0, lineNumber: 1 },
+                  { accountId: inventory1300.id, debit: 0, credit: costAmount2, lineNumber: 2 }
+                ]
+              }
+            }
+          });
         } else {
-          if (inventory1300 && cogs5001) {
-            const costAmount = Number(freshItem.unitCost) * item.quantity;
-            await tx.journalEntry.create({
-              data: {
-                entryNumber: `JE-${year}-${randomUUID().slice(0, 8)}`,
-                entryDate: now.toISOString().split('T')[0],
-                description: `تسليم ضمن المصاريف: ${item.itemName} للطالب ${order.student.name} (${order.code})`,
-                referenceType: 'delivery_order',
-                referenceId: order.id,
-                status: 'posted', postedAt: now,
-                lines: {
-                  create: [
-                    { accountId: cogs5001.id, debit: costAmount, credit: 0, lineNumber: 1 },
-                    { accountId: inventory1300.id, debit: 0, credit: costAmount, lineNumber: 2 }
-                  ]
-                }
-              }
-            });
+          // Issue 4: throw if inventory/COGS accounts are missing
+          if (!inventory1300 || !cogs5001) {
+            throw new Error('حساب المخزون (1300) أو تكلفة البضاعة (5001) غير موجود');
           }
+          const costAmount = Number(freshItem.unitCost) * item.quantity;
+          await tx.journalEntry.create({
+            data: {
+              entryNumber: `JE-${year}-${randomUUID().slice(0, 8)}`,
+              entryDate: now.toISOString().split('T')[0],
+              description: `تسليم ضمن المصاريف: ${item.itemName} للطالب ${order.student.name} (${order.code})`,
+              referenceType: 'delivery_order',
+              referenceId: order.id,
+              status: 'posted', postedAt: now,
+              lines: {
+                create: [
+                  { accountId: cogs5001.id, debit: costAmount, credit: 0, lineNumber: 1 },
+                  { accountId: inventory1300.id, debit: 0, credit: costAmount, lineNumber: 2 }
+                ]
+              }
+            }
+          });
         }
 
         await tx.deliveryOrderItem.update({
           where: { id: item.id },
           data: { deliveredAt: now }
         });
+      }
+
+      // Issue 3: fetch session atomically inside the transaction
+      let openSession: { id: string } | null = null;
+      if (order.chargeType === 'external') {
+        openSession = await tx.treasurySession.findFirst({
+          where: { status: 'open' },
+          select: { id: true }
+        });
+        if (!openSession) {
+          throw new Error('لا توجد خزينة مفتوحة. يجب فتح الخزينة قبل تسليم أصناف خارجية.');
+        }
       }
 
       if (order.chargeType === 'external' && openSession) {
@@ -366,33 +388,107 @@ router.patch('/:id/return/:itemId', requireAuth, warehouseRoles, async (req, res
         }
       });
 
+      const year = now.getFullYear();
+
       if (order.chargeType === 'external') {
         const returnAmount = Number(orderItem.totalAmount);
+        // Issue 2: throw if no open session instead of silently skipping
         const openSession = await tx.treasurySession.findFirst({ where: { status: 'open' }, select: { id: true } });
-        if (openSession) {
-          await tx.payment.create({
+        if (!openSession) {
+          throw new Error('لا توجد خزينة مفتوحة. يجب فتح الخزينة قبل تسجيل الإرجاع.');
+        }
+        await tx.payment.create({
+          data: {
+            studentId: order.studentId,
+            studentName: order.student.name,
+            amount: -returnAmount,
+            type: 'other',
+            method: 'cash',
+            date: now,
+            receiptNumber: `RET-${order.code}-${randomUUID()}`,
+            collectedBy: returnedByName,
+            userId: returnedByUserId,
+            sessionId: openSession.id,
+            academicYear: order.academicYear,
+            notes: `إرجاع: ${orderItem.itemName} من طلب ${order.code}`
+          }
+        });
+        await tx.student.update({
+          where: { id: order.studentId },
+          data: { paidAmount: { decrement: returnAmount } }
+        });
+        await tx.studentYearlyFinance.updateMany({
+          where: { studentId: order.studentId, academicYear: order.academicYear },
+          data: { paidAmount: { decrement: returnAmount } }
+        });
+
+        // Issue 1: revenue reversal journal entries for external return
+        const cash1001 = await tx.account.findUnique({ where: { code: '1001' } });
+        const cat = orderItem.inventoryItem.category ?? '';
+        const revCode = (cat === 'books' || cat === 'كتب') ? '4002'
+          : (cat === 'uniform' || cat === 'زي') ? '4003' : '4006';
+        const revAccount = await tx.account.findUnique({ where: { code: revCode } });
+        if (cash1001 && revAccount) {
+          await tx.journalEntry.create({
             data: {
-              studentId: order.studentId,
-              studentName: order.student.name,
-              amount: -returnAmount,
-              type: 'other',
-              method: 'cash',
-              date: now,
-              receiptNumber: `RET-${order.code}-${randomUUID()}`,
-              collectedBy: returnedByName,
-              userId: returnedByUserId,
-              sessionId: openSession.id,
-              academicYear: order.academicYear,
-              notes: `إرجاع: ${orderItem.itemName} من طلب ${order.code}`
+              entryNumber: `JE-${year}-${randomUUID().slice(0, 8)}`,
+              entryDate: now.toISOString().split('T')[0],
+              description: `عكس إيراد إرجاع ${orderItem.itemName} (${order.code})`,
+              referenceType: 'delivery_order',
+              referenceId: order.id,
+              status: 'posted', postedAt: now,
+              lines: {
+                create: [
+                  { accountId: revAccount.id, debit: returnAmount, credit: 0, lineNumber: 1 },
+                  { accountId: cash1001.id, debit: 0, credit: returnAmount, lineNumber: 2 }
+                ]
+              }
             }
           });
-          await tx.student.update({
-            where: { id: order.studentId },
-            data: { paidAmount: { decrement: returnAmount } }
+        }
+
+        const costAmount = Number(orderItem.inventoryItem.unitCost) * orderItem.quantity;
+        const inventory1300 = await tx.account.findUnique({ where: { code: '1300' } });
+        const cogs5001 = await tx.account.findUnique({ where: { code: '5001' } });
+        if (inventory1300 && cogs5001) {
+          await tx.journalEntry.create({
+            data: {
+              entryNumber: `JE-${year}-${randomUUID().slice(0, 8)}`,
+              entryDate: now.toISOString().split('T')[0],
+              description: `عكس تكلفة إرجاع ${orderItem.itemName} (${order.code})`,
+              referenceType: 'delivery_order',
+              referenceId: order.id,
+              status: 'posted', postedAt: now,
+              lines: {
+                create: [
+                  { accountId: inventory1300.id, debit: costAmount, credit: 0, lineNumber: 1 },
+                  { accountId: cogs5001.id, debit: 0, credit: costAmount, lineNumber: 2 }
+                ]
+              }
+            }
           });
-          await tx.studentYearlyFinance.updateMany({
-            where: { studentId: order.studentId, academicYear: order.academicYear },
-            data: { paidAmount: { decrement: returnAmount } }
+        }
+      } else {
+        // Issue 1: COGS reversal only for within_fees return
+        const costAmount = Number(orderItem.inventoryItem.unitCost) * orderItem.quantity;
+        const inventory1300 = await tx.account.findUnique({ where: { code: '1300' } });
+        const cogs5001 = await tx.account.findUnique({ where: { code: '5001' } });
+        if (inventory1300 && cogs5001) {
+          await tx.journalEntry.create({
+            data: {
+              entryNumber: `JE-${year}-${randomUUID().slice(0, 8)}`,
+              entryDate: now.toISOString().split('T')[0],
+              description: `عكس تكلفة إرجاع ${orderItem.itemName} ضمن المصاريف (${order.code})`,
+              referenceType: 'delivery_order',
+              referenceId: order.id,
+              status: 'posted', postedAt: now,
+              lines: {
+                create: [
+                  { accountId: inventory1300.id, debit: costAmount, credit: 0, lineNumber: 1 },
+                  { accountId: cogs5001.id, debit: 0, credit: costAmount, lineNumber: 2 }
+                ]
+              }
+            }
           });
         }
       }
