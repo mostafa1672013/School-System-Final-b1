@@ -1,5 +1,6 @@
 import { Router } from 'express';
 import { PrismaClient } from '@prisma/client';
+import { randomUUID } from 'crypto';
 
 const router = Router();
 const prisma = new PrismaClient();
@@ -252,7 +253,7 @@ router.post('/receive', async (req, res) => {
         data: {
           itemId,
           type: 'in',
-          subType: 'purchase',
+          subType: actualSubType,
           quantity,
           unitCostSnapshot: unitCost || item.unitCost,
           unitPriceSnapshot: item.unitPrice,
@@ -271,11 +272,13 @@ router.post('/receive', async (req, res) => {
         const liability2001 = await tx.account.findUnique({ where: { code: '2001' } });
 
         if (asset1300 && liability2001) {
+          const year = new Date().getFullYear();
           const journalEntry = await tx.journalEntry.create({
             data: {
-              entryNumber: `JE-INV-${Date.now()}`,
+              entryNumber: `JE-${year}-${randomUUID().slice(0, 8)}`,
               entryDate: new Date().toISOString().split('T')[0],
               description: `استلام مخزون: ${item.name} (${quantity} ${item.unit})`,
+              referenceType: 'inventory_receive',
               referenceId: transaction.id,
               lines: {
                 create: [
@@ -394,12 +397,14 @@ router.post('/issue', async (req, res) => {
           }
 
           if (cash1001 && revenueAccount && inventory1300 && cogs5001) {
+            const year = new Date().getFullYear();
             // Entry 1: DR Cash | CR Revenue
             const journalEntry1 = await tx.journalEntry.create({
               data: {
-                entryNumber: `JE-INV-${Date.now()}`,
+                entryNumber: `JE-${year}-${randomUUID().slice(0, 8)}`,
                 entryDate: new Date().toISOString().split('T')[0],
                 description: `بيع مخزون: ${item.name} لطالب (${quantity} ${item.unit})`,
+                referenceType: 'inventory_sale',
                 referenceId: transaction.id,
                 lines: {
                   create: [
@@ -421,9 +426,10 @@ router.post('/issue', async (req, res) => {
             // Entry 2: DR COGS | CR Inventory
             const journalEntry2 = await tx.journalEntry.create({
               data: {
-                entryNumber: `JE-COGS-${Date.now()}`,
+                entryNumber: `JE-${year}-${randomUUID().slice(0, 8)}`,
                 entryDate: new Date().toISOString().split('T')[0],
                 description: `تكلفة بضاعة مباعة: ${item.name} (${quantity} ${item.unit})`,
+                referenceType: 'inventory_sale',
                 referenceId: transaction.id,
                 lines: {
                   create: [
@@ -455,11 +461,13 @@ router.post('/issue', async (req, res) => {
           const inventory1300 = await tx.account.findUnique({ where: { code: '1300' } });
 
           if (expense5002 && inventory1300) {
+            const year = new Date().getFullYear();
             const journalEntry = await tx.journalEntry.create({
               data: {
-                entryNumber: `JE-INV-${Date.now()}`,
+                entryNumber: `JE-${year}-${randomUUID().slice(0, 8)}`,
                 entryDate: new Date().toISOString().split('T')[0],
                 description: `صرف مستلزمات: ${item.name} للقسم ${departmentName || 'غير محدد'} (${quantity} ${item.unit})`,
+                referenceType: 'inventory_consumption',
                 referenceId: transaction.id,
                 lines: {
                   create: [
