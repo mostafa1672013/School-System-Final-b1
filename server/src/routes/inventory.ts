@@ -336,6 +336,10 @@ router.post('/issue', async (req, res) => {
       return res.status(400).json({ error: 'نوع الصرف غير صحيح' });
     }
 
+    if (subType === 'sale' && !studentId) {
+      return res.status(400).json({ error: 'الطالب مطلوب عند بيع صنف من المخزن' });
+    }
+
     // Use transaction for consistency
     const result = await prisma.$transaction(async (tx) => {
       const item = await tx.inventoryItem.findUnique({ where: { id: itemId } });
@@ -416,6 +420,8 @@ router.post('/issue', async (req, res) => {
                 description: `بيع مخزون: ${item.name} لطالب (${quantity} ${item.unit})`,
                 referenceType: 'inventory_sale',
                 referenceId: transaction.id,
+                status: 'posted',
+                postedAt: new Date(),
                 lines: {
                   create: [
                     {
@@ -441,6 +447,8 @@ router.post('/issue', async (req, res) => {
                 description: `تكلفة بضاعة مباعة: ${item.name} (${quantity} ${item.unit})`,
                 referenceType: 'inventory_sale',
                 referenceId: transaction.id,
+                status: 'posted',
+                postedAt: new Date(),
                 lines: {
                   create: [
                     {
@@ -516,7 +524,12 @@ router.post('/issue', async (req, res) => {
           uniform: 'uniform', زي: 'uniform',
         };
         const paymentType = paymentTypeMap[item.category ?? ''] ?? 'other';
-        const receiptNumber = `INV-${new Date().getFullYear()}-${randomUUID().slice(0, 8)}`;
+        const receiptNumber = `INV-${new Date().getFullYear()}-${randomUUID()}`;
+
+        const student = await tx.student.findUnique({
+          where: { id: studentId },
+          select: { academicYear: true }
+        });
 
         await tx.payment.create({
           data: {
@@ -530,13 +543,20 @@ router.post('/issue', async (req, res) => {
             collectedBy: performedBy,
             userId: performedByUserId || null,
             sessionId: openSession.id,
+            academicYear: student?.academicYear || null,
             notes: `بيع مخزون: ${item.name} (${quantity} ${item.unit})`,
           }
         });
 
-        if (studentId) {
-          await tx.student.update({
-            where: { id: studentId },
+        await tx.student.update({
+          where: { id: studentId },
+          data: { paidAmount: { increment: Number(item.unitPrice) * quantity } }
+        });
+
+        // Update StudentYearlyFinance for the student's current academic year
+        if (student?.academicYear) {
+          await tx.studentYearlyFinance.updateMany({
+            where: { studentId, academicYear: student.academicYear },
             data: { paidAmount: { increment: Number(item.unitPrice) * quantity } }
           });
         }
