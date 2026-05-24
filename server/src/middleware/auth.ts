@@ -94,7 +94,9 @@ export function requireRoles(...allowedRoles: string[]) {
 // Convenience aliases used throughout the routes
 export const adminOnly = requireRoles('system_admin');
 export const managementRoles = requireRoles('system_admin', 'school_director', 'head_accountant');
-export const accountantRoles = requireRoles('system_admin', 'school_director', 'head_accountant', 'accountant');
+export const accountantRoles = requireRoles('system_admin', 'school_director', 'head_accountant', 'accountant', 'treasury_accountant');
+export const warehouseRoles = requireRoles('system_admin', 'school_director', 'warehouse_keeper');
+export const accountingAndWarehouse = requireRoles('system_admin', 'school_director', 'head_accountant', 'accountant', 'warehouse_keeper');
 
 // ---- Socket.IO auth: call inside io.use() ----
 export function socketAuth(socket: any, next: (err?: Error) => void) {
