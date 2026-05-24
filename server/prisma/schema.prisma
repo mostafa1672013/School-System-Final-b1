@@ -10,8 +10,8 @@ datasource db {
 model Badge {
   id                 String    @id @default(uuid())
   name               String
-  color              String    @default("#6366f1") // hex color
-  icon               String?   // emoji or icon name
+  color              String    @default("#6366f1")
+  icon               String?
   discountPercentage Decimal   @default(0) @db.Decimal(5, 2)
   description        String?
   createdAt          DateTime  @default(now())
@@ -20,152 +20,154 @@ model Badge {
 }
 
 model Student {
-  id              String    @id @default(uuid())
-  nationalId      String    @unique   // now stores encrypted value
-  nationalIdHash  String?   @unique   // HMAC hash for @unique lookups
-  name            String
-  photoUrl        String?
-  stage           String
-  grade           String
-  track           String    @default("local") // local, international
-  academicYear    String    @default("2024-2025")
-  className       String?
-  guardianName    String
-  guardianPhone   String
-  address         String?
-  birthDate       String?
-  enrollmentDate  String?
-  status          String    @default("applied") // applied, under_testing, fee_setup, pending_approval, admitted
-  hasSiblings     Boolean   @default(false)
-  testResult      String?   // pass, fail
-  tuitionFees     Decimal   @default(0) @db.Decimal(12, 2)
-  tuitionMandatory Boolean   @default(true)
-  booksFees       Decimal   @default(0) @db.Decimal(12, 2)
-  booksMandatory   Boolean   @default(true)
-  uniformFees     Decimal   @default(0) @db.Decimal(12, 2)
-  uniformMandatory Boolean   @default(true)
-  busFees         Decimal   @default(0) @db.Decimal(12, 2)
-  otherFees       Decimal   @default(0) @db.Decimal(12, 2)
-  arrearsFees     Decimal   @default(0) @db.Decimal(12, 2)
-  totalFees       Decimal   @default(0) @db.Decimal(12, 2)
-  paidAmount      Decimal   @default(0) @db.Decimal(12, 2)
-  pendingPaymentAmount Decimal? @db.Decimal(12, 2)
-  pendingPaymentType   String?
-  pendingPaymentMethod String?
-  pendingWalletPhoneNumber String?
-  pendingPaymentNotes  String?
-  pendingInstallmentPlanId String?
-  pendingInstallmentId String?
-  paymentRequestStatus String?
-  discountAmount     Decimal  @default(0) @db.Decimal(12, 2)
-  discountPercentage Decimal  @default(0) @db.Decimal(5, 2)
-  discountApprovedBy String?
-  discountStatus     String   @default("approved") // "approved", "pending", "rejected"
-  requestedDiscountAmount Decimal @default(0) @db.Decimal(12, 2)
-  requestedDiscountPercentage Decimal @default(0) @db.Decimal(5, 2)
-  discountRequesterId String?
-  discountApproverId  String?
-  busRouteId      String?
-  badgeId         String?
-  badge           Badge?    @relation(fields: [badgeId], references: [id], onDelete: SetNull)
-  documents       Json?     // stores URLs for birth certificate, ID, etc.
-  extraFields     Json?     // stores custom fields as { label: string, value: string }[]
-  additionalFees  Json?     // [{ name: string, amount: number, isMandatory: boolean }]
-  deletedAt       DateTime?
-  createdAt       DateTime  @default(now())
-  updatedAt       DateTime  @updatedAt
-  payments         Payment[]
-  yearlyFinance    StudentYearlyFinance[]
-  installmentPlan  InstallmentPlan?
-  busSubscriptions BusSubscription[]
+  id                          String                 @id @default(uuid())
+  nationalId                  String                 @unique
+  name                        String
+  photoUrl                    String?
+  stage                       String
+  grade                       String
+  track                       String                 @default("local")
+  academicYear                String                 @default("2024-2025")
+  className                   String?
+  guardianName                String
+  guardianPhone               String
+  address                     String?
+  birthDate                   String?
+  enrollmentDate              String?
+  status                      String                 @default("applied")
+  hasSiblings                 Boolean                @default(false)
+  testResult                  String?
+  tuitionFees                 Decimal                @default(0) @db.Decimal(12, 2)
+  tuitionMandatory            Boolean                @default(true)
+  booksFees                   Decimal                @default(0) @db.Decimal(12, 2)
+  booksMandatory              Boolean                @default(true)
+  uniformFees                 Decimal                @default(0) @db.Decimal(12, 2)
+  uniformMandatory            Boolean                @default(true)
+  busFees                     Decimal                @default(0) @db.Decimal(12, 2)
+  otherFees                   Decimal                @default(0) @db.Decimal(12, 2)
+  totalFees                   Decimal                @default(0) @db.Decimal(12, 2)
+  paidAmount                  Decimal                @default(0) @db.Decimal(12, 2)
+  pendingPaymentAmount        Decimal?               @db.Decimal(12, 2)
+  pendingPaymentType          String?
+  pendingPaymentMethod        String?
+  pendingWalletPhoneNumber    String?
+  pendingPaymentNotes         String?
+  pendingInstallmentPlanId    String?
+  pendingInstallmentId        String?
+  paymentRequestStatus        String?
+  discountAmount              Decimal                @default(0) @db.Decimal(12, 2)
+  discountPercentage          Decimal                @default(0) @db.Decimal(5, 2)
+  discountApprovedBy          String?
+  discountStatus              String                 @default("approved")
+  requestedDiscountAmount     Decimal                @default(0) @db.Decimal(12, 2)
+  requestedDiscountPercentage Decimal                @default(0) @db.Decimal(5, 2)
+  discountRequesterId         String?
+  discountApproverId          String?
+  busRouteId                  String?
+  documents                   Json?
+  extraFields                 Json?
+  additionalFees              Json?
+  createdAt                   DateTime               @default(now())
+  updatedAt                   DateTime               @updatedAt
+  badgeId                     String?
+  arrearsFees                 Decimal                @default(0) @db.Decimal(12, 2)
+  deletedAt                   DateTime?
+  nationalIdHash              String?                @unique
+  busSubscriptions            BusSubscription[]
+  installmentPlan             InstallmentPlan?
+  payments                    Payment[]
+  badge                       Badge?                 @relation(fields: [badgeId], references: [id])
+  yearlyFinance               StudentYearlyFinance[]
+  deliveryOrders              DeliveryOrder[]
 }
 
 model StageFee {
-  id              String   @id @default(uuid())
-  stage           String
-  grade           String
-  track           String   @default("local") // local, international
-  academicYear    String
-  tuitionFees     Decimal  @db.Decimal(12, 2)
-  tuitionMandatory Boolean   @default(true)
-  booksFees       Decimal  @db.Decimal(12, 2)
-  booksMandatory   Boolean   @default(true)
-  uniformFees     Decimal  @db.Decimal(12, 2)
-  uniformMandatory Boolean   @default(true)
-  applicationFees Decimal  @db.Decimal(12, 2)
-  applicationMandatory Boolean @default(true)
-  additionalFees  Json?     // [{ name: string, amount: number, isMandatory: boolean }]
-  createdAt       DateTime @default(now())
-  updatedAt       DateTime @updatedAt
+  id                   String   @id @default(uuid())
+  stage                String
+  grade                String
+  track                String   @default("local")
+  academicYear         String
+  tuitionFees          Decimal  @db.Decimal(12, 2)
+  tuitionMandatory     Boolean  @default(true)
+  booksFees            Decimal  @db.Decimal(12, 2)
+  booksMandatory       Boolean  @default(true)
+  uniformFees          Decimal  @db.Decimal(12, 2)
+  uniformMandatory     Boolean  @default(true)
+  applicationFees      Decimal  @db.Decimal(12, 2)
+  applicationMandatory Boolean  @default(true)
+  additionalFees       Json?
+  createdAt            DateTime @default(now())
+  updatedAt            DateTime @updatedAt
 
   @@unique([stage, grade, track, academicYear])
 }
 
 model Payment {
-  id            String   @id @default(uuid())
-  studentId     String?
-  studentName   String
-  amount        Decimal  @db.Decimal(12, 2)
-  type          String
-  method        String
-  date          DateTime
-  receiptNumber String   @unique
-  collectedBy   String
-  userId        String?  // من قام بالتحصيل (يجب أن يكون هو فاتح الخزينة)
-  academicYear  String?
-  notes         String?
+  id                String           @id @default(uuid())
+  studentId         String?
+  studentName       String
+  amount            Decimal          @db.Decimal(12, 2)
+  type              String
+  method            String
+  date              DateTime
+  receiptNumber     String           @unique
+  collectedBy       String
+  academicYear      String?
+  notes             String?
   walletPhoneNumber String?
-  sessionId     String?
-  student       Student? @relation(fields: [studentId], references: [id], onDelete: SetNull)
-  session       TreasurySession? @relation(fields: [sessionId], references: [id], onDelete: SetNull)
-  deletedAt     DateTime?
-  createdAt     DateTime @default(now())
+  sessionId         String?
+  createdAt         DateTime         @default(now())
+  userId            String?
+  deletedAt         DateTime?
+  session           TreasurySession? @relation(fields: [sessionId], references: [id])
+  student           Student?         @relation(fields: [studentId], references: [id])
 }
 
 model StudentYearlyFinance {
-  id              String   @id @default(uuid())
-  studentId       String?
-  academicYear    String
-  grade           String
-  stage           String
-  tuitionFees     Decimal  @default(0) @db.Decimal(12, 2)
-  booksFees       Decimal  @default(0) @db.Decimal(12, 2)
-  uniformFees     Decimal  @default(0) @db.Decimal(12, 2)
-  busFees         Decimal  @default(0) @db.Decimal(12, 2)
-  otherFees       Decimal  @default(0) @db.Decimal(12, 2)
-  arrearsFees     Decimal  @default(0) @db.Decimal(12, 2)
-  totalFees       Decimal  @default(0) @db.Decimal(12, 2)
-  paidAmount      Decimal  @default(0) @db.Decimal(12, 2)
-  student         Student? @relation(fields: [studentId], references: [id], onDelete: SetNull)
+  id           String   @id @default(uuid())
+  studentId    String?
+  academicYear String
+  grade        String
+  stage        String
+  tuitionFees  Decimal  @default(0) @db.Decimal(12, 2)
+  booksFees    Decimal  @default(0) @db.Decimal(12, 2)
+  uniformFees  Decimal  @default(0) @db.Decimal(12, 2)
+  busFees      Decimal  @default(0) @db.Decimal(12, 2)
+  otherFees    Decimal  @default(0) @db.Decimal(12, 2)
+  totalFees    Decimal  @default(0) @db.Decimal(12, 2)
+  paidAmount   Decimal  @default(0) @db.Decimal(12, 2)
+  arrearsFees  Decimal  @default(0) @db.Decimal(12, 2)
+  student      Student? @relation(fields: [studentId], references: [id])
 
   @@unique([studentId, academicYear])
 }
 
 model InventoryItem {
-  id           String   @id @default(uuid())
+  id           String                 @id @default(uuid())
   name         String
   category     String
-  itemType     String   @default("consumable")  // "sale" | "consumable"
-  quantity     Int      @default(0)
-  minQuantity  Int      @default(5)
-  maxQuantity  Int?
-  unit         String   @default("قطعة")
-  unitCost     Decimal  @default(0) @db.Decimal(12, 2)  // تكلفة الشراء
-  unitPrice    Decimal  @default(0) @db.Decimal(12, 2)  // سعر البيع
+  quantity     Int                    @default(0)
+  minQuantity  Int                    @default(5)
+  unit         String                 @default("قطعة")
+  unitPrice    Decimal                @default(0) @db.Decimal(12, 2)
   grade        String?
   description  String?
   lastUpdated  String
-  transactions InventoryTransaction[]
-  createdAt    DateTime @default(now())
-  updatedAt    DateTime @updatedAt
+  createdAt    DateTime               @default(now())
+  itemType     String                 @default("consumable")
+  maxQuantity  Int?
+  unitCost     Decimal                @default(0) @db.Decimal(12, 2)
+  updatedAt    DateTime               @updatedAt
+  transactions     InventoryTransaction[]
+  gradeListEntries GradeItemListEntry[]
+  deliveryItems    DeliveryOrderItem[]
 }
 
 model InventoryTransaction {
   id                String        @id @default(uuid())
   itemId            String
-  item              InventoryItem @relation(fields: [itemId], references: [id], onDelete: Cascade)
-  type              String        // "in" | "out"
-  subType           String?       // "purchase" | "sale" | "consumption" | "adjustment"
+  type              String
+  subType           String?
   quantity          Int
   unitCostSnapshot  Decimal       @default(0) @db.Decimal(12, 2)
   unitPriceSnapshot Decimal       @default(0) @db.Decimal(12, 2)
@@ -178,10 +180,11 @@ model InventoryTransaction {
   performedBy       String
   performedByUserId String?
   journalEntryId    String?
-  goodsReceiptId    String?
-  goodsReceipt      GoodsReceipt? @relation(fields: [goodsReceiptId], references: [id], onDelete: SetNull)
   date              DateTime
   createdAt         DateTime      @default(now())
+  goodsReceiptId    String?
+  goodsReceipt      GoodsReceipt? @relation(fields: [goodsReceiptId], references: [id])
+  item              InventoryItem @relation(fields: [itemId], references: [id], onDelete: Cascade)
 }
 
 model ItemCategory {
@@ -193,40 +196,40 @@ model ItemCategory {
 }
 
 model BusRoute {
-  id            String              @id @default(uuid())
+  id            String            @id @default(uuid())
   name          String
   driverName    String
   driverPhone   String
   busNumber     String
   capacity      Int
-  monthlyFee    Decimal             @db.Decimal(12, 2)
-  annualFee     Decimal             @db.Decimal(12, 2)
-  stops         String[]            @default([])
+  monthlyFee    Decimal           @db.Decimal(12, 2)
+  annualFee     Decimal           @db.Decimal(12, 2)
+  stops         String[]          @default([])
   subscriptions BusSubscription[]
 }
 
 model BusSubscription {
-  id              String    @id @default(uuid())
-  code            String    @unique
-  subscriberType  String    // 'student' | 'employee' | 'supervisor'
-  studentId       String?
-  student         Student?  @relation(fields: [studentId], references: [id], onDelete: SetNull)
-  subscriberName  String
-  routeId         String
-  route           BusRoute  @relation(fields: [routeId], references: [id])
-  academicYear    String
-  startDate       DateTime
-  endDate         DateTime?
-  fullFeeAmount   Decimal   @db.Decimal(12, 2)
-  discountPct     Decimal   @default(0) @db.Decimal(5, 2)
-  actualAmount    Decimal   @db.Decimal(12, 2)
-  pickupAddress   String?
-  pickupPhone     String?
-  status          String    @default("active")
-  notes           String?
-  createdAt       DateTime  @default(now())
-  updatedAt       DateTime  @updatedAt
-  changes         SubscriptionChange[]
+  id             String               @id @default(uuid())
+  code           String               @unique
+  subscriberType String
+  studentId      String?
+  subscriberName String
+  routeId        String
+  academicYear   String
+  startDate      DateTime
+  endDate        DateTime?
+  fullFeeAmount  Decimal              @db.Decimal(12, 2)
+  discountPct    Decimal              @default(0) @db.Decimal(5, 2)
+  actualAmount   Decimal              @db.Decimal(12, 2)
+  pickupAddress  String?
+  pickupPhone    String?
+  status         String               @default("active")
+  notes          String?
+  createdAt      DateTime             @default(now())
+  updatedAt      DateTime             @updatedAt
+  route          BusRoute             @relation(fields: [routeId], references: [id])
+  student        Student?             @relation(fields: [studentId], references: [id])
+  changes        SubscriptionChange[]
 
   @@index([routeId])
   @@index([studentId])
@@ -234,282 +237,296 @@ model BusSubscription {
 }
 
 model RentalCompany {
-  id                    String           @id @default(uuid())
-  code                  String           @unique
-  nameAr                String
-  nameEn                String?
-  contactPerson         String?
-  phone                 String?
-  email                 String?
-  address               String?
-  taxId                 String?
-  bankName              String?
-  bankAccountNumber     String?
-  notes                 String?
-  isActive              Boolean          @default(true)
-  createdAt             DateTime         @default(now())
-  updatedAt             DateTime         @updatedAt
-  contracts             RentalContract[]
-  drivers               ExternalDriver[]
+  id                String           @id @default(uuid())
+  code              String           @unique
+  nameAr            String
+  nameEn            String?
+  contactPerson     String?
+  phone             String?
+  email             String?
+  address           String?
+  taxId             String?
+  bankName          String?
+  bankAccountNumber String?
+  notes             String?
+  isActive          Boolean          @default(true)
+  createdAt         DateTime         @default(now())
+  updatedAt         DateTime         @updatedAt
+  drivers           ExternalDriver[]
+  contracts         RentalContract[]
 }
 
 model RentalContract {
-  id                   String         @id @default(uuid())
-  companyId            String
-  company              RentalCompany  @relation(fields: [companyId], references: [id])
-  contractNumber       String         @unique
-  title                String?
-  startDate            DateTime
-  endDate              DateTime
-  monthlyFeePerBus     Decimal        @db.Decimal(12, 2)
-  busesCount           Int
-  includesDriver       Boolean        @default(true)
-  includesFuel         Boolean        @default(true)
-  includesMaintenance  Boolean        @default(true)
-  includesInsurance    Boolean        @default(true)
-  paymentFrequency     String         @default("monthly")
-  paymentDueDay        Int?
-  status               String         @default("active")
-  notes                String?
-  createdAt            DateTime       @default(now())
-  updatedAt            DateTime       @updatedAt
-  buses                FleetBus[]
-  invoices             RentalInvoice[]
+  id                  String          @id @default(uuid())
+  companyId           String
+  contractNumber      String          @unique
+  title               String?
+  startDate           DateTime
+  endDate             DateTime
+  monthlyFeePerBus    Decimal         @db.Decimal(12, 2)
+  busesCount          Int
+  includesDriver      Boolean         @default(true)
+  includesFuel        Boolean         @default(true)
+  includesMaintenance Boolean         @default(true)
+  includesInsurance   Boolean         @default(true)
+  paymentFrequency    String          @default("monthly")
+  paymentDueDay       Int?
+  status              String          @default("active")
+  notes               String?
+  createdAt           DateTime        @default(now())
+  updatedAt           DateTime        @updatedAt
+  buses               FleetBus[]
+  company             RentalCompany   @relation(fields: [companyId], references: [id])
+  invoices            RentalInvoice[]
 
   @@index([companyId])
   @@index([status])
 }
 
 model FleetBus {
-  id                 String          @id @default(uuid())
-  code               String          @unique
-  plateNumber        String          @unique
-  capacity           Int
-  ownershipType      String          @default("rented_full")
-  rentalContractId   String?
-  rentalContract     RentalContract? @relation(fields: [rentalContractId], references: [id])
-  make               String?
-  model              String?
-  year               Int?
-  color              String?
-  status             String          @default("active")
-  insuranceExpiry    DateTime?
-  licenseExpiry      DateTime?
-  notes              String?
-  createdAt          DateTime        @default(now())
-  updatedAt          DateTime        @updatedAt
+  id               String          @id @default(uuid())
+  code             String          @unique
+  plateNumber      String          @unique
+  capacity         Int
+  ownershipType    String          @default("rented_full")
+  rentalContractId String?
+  make             String?
+  model            String?
+  year             Int?
+  color            String?
+  status           String          @default("active")
+  insuranceExpiry  DateTime?
+  licenseExpiry    DateTime?
+  notes            String?
+  createdAt        DateTime        @default(now())
+  updatedAt        DateTime        @updatedAt
+  rentalContract   RentalContract? @relation(fields: [rentalContractId], references: [id])
 
   @@index([status])
   @@index([rentalContractId])
 }
 
 model ExternalDriver {
-  id             String        @id @default(uuid())
-  code           String        @unique
-  fullName       String
-  phone          String?
-  companyId      String
-  company        RentalCompany @relation(fields: [companyId], references: [id])
-  licenseNumber  String?
-  licenseExpiry  DateTime?
-  isActive       Boolean       @default(true)
-  notes          String?
-  createdAt      DateTime      @default(now())
+  id            String        @id @default(uuid())
+  code          String        @unique
+  fullName      String
+  phone         String?
+  companyId     String
+  licenseNumber String?
+  licenseExpiry DateTime?
+  isActive      Boolean       @default(true)
+  notes         String?
+  createdAt     DateTime      @default(now())
+  company       RentalCompany @relation(fields: [companyId], references: [id])
 
   @@index([companyId])
   @@index([isActive])
 }
 
 model SubscriptionChange {
-  id                   String          @id @default(uuid())
-  subscriptionId       String
-  subscription         BusSubscription @relation(fields: [subscriptionId], references: [id])
-  changeType           String          // route_change|cancel|suspend|reactivate
-  changeDate           DateTime        @default(now())
-  effectiveDate        DateTime
-  previousRouteId      String?
-  newRouteId           String?
-  previousFullFee      Decimal?        @db.Decimal(12, 2)
-  newFullFee           Decimal?        @db.Decimal(12, 2)
-  monthsRemaining      Int?
-  previousRemaining    Decimal?        @db.Decimal(12, 2)
-  newRemaining         Decimal?        @db.Decimal(12, 2)
-  proRataDifference    Decimal?        @db.Decimal(12, 2)
-  direction            String?         // subscriber_pays|school_refunds|no_change
-  changeReason         String?
-  status               String          @default("pending")
-  notes                String?
-  createdAt            DateTime        @default(now())
-  createdBy            String?
+  id                String          @id @default(uuid())
+  subscriptionId    String
+  changeType        String
+  changeDate        DateTime        @default(now())
+  effectiveDate     DateTime
+  previousRouteId   String?
+  newRouteId        String?
+  previousFullFee   Decimal?        @db.Decimal(12, 2)
+  newFullFee        Decimal?        @db.Decimal(12, 2)
+  monthsRemaining   Int?
+  previousRemaining Decimal?        @db.Decimal(12, 2)
+  newRemaining      Decimal?        @db.Decimal(12, 2)
+  proRataDifference Decimal?        @db.Decimal(12, 2)
+  direction         String?
+  changeReason      String?
+  status            String          @default("pending")
+  notes             String?
+  createdAt         DateTime        @default(now())
+  createdBy         String?
+  subscription      BusSubscription @relation(fields: [subscriptionId], references: [id])
 
   @@index([subscriptionId])
 }
 
 model RentalInvoice {
-  id                   String          @id @default(uuid())
-  code                 String          @unique
-  contractId           String
-  contract             RentalContract  @relation(fields: [contractId], references: [id])
-  invoiceDate          DateTime
-  periodFrom           DateTime
-  periodTo             DateTime
-  baseAmount           Decimal         @db.Decimal(12, 2)
-  discountAmount       Decimal         @default(0) @db.Decimal(12, 2)
-  taxAmount            Decimal         @default(0) @db.Decimal(12, 2)
-  totalAmount          Decimal         @db.Decimal(12, 2)
-  status               String          @default("pending_review")
-  paymentDate          DateTime?
-  notes                String?
-  attachmentUrl        String?
-  createdAt            DateTime        @default(now())
-  updatedAt            DateTime        @updatedAt
+  id             String         @id @default(uuid())
+  code           String         @unique
+  contractId     String
+  invoiceDate    DateTime
+  periodFrom     DateTime
+  periodTo       DateTime
+  baseAmount     Decimal        @db.Decimal(12, 2)
+  discountAmount Decimal        @default(0) @db.Decimal(12, 2)
+  taxAmount      Decimal        @default(0) @db.Decimal(12, 2)
+  totalAmount    Decimal        @db.Decimal(12, 2)
+  status         String         @default("pending_review")
+  paymentDate    DateTime?
+  notes          String?
+  attachmentUrl  String?
+  createdAt      DateTime       @default(now())
+  updatedAt      DateTime       @updatedAt
+  contract       RentalContract @relation(fields: [contractId], references: [id])
 
   @@index([contractId])
   @@index([status])
 }
 
 model User {
-  id        String   @id @default(uuid())
-  name      String
-  email     String   @unique
-  password  String
-  role      String
-  avatar    String?
-  active    Boolean  @default(true)
-  discountLimitPercent Decimal @default(0) @db.Decimal(5, 2)
-  isOnline  Boolean  @default(false)
-  lastLoginAt DateTime?
-  lastLogoutAt DateTime?
-  tokenVersion  Int      @default(0)
-  deletedAt DateTime?
-  createdAt DateTime @default(now())
+  id                   String           @id @default(uuid())
+  name                 String
+  email                String           @unique
+  password             String
+  role                 String
+  avatar               String?
+  active               Boolean          @default(true)
+  discountLimitPercent Decimal          @default(0) @db.Decimal(5, 2)
+  createdAt            DateTime         @default(now())
+  isOnline             Boolean          @default(false)
+  lastLoginAt          DateTime?
+  lastLogoutAt         DateTime?
+  deletedAt            DateTime?
+  tokenVersion         Int              @default(0)
+  permissions          UserPermission[]
+}
+
+model UserPermission {
+  id        String  @id @default(uuid())
+  userId    String
+  resource  String
+  canRead   Boolean @default(false)
+  canWrite  Boolean @default(false)
+  canDelete Boolean @default(false)
+  user      User    @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, resource])
 }
 
 model RoleLimit {
-  role          String   @id
-  maxPercentage Decimal  @db.Decimal(5, 2)
-  maxAmount     Decimal  @db.Decimal(12, 2)
+  role          String  @id
+  maxPercentage Decimal @db.Decimal(5, 2)
+  maxAmount     Decimal @db.Decimal(12, 2)
 }
 
 model Account {
-  id               String   @id @default(uuid())
-  code             String   @unique
+  id               String             @id @default(uuid())
+  code             String             @unique
   name             String
-  nameEn           String?
   type             String
-  level            Int      @default(4)
-  normalBalance    String   @default("debit")
   parentId         String?
-  isSystemAccount  Boolean  @default(false)
-  allowManualEntry Boolean  @default(true)
-  isActive         Boolean  @default(true)
-  parent           Account?  @relation("SubAccounts", fields: [parentId], references: [id])
-  subAccounts      Account[] @relation("SubAccounts")
-  lines            JournalEntryLine[]
+  createdAt        DateTime           @default(now())
+  updatedAt        DateTime           @updatedAt
+  nameEn           String?
+  level            Int                @default(4)
+  normalBalance    String             @default("debit")
+  isSystemAccount  Boolean            @default(false)
+  allowManualEntry Boolean            @default(true)
+  isActive         Boolean            @default(true)
+  parent           Account?           @relation("SubAccounts", fields: [parentId], references: [id])
+  subAccounts      Account[]          @relation("SubAccounts")
   expenses         Expense[]
-  createdAt        DateTime @default(now())
-  updatedAt        DateTime @updatedAt
+  lines            JournalEntryLine[]
+  bankDeposits     BankDeposit[]
 }
 
 model FiscalYear {
-  id          String   @id @default(uuid())
-  yearCode    String   @unique
-  nameAr      String
-  nameEn      String
-  startDate   String
-  endDate     String
-  status      String   @default("active")
-  closedAt    DateTime?
-  closedBy    String?
-  createdAt   DateTime @default(now())
-  periods     AccountingPeriod[]
+  id        String             @id @default(uuid())
+  yearCode  String             @unique
+  nameAr    String
+  nameEn    String
+  startDate String
+  endDate   String
+  status    String             @default("active")
+  closedAt  DateTime?
+  closedBy  String?
+  createdAt DateTime           @default(now())
+  periods   AccountingPeriod[]
 }
 
 model AccountingPeriod {
-  id             String   @id @default(uuid())
-  periodCode     String   @unique
+  id             String         @id @default(uuid())
+  periodCode     String         @unique
   nameAr         String
   nameEn         String
   startDate      String
   endDate        String
   fiscalYearId   String
-  fiscalYear     FiscalYear @relation(fields: [fiscalYearId], references: [id])
-  status         String   @default("open")
+  status         String         @default("open")
   closedAt       DateTime?
   closedBy       String?
-  createdAt      DateTime @default(now())
+  createdAt      DateTime       @default(now())
+  fiscalYear     FiscalYear     @relation(fields: [fiscalYearId], references: [id])
   journalEntries JournalEntry[]
 }
 
 model CostCenter {
-  id          String   @id @default(uuid())
-  code        String   @unique
+  id          String             @id @default(uuid())
+  code        String             @unique
   nameAr      String
   nameEn      String
   description String?
   parentId    String?
-  parent      CostCenter?  @relation("SubCostCenters", fields: [parentId], references: [id])
-  children    CostCenter[] @relation("SubCostCenters")
-  isActive    Boolean  @default(true)
-  createdAt   DateTime @default(now())
+  isActive    Boolean            @default(true)
+  createdAt   DateTime           @default(now())
+  parent      CostCenter?        @relation("SubCostCenters", fields: [parentId], references: [id])
+  children    CostCenter[]       @relation("SubCostCenters")
   lines       JournalEntryLine[]
 }
 
 model JournalEntry {
-  id            String   @id @default(uuid())
-  entryNumber   String   @unique @default(uuid())
-  entryDate     String   @default("")
-  postingDate   String?
+  id            String             @id @default(uuid())
   description   String
+  referenceId   String?
+  createdAt     DateTime           @default(now())
+  entryNumber   String             @unique @default(uuid())
+  entryDate     String             @default("")
+  postingDate   String?
   notes         String?
   referenceType String?
-  referenceId   String?
-  status        String   @default("draft")
+  status        String             @default("draft")
   periodId      String?
-  period        AccountingPeriod? @relation(fields: [periodId], references: [id])
-  isReversal    Boolean  @default(false)
+  isReversal    Boolean            @default(false)
   reversalOfId  String?
   reversedById  String?
-  lines         JournalEntryLine[]
-  createdAt     DateTime @default(now())
   createdBy     String?
   approvedAt    DateTime?
   approvedBy    String?
   postedAt      DateTime?
   postedBy      String?
+  period        AccountingPeriod?  @relation(fields: [periodId], references: [id])
+  lines         JournalEntryLine[]
 }
 
 model JournalEntryLine {
-  id             String      @id @default(uuid())
+  id             String       @id @default(uuid())
   journalEntryId String
   accountId      String
-  debit          Decimal     @default(0) @db.Decimal(12, 2)
-  credit         Decimal     @default(0) @db.Decimal(12, 2)
+  debit          Decimal      @default(0) @db.Decimal(12, 2)
+  credit         Decimal      @default(0) @db.Decimal(12, 2)
   description    String?
   costCenterId   String?
-  lineNumber     Int         @default(1)
-  journalEntry   JournalEntry @relation(fields: [journalEntryId], references: [id], onDelete: Cascade)
+  lineNumber     Int          @default(1)
   account        Account      @relation(fields: [accountId], references: [id])
   costCenter     CostCenter?  @relation(fields: [costCenterId], references: [id])
+  journalEntry   JournalEntry @relation(fields: [journalEntryId], references: [id], onDelete: Cascade)
 }
 
 model Expense {
-  id            String   @id @default(uuid())
-  amount        Decimal  @db.Decimal(12, 2)
+  id            String           @id @default(uuid())
+  amount        Decimal          @db.Decimal(12, 2)
   date          DateTime
   description   String
   accountId     String
-  account       Account  @relation(fields: [accountId], references: [id])
   paymentMethod String
-  status        String   @default("pending_treasury") // pending_approval, pending_treasury, paid, rejected
+  status        String           @default("pending_treasury")
   requestedBy   String
   approvedBy    String?
   paidBy        String?
-  paidByUserId  String?  // من قام بدفع المصروفة من الخزينة (يجب أن يكون هو فاتح الخزينة)
   notes         String?
   sessionId     String?
-  session       TreasurySession? @relation(fields: [sessionId], references: [id], onDelete: SetNull)
-  createdAt     DateTime @default(now())
+  createdAt     DateTime         @default(now())
+  paidByUserId  String?
+  account       Account          @relation(fields: [accountId], references: [id])
+  session       TreasurySession? @relation(fields: [sessionId], references: [id])
 }
 
 model ExpenseLimit {
@@ -522,60 +539,80 @@ model InstallmentPlan {
   studentId    String        @unique
   totalAmount  Decimal       @db.Decimal(12, 2)
   academicYear String
-  status       String        @default("active") // active, completed
-  installments Installment[]
-  student      Student       @relation(fields: [studentId], references: [id], onDelete: Restrict)
+  status       String        @default("active")
   createdAt    DateTime      @default(now())
   updatedAt    DateTime      @updatedAt
+  installments Installment[]
+  student      Student       @relation(fields: [studentId], references: [id])
 }
 
 model Installment {
-  id            String          @id @default(uuid())
-  planId        String
-  amount        Decimal         @db.Decimal(12, 2)
-  dueDate       String
-  paidAmount    Decimal         @default(0) @db.Decimal(12, 2)
-  paidDate      String?
-  status        String          @default("pending") // pending, partial, paid
-  notes         String?
-  plan          InstallmentPlan @relation(fields: [planId], references: [id], onDelete: Cascade)
-  createdAt     DateTime        @default(now())
-  updatedAt     DateTime        @updatedAt
+  id         String          @id @default(uuid())
+  planId     String
+  amount     Decimal         @db.Decimal(12, 2)
+  dueDate    String
+  paidAmount Decimal         @default(0) @db.Decimal(12, 2)
+  paidDate   String?
+  status     String          @default("pending")
+  notes      String?
+  createdAt  DateTime        @default(now())
+  updatedAt  DateTime        @updatedAt
+  plan       InstallmentPlan @relation(fields: [planId], references: [id], onDelete: Cascade)
 }
 
 model TreasurySession {
-  id               String    @id @default(uuid())
-  date             String    @unique
-  openingBalance   Decimal   @db.Decimal(12, 2)
-  closingBalance   Decimal?  @db.Decimal(12, 2)
-  actualBalance    Decimal?  @db.Decimal(12, 2)
-  difference       Decimal?  @db.Decimal(12, 2)
-  status           String    @default("open") // open, pending_close, closed, pending_reopen
-  openedBy         String
-  closedBy         String?
-  closureNote      String?
-  approvedBy       String?
+  id                String            @id @default(uuid())
+  date              String            @unique
+  openingBalance    Decimal           @db.Decimal(12, 2)
+  closingBalance    Decimal?          @db.Decimal(12, 2)
+  actualBalance     Decimal?          @db.Decimal(12, 2)
+  difference        Decimal?          @db.Decimal(12, 2)
+  status            String            @default("open")
+  openedBy          String
+  closedBy          String?
+  closureNote       String?
+  approvedBy        String?
+  openedAt          DateTime          @default(now())
+  closedAt          DateTime?
+  createdAt         DateTime          @default(now())
   reopenRequestedBy String?
-  openedAt         DateTime  @default(now())
-  closedAt         DateTime?
-  payments         Payment[]
-  expenses         Expense[]
-  supplierPayments SupplierPayment[]
-  createdAt        DateTime  @default(now())
+  expenses          Expense[]
+  payments          Payment[]
+  supplierPayments  SupplierPayment[]
+  bankDeposits      BankDeposit[]
+}
+
+model BankDeposit {
+  id            String          @id @default(uuid())
+  amount        Decimal         @db.Decimal(12, 2)
+  date          DateTime        @default(now())
+  bankAccountId String
+  reference     String?
+  notes         String?
+  sessionId     String
+  createdBy     String
+  status        String          @default("pending")
+  approvedBy    String?
+  approvedAt    DateTime?
+  session       TreasurySession @relation(fields: [sessionId], references: [id])
+  bankAccount   Account         @relation(fields: [bankAccountId], references: [id])
+  createdAt     DateTime        @default(now())
+
+  @@index([sessionId])
 }
 
 model TreasurySessionAudit {
-  id              String   @id @default(uuid())
-  sessionId       String
-  eventType       String   // "closed" | "reopened" | "close_approved"
-  closingBalance  Decimal? @db.Decimal(12, 2)
-  actualBalance   Decimal? @db.Decimal(12, 2)
-  difference      Decimal? @db.Decimal(12, 2)
-  closedBy        String?
-  approvedBy      String?
-  closureNote     String?
-  performedBy     String
-  createdAt       DateTime @default(now())
+  id             String   @id @default(uuid())
+  sessionId      String
+  eventType      String
+  closingBalance Decimal? @db.Decimal(12, 2)
+  actualBalance  Decimal? @db.Decimal(12, 2)
+  difference     Decimal? @db.Decimal(12, 2)
+  closedBy       String?
+  approvedBy     String?
+  closureNote    String?
+  performedBy    String
+  createdAt      DateTime @default(now())
 
   @@index([sessionId])
   @@map("treasury_session_audits")
@@ -590,8 +627,8 @@ model AuditLog {
   id         String   @id @default(uuid())
   userId     String
   userName   String
-  action     String   // CREATE | UPDATE | DELETE | LOGIN | LOGOUT | APPROVE | REJECT
-  entityType String   // Student | Payment | TreasurySession | User | Discount | Expense
+  action     String
+  entityType String
   entityId   String?
   before     Json?
   after      Json?
@@ -617,152 +654,222 @@ model UserRole {
   @@index([userId])
 }
 
-// =======================================================
-// P2P (Procure-to-Pay) Models
-// =======================================================
-
 model Supplier {
-  id              String   @id @default(uuid())
-  code            String   @unique
-  name            String
-  contactPerson   String?
-  phone           String?
-  email           String?
-  taxId           String?
-  address         String?
-  isActive        Boolean  @default(true)
-  createdAt       DateTime @default(now())
-  updatedAt       DateTime @updatedAt
-  
-  requests        PurchaseRequest[]
-  orders          PurchaseOrder[]
-  receipts        GoodsReceipt[]
-  invoices        PurchaseInvoice[]
-  payments        SupplierPayment[]
+  id            String            @id @default(uuid())
+  code          String            @unique
+  name          String
+  contactPerson String?
+  phone         String?
+  email         String?
+  taxId         String?
+  address       String?
+  isActive      Boolean           @default(true)
+  createdAt     DateTime          @default(now())
+  updatedAt     DateTime          @updatedAt
+  receipts         GoodsReceipt[]
+  invoices         PurchaseInvoice[]
+  orders           PurchaseOrder[]
+  requests         PurchaseRequest[]
+  payments         SupplierPayment[]
+  gradeListEntries GradeItemListEntry[]
 }
 
 model PurchaseRequest {
-  id              String   @id @default(uuid())
-  requestNumber   String   @unique @default(uuid())
-  date            DateTime @default(now())
-  requestedBy     String
-  department      String?
-  status          String   @default("pending_approval") // pending_approval, approved, rejected, po_created
-  notes           String?
-  approvedBy      String?
-  approvedAt      DateTime?
-  supplierId      String?
-  supplier        Supplier? @relation(fields: [supplierId], references: [id])
-  items           PurchaseRequestItem[]
-  orders          PurchaseOrder[]
-  createdAt       DateTime @default(now())
-  updatedAt       DateTime @updatedAt
+  id            String                @id @default(uuid())
+  requestNumber String                @unique @default(uuid())
+  date          DateTime              @default(now())
+  requestedBy   String
+  department    String?
+  status        String                @default("pending_approval")
+  notes         String?
+  approvedBy    String?
+  approvedAt    DateTime?
+  supplierId    String?
+  createdAt     DateTime              @default(now())
+  updatedAt     DateTime              @updatedAt
+  orders        PurchaseOrder[]
+  supplier      Supplier?             @relation(fields: [supplierId], references: [id])
+  items         PurchaseRequestItem[]
 }
 
 model PurchaseRequestItem {
-  id              String   @id @default(uuid())
-  requestId       String
-  request         PurchaseRequest @relation(fields: [requestId], references: [id], onDelete: Cascade)
-  itemName        String
-  itemId          String?
-  quantity        Int
-  estimatedCost   Decimal  @default(0) @db.Decimal(12, 2)
-  notes           String?
+  id            String          @id @default(uuid())
+  requestId     String
+  itemName      String
+  itemId        String?
+  quantity      Int
+  estimatedCost Decimal         @default(0) @db.Decimal(12, 2)
+  notes         String?
+  request       PurchaseRequest @relation(fields: [requestId], references: [id], onDelete: Cascade)
 }
 
 model PurchaseOrder {
-  id              String   @id @default(uuid())
-  orderNumber     String   @unique @default(uuid())
-  date            DateTime @default(now())
-  supplierId      String
-  supplier        Supplier @relation(fields: [supplierId], references: [id])
-  requestId       String?
-  request         PurchaseRequest? @relation(fields: [requestId], references: [id])
-  status          String   @default("issued") // issued, partially_received, completed, cancelled
-  totalAmount     Decimal  @default(0) @db.Decimal(12, 2)
-  notes           String?
-  createdBy       String
-  items           PurchaseOrderItem[]
-  receipts        GoodsReceipt[]
-  createdAt       DateTime @default(now())
-  updatedAt       DateTime @updatedAt
+  id          String              @id @default(uuid())
+  orderNumber String              @unique @default(uuid())
+  date        DateTime            @default(now())
+  supplierId  String
+  requestId   String?
+  status      String              @default("issued")
+  totalAmount Decimal             @default(0) @db.Decimal(12, 2)
+  notes       String?
+  createdBy   String
+  createdAt   DateTime            @default(now())
+  updatedAt   DateTime            @updatedAt
+  receipts    GoodsReceipt[]
+  request     PurchaseRequest?    @relation(fields: [requestId], references: [id])
+  supplier    Supplier            @relation(fields: [supplierId], references: [id])
+  items       PurchaseOrderItem[]
 }
 
 model PurchaseOrderItem {
-  id              String   @id @default(uuid())
-  orderId         String
-  order           PurchaseOrder @relation(fields: [orderId], references: [id], onDelete: Cascade)
-  itemId          String
-  itemName        String
-  quantity        Int
-  receivedQty     Int      @default(0)
-  unitCost        Decimal  @db.Decimal(12, 2)
-  totalAmount     Decimal  @db.Decimal(12, 2)
+  id          String        @id @default(uuid())
+  orderId     String
+  itemId      String
+  itemName    String
+  quantity    Int
+  receivedQty Int           @default(0)
+  unitCost    Decimal       @db.Decimal(12, 2)
+  totalAmount Decimal       @db.Decimal(12, 2)
+  order       PurchaseOrder @relation(fields: [orderId], references: [id], onDelete: Cascade)
 }
 
 model GoodsReceipt {
-  id              String   @id @default(uuid())
-  receiptNumber   String   @unique @default(uuid())
-  date            DateTime @default(now())
-  orderId         String?
-  order           PurchaseOrder? @relation(fields: [orderId], references: [id])
-  supplierId      String
-  supplier        Supplier @relation(fields: [supplierId], references: [id])
-  deliveryNote    String?
-  receivedBy      String
-  status          String   @default("received") // received, invoiced
-  notes           String?
-  items           GoodsReceiptItem[]
-  inventoryTxns   InventoryTransaction[]
-  invoices        PurchaseInvoice[]
-  createdAt       DateTime @default(now())
+  id            String                 @id @default(uuid())
+  receiptNumber String                 @unique @default(uuid())
+  date          DateTime               @default(now())
+  orderId       String?
+  supplierId    String
+  deliveryNote  String?
+  receivedBy    String
+  status        String                 @default("received")
+  notes         String?
+  createdAt     DateTime               @default(now())
+  order         PurchaseOrder?         @relation(fields: [orderId], references: [id])
+  supplier      Supplier               @relation(fields: [supplierId], references: [id])
+  items         GoodsReceiptItem[]
+  inventoryTxns InventoryTransaction[]
+  invoices      PurchaseInvoice[]
 }
 
 model GoodsReceiptItem {
-  id              String   @id @default(uuid())
-  receiptId       String
-  receipt         GoodsReceipt @relation(fields: [receiptId], references: [id], onDelete: Cascade)
-  itemId          String
-  itemName        String
-  quantity        Int
-  unitCost        Decimal  @db.Decimal(12, 2)
+  id        String       @id @default(uuid())
+  receiptId String
+  itemId    String
+  itemName  String
+  quantity  Int
+  unitCost  Decimal      @db.Decimal(12, 2)
+  receipt   GoodsReceipt @relation(fields: [receiptId], references: [id], onDelete: Cascade)
 }
 
 model PurchaseInvoice {
-  id              String   @id @default(uuid())
-  invoiceNumber   String   @unique
-  date            DateTime
-  dueDate         DateTime?
-  supplierId      String
-  supplier        Supplier @relation(fields: [supplierId], references: [id])
-  receiptId       String?
-  receipt         GoodsReceipt? @relation(fields: [receiptId], references: [id])
-  totalAmount     Decimal  @db.Decimal(12, 2)
-  taxAmount       Decimal  @default(0) @db.Decimal(12, 2)
-  netAmount       Decimal  @db.Decimal(12, 2)
-  paidAmount      Decimal  @default(0) @db.Decimal(12, 2)
-  status          String   @default("unpaid") // unpaid, partial, paid
-  journalEntryId  String?
-  createdBy       String
-  payments        SupplierPayment[]
-  createdAt       DateTime @default(now())
-  updatedAt       DateTime @updatedAt
+  id             String            @id @default(uuid())
+  invoiceNumber  String            @unique
+  date           DateTime
+  dueDate        DateTime?
+  supplierId     String
+  receiptId      String?
+  totalAmount    Decimal           @db.Decimal(12, 2)
+  taxAmount      Decimal           @default(0) @db.Decimal(12, 2)
+  netAmount      Decimal           @db.Decimal(12, 2)
+  paidAmount     Decimal           @default(0) @db.Decimal(12, 2)
+  status         String            @default("unpaid")
+  journalEntryId String?
+  createdBy      String
+  createdAt      DateTime          @default(now())
+  updatedAt      DateTime          @updatedAt
+  receipt        GoodsReceipt?     @relation(fields: [receiptId], references: [id])
+  supplier       Supplier          @relation(fields: [supplierId], references: [id])
+  payments       SupplierPayment[]
 }
 
 model SupplierPayment {
-  id              String   @id @default(uuid())
-  paymentNumber   String   @unique @default(uuid())
-  date            DateTime @default(now())
+  id              String           @id @default(uuid())
+  paymentNumber   String           @unique @default(uuid())
+  date            DateTime         @default(now())
   supplierId      String
-  supplier        Supplier @relation(fields: [supplierId], references: [id])
   invoiceId       String?
-  invoice         PurchaseInvoice? @relation(fields: [invoiceId], references: [id])
-  amount          Decimal  @db.Decimal(12, 2)
-  paymentMethod   String   // cash, bank, check
+  amount          Decimal          @db.Decimal(12, 2)
+  paymentMethod   String
   referenceNumber String?
   sessionId       String?
-  session         TreasurySession? @relation(fields: [sessionId], references: [id])
   journalEntryId  String?
   createdBy       String
-  createdAt       DateTime @default(now())
+  createdAt       DateTime         @default(now())
+  invoice         PurchaseInvoice? @relation(fields: [invoiceId], references: [id])
+  session         TreasurySession? @relation(fields: [sessionId], references: [id])
+  supplier        Supplier         @relation(fields: [supplierId], references: [id])
+}
+
+// =======================================================
+// Student Inventory Distribution Models
+// =======================================================
+
+model GradeItemList {
+  id           String               @id @default(uuid())
+  stage        String
+  grade        String
+  track        String               @default("local")
+  academicYear String
+  term         String
+  createdBy    String
+  createdAt    DateTime             @default(now())
+  updatedAt    DateTime             @updatedAt
+  entries      GradeItemListEntry[]
+
+  @@unique([stage, grade, track, academicYear, term])
+  @@index([academicYear, term])
+}
+
+model GradeItemListEntry {
+  id                  String         @id @default(uuid())
+  listId              String
+  list                GradeItemList  @relation(fields: [listId], references: [id], onDelete: Cascade)
+  inventoryItemId     String
+  inventoryItem       InventoryItem  @relation(fields: [inventoryItemId], references: [id], onDelete: Restrict)
+  quantity            Int            @default(1)
+  preferredSupplierId String?
+  preferredSupplier   Supplier?      @relation(fields: [preferredSupplierId], references: [id], onDelete: SetNull)
+  notes               String?
+  createdAt           DateTime       @default(now())
+
+  @@unique([listId, inventoryItemId])
+}
+
+model DeliveryOrder {
+  id           String              @id @default(uuid())
+  code         String              @unique
+  studentId    String
+  student      Student             @relation(fields: [studentId], references: [id], onDelete: Restrict)
+  academicYear String
+  term         String
+  status       String              @default("pending")
+  chargeType   String              @default("within_fees")
+  requestedBy  String
+  confirmedBy  String?
+  deliveredBy  String?
+  totalAmount  Decimal             @default(0) @db.Decimal(12, 2)
+  notes        String?
+  createdAt    DateTime            @default(now())
+  updatedAt    DateTime            @updatedAt
+  items        DeliveryOrderItem[]
+
+  @@index([studentId])
+  @@index([status])
+  @@index([academicYear, term])
+}
+
+model DeliveryOrderItem {
+  id              String        @id @default(uuid())
+  orderId         String
+  order           DeliveryOrder @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  inventoryItemId String
+  inventoryItem   InventoryItem @relation(fields: [inventoryItemId], references: [id], onDelete: Restrict)
+  itemName        String
+  quantity        Int
+  unitPrice       Decimal       @db.Decimal(12, 2)
+  totalAmount     Decimal       @db.Decimal(12, 2)
+  deliveredAt     DateTime?
+  returnedAt      DateTime?
+  returnNotes     String?
+  createdAt       DateTime      @default(now())
 }
