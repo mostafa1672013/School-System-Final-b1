@@ -69,7 +69,8 @@ router.post('/', requireAuth, accountantRoles, async (req, res) => {
     const student = await prisma.student.findUnique({ where: { id: studentId } });
     if (!student) return res.status(404).json({ error: 'الطالب غير موجود' });
 
-    // Grade validation
+    // Grade validation + resolve sellingPrice for within_fees items
+    const resolvedItems: Array<any> = [];
     for (const item of items) {
       const invItem = await prisma.inventoryItem.findUnique({ where: { id: item.inventoryItemId } });
       if (!invItem) return res.status(404).json({ error: `الصنف ${item.inventoryItemId} غير موجود` });
@@ -78,11 +79,35 @@ router.post('/', requireAuth, accountantRoles, async (req, res) => {
           error: `الصنف "${invItem.name}" مخصص للصف ${invItem.grade}، بينما الطالب في الصف ${student.grade}`
         });
       }
+
+      let unitPrice = Number(item.unitPrice);
+
+      // For within_fees: override unitPrice with sellingPrice from GradeItemList if available
+      if (chargeType === 'within_fees') {
+        const listEntry = await prisma.gradeItemListEntry.findFirst({
+          where: {
+            inventoryItemId: item.inventoryItemId,
+            list: {
+              stage: student.stage,
+              grade: student.grade,
+              track: student.track,
+              academicYear,
+              term
+            }
+          },
+          select: { sellingPrice: true }
+        });
+        if (listEntry?.sellingPrice != null) {
+          unitPrice = Number(listEntry.sellingPrice);
+        }
+      }
+
+      resolvedItems.push({ ...item, unitPrice });
     }
 
     const result = await prisma.$transaction(async (tx) => {
       const code = await generateDeliveryCode(tx);
-      const totalAmount = items.reduce((sum: number, item: any) =>
+      const totalAmount = resolvedItems.reduce((sum: number, item: any) =>
         sum + (Number(item.unitPrice) * Number(item.quantity)), 0);
 
       return tx.deliveryOrder.create({
@@ -92,7 +117,7 @@ router.post('/', requireAuth, accountantRoles, async (req, res) => {
           requestedBy, notes: notes || null,
           totalAmount,
           items: {
-            create: items.map((item: any) => ({
+            create: resolvedItems.map((item: any) => ({
               inventoryItemId: item.inventoryItemId,
               itemName: item.itemName,
               quantity: item.quantity,

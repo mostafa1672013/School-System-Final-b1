@@ -548,6 +548,7 @@ export interface GradeItemListEntry {
     unitPrice: number;
   };
   quantity: number;
+  sellingPrice?: number;
   preferredSupplierId?: string;
   preferredSupplier?: { id: string; name: string };
   notes?: string;

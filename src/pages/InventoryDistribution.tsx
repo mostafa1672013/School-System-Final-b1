@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { toast } from 'sonner';
-import { BarChart3, AlertTriangle, CheckCircle, Clock, ShoppingCart, Users } from 'lucide-react';
+import { BarChart3, AlertTriangle, CheckCircle, Clock, ShoppingCart, Users, TrendingUp } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
@@ -28,6 +28,12 @@ export default function InventoryDistribution() {
   const [loadingSummary, setLoadingSummary] = useState(false);
   const [loadingStudents, setLoadingStudents] = useState(false);
   const [creatingPR, setCreatingPR] = useState<string | null>(null);
+  const [profitability, setProfitability] = useState<{
+    items: Array<{ inventoryItemId: string; itemName: string; unit: string; category: string; totalQty: number; totalRevenue: number; totalCost: number; profit: number; margin: number }>;
+    totals: { totalRevenue: number; totalCost: number; profit: number };
+  } | null>(null);
+  const [loadingProfitability, setLoadingProfitability] = useState(false);
+  const [profitTerm, setProfitTerm] = useState<string>('');
 
   const fetchSummary = async () => {
     setLoadingSummary(true);
@@ -54,6 +60,18 @@ export default function InventoryDistribution() {
       setStudentStatus(data);
     } catch { toast.error('فشل تحميل بيانات الطلاب'); }
     finally { setLoadingStudents(false); }
+  };
+
+  const fetchProfitability = async () => {
+    setLoadingProfitability(true);
+    try {
+      const params = new URLSearchParams({ academicYear: selectedYear });
+      if (profitTerm) params.set('term', profitTerm);
+      const res = await fetch(`/api/distribution/profitability?${params}`, { headers: getAuthHeaders() });
+      const data = await res.json();
+      setProfitability(data);
+    } catch { toast.error('فشل تحميل تقرير الربحية'); }
+    finally { setLoadingProfitability(false); }
   };
 
   useEffect(() => { fetchSummary(); }, [selectedYear, selectedTerm]);
@@ -115,6 +133,7 @@ export default function InventoryDistribution() {
         <TabsList>
           <TabsTrigger value="grades">توزيع المراحل</TabsTrigger>
           <TabsTrigger value="students">متابعة الطلاب</TabsTrigger>
+          <TabsTrigger value="profitability" onClick={() => { if (!profitability) fetchProfitability(); }}>ربحية الأصناف</TabsTrigger>
         </TabsList>
 
         <TabsContent value="grades" className="mt-4 space-y-4">
@@ -238,6 +257,82 @@ export default function InventoryDistribution() {
                   </tbody>
                 </table>
               </div>
+            </div>
+          )}
+        </TabsContent>
+        <TabsContent value="profitability" className="mt-4 space-y-4">
+          <div className="flex gap-3 items-center flex-wrap">
+            <Select value={profitTerm} onValueChange={setProfitTerm}>
+              <SelectTrigger className="w-40"><SelectValue placeholder="كل الترمات" /></SelectTrigger>
+              <SelectContent>
+                <SelectItem value="">كل الترمات</SelectItem>
+                {TERMS.map(t => <SelectItem key={t.value} value={t.value}>{t.label}</SelectItem>)}
+              </SelectContent>
+            </Select>
+            <Button variant="outline" onClick={fetchProfitability} disabled={loadingProfitability}>تحديث</Button>
+          </div>
+
+          {loadingProfitability ? (
+            <p className="text-muted-foreground py-8 text-center">جاري التحميل...</p>
+          ) : !profitability ? (
+            <div className="text-center py-16 text-muted-foreground">
+              <TrendingUp className="size-12 mx-auto mb-3 opacity-30" />
+              <p>اضغط "تحديث" لعرض تقرير الربحية</p>
+            </div>
+          ) : (
+            <div className="space-y-4">
+              <div className="grid grid-cols-3 gap-4">
+                {[
+                  { label: 'إجمالي الإيرادات', value: formatCurrency(profitability.totals.totalRevenue), color: 'text-blue-600' },
+                  { label: 'إجمالي التكاليف', value: formatCurrency(profitability.totals.totalCost), color: 'text-red-600' },
+                  { label: 'صافي الربح', value: formatCurrency(profitability.totals.profit), color: profitability.totals.profit >= 0 ? 'text-green-600' : 'text-red-600' },
+                ].map(({ label, value, color }) => (
+                  <div key={label} className="rounded-lg border p-4 text-center">
+                    <p className="text-sm text-muted-foreground mb-1">{label}</p>
+                    <p className={`text-xl font-bold tabular-nums ${color}`}>{value}</p>
+                  </div>
+                ))}
+              </div>
+
+              {profitability.items.length === 0 ? (
+                <p className="text-center py-8 text-muted-foreground">لا توجد بيانات توزيع مكتملة لهذه الفترة</p>
+              ) : (
+                <div className="rounded-lg border overflow-hidden">
+                  <table className="w-full text-sm">
+                    <thead className="bg-muted/30">
+                      <tr>
+                        <th className="text-right p-3 font-semibold">الصنف</th>
+                        <th className="text-center p-3 font-semibold">الكمية</th>
+                        <th className="text-center p-3 font-semibold">الإيراد</th>
+                        <th className="text-center p-3 font-semibold">التكلفة</th>
+                        <th className="text-center p-3 font-semibold">الربح</th>
+                        <th className="text-center p-3 font-semibold">هامش %</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {profitability.items.map(item => (
+                        <tr key={item.inventoryItemId} className="border-t hover:bg-muted/10">
+                          <td className="p-3">
+                            <p className="font-medium">{item.itemName}</p>
+                            {item.category && <p className="text-xs text-muted-foreground">{item.category}</p>}
+                          </td>
+                          <td className="p-3 text-center tabular-nums">{item.totalQty} {item.unit}</td>
+                          <td className="p-3 text-center tabular-nums text-blue-700">{formatCurrency(item.totalRevenue)}</td>
+                          <td className="p-3 text-center tabular-nums text-red-700">{formatCurrency(item.totalCost)}</td>
+                          <td className="p-3 text-center tabular-nums font-semibold" style={{ color: item.profit >= 0 ? 'rgb(22,163,74)' : 'rgb(220,38,38)' }}>
+                            {formatCurrency(item.profit)}
+                          </td>
+                          <td className="p-3 text-center tabular-nums">
+                            <span className={`text-xs font-medium px-2 py-0.5 rounded-full ${item.margin >= 0 ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700'}`}>
+                              {item.margin}%
+                            </span>
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              )}
             </div>
           )}
         </TabsContent>

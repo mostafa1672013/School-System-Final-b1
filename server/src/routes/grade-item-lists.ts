@@ -80,6 +80,7 @@ router.post('/', requireAuth, accountantRoles, async (req, res) => {
           create: entries.map((e: any) => ({
             inventoryItemId: e.inventoryItemId,
             quantity: e.quantity || 1,
+            sellingPrice: e.sellingPrice != null ? e.sellingPrice : null,
             preferredSupplierId: e.preferredSupplierId || null,
             notes: e.notes || null
           }))
@@ -114,6 +115,7 @@ router.patch('/:id/entries', requireAuth, accountantRoles, async (req, res) => {
             create: entries.map((e: any) => ({
               inventoryItemId: e.inventoryItemId,
               quantity: e.quantity || 1,
+              sellingPrice: e.sellingPrice != null ? e.sellingPrice : null,
               preferredSupplierId: e.preferredSupplierId || null,
               notes: e.notes || null
             }))

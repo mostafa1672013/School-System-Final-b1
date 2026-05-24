@@ -155,4 +155,86 @@ router.get('/student-status', requireAuth, accountingAndWarehouse, async (req, r
   }
 });
 
+// GET profitability per inventory item
+// Query: academicYear (required), term (optional)
+router.get('/profitability', requireAuth, accountingAndWarehouse, async (req, res) => {
+  try {
+    const { academicYear, term } = req.query;
+    if (!academicYear) {
+      return res.status(400).json({ error: 'السنة الدراسية مطلوبة' });
+    }
+
+    const orderWhere: any = {
+      academicYear: String(academicYear),
+      status: 'delivered'
+    };
+    if (term) orderWhere.term = String(term);
+
+    // Fetch all delivered order items with their inventory item's unitCost
+    const deliveredItems = await prisma.deliveryOrderItem.findMany({
+      where: {
+        deliveredAt: { not: null },
+        returnedAt: null,
+        order: orderWhere
+      },
+      include: {
+        inventoryItem: { select: { id: true, name: true, unit: true, category: true, unitCost: true } },
+        order: { select: { chargeType: true, term: true } }
+      }
+    });
+
+    // Group by inventoryItemId
+    const grouped: Record<string, {
+      inventoryItemId: string;
+      itemName: string;
+      unit: string;
+      category: string;
+      totalQty: number;
+      totalRevenue: number;
+      totalCost: number;
+    }> = {};
+
+    for (const item of deliveredItems) {
+      const key = item.inventoryItemId;
+      if (!grouped[key]) {
+        grouped[key] = {
+          inventoryItemId: key,
+          itemName: item.inventoryItem.name,
+          unit: item.inventoryItem.unit,
+          category: item.inventoryItem.category ?? '',
+          totalQty: 0,
+          totalRevenue: 0,
+          totalCost: 0
+        };
+      }
+      const qty = item.quantity;
+      const revenue = Number(item.unitPrice) * qty;
+      const cost = Number(item.inventoryItem.unitCost) * qty;
+      grouped[key].totalQty += qty;
+      grouped[key].totalRevenue += revenue;
+      grouped[key].totalCost += cost;
+    }
+
+    const result = Object.values(grouped).map(g => ({
+      ...g,
+      totalRevenue: Math.round(g.totalRevenue * 100) / 100,
+      totalCost: Math.round(g.totalCost * 100) / 100,
+      profit: Math.round((g.totalRevenue - g.totalCost) * 100) / 100,
+      margin: g.totalRevenue > 0
+        ? Math.round(((g.totalRevenue - g.totalCost) / g.totalRevenue) * 10000) / 100
+        : 0
+    })).sort((a, b) => b.profit - a.profit);
+
+    const totals = result.reduce((acc, r) => ({
+      totalRevenue: acc.totalRevenue + r.totalRevenue,
+      totalCost: acc.totalCost + r.totalCost,
+      profit: acc.profit + r.profit
+    }), { totalRevenue: 0, totalCost: 0, profit: 0 });
+
+    res.json({ items: result, totals });
+  } catch (error: any) {
+    res.status(500).json({ error: error.message || 'فشل تحميل تقرير الربحية' });
+  }
+});
+
 export default router;

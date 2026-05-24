@@ -36,7 +36,7 @@ export default function GradeItemLists() {
   const [formStage, setFormStage] = useState('');
   const [formGrade, setFormGrade] = useState('');
   const [formTrack, setFormTrack] = useState('local');
-  const [formEntries, setFormEntries] = useState<Array<{ inventoryItemId: string; quantity: number; preferredSupplierId?: string }>>([]);
+  const [formEntries, setFormEntries] = useState<Array<{ inventoryItemId: string; quantity: number; sellingPrice?: number; preferredSupplierId?: string }>>([]);
 
   useEffect(() => {
     fetchLists({ academicYear: selectedYear, term: selectedTerm });
@@ -44,7 +44,7 @@ export default function GradeItemLists() {
     fetchSuppliers();
   }, [selectedYear, selectedTerm]);
 
-  const addEntryRow = () => setFormEntries([...formEntries, { inventoryItemId: '', quantity: 1 }]);
+  const addEntryRow = () => setFormEntries([...formEntries, { inventoryItemId: '', quantity: 1, sellingPrice: undefined }]);
   const removeEntryRow = (idx: number) => setFormEntries(formEntries.filter((_, i) => i !== idx));
   const updateEntryRow = (idx: number, field: string, value: unknown) => {
     const updated = [...formEntries];
@@ -80,7 +80,7 @@ export default function GradeItemLists() {
   const openEdit = (list: GradeItemList) => {
     setEditingList(list);
     setFormEntries(list.entries.map(e => ({
-      inventoryItemId: e.inventoryItemId, quantity: e.quantity, preferredSupplierId: e.preferredSupplierId
+      inventoryItemId: e.inventoryItemId, quantity: e.quantity, sellingPrice: e.sellingPrice, preferredSupplierId: e.preferredSupplierId
     })));
   };
 
@@ -95,7 +95,7 @@ export default function GradeItemLists() {
     <div className="space-y-3">
       {formEntries.map((entry, idx) => (
         <div key={idx} className="grid grid-cols-12 gap-2 items-end border rounded p-2 bg-muted/20">
-          <div className="col-span-5 space-y-1">
+          <div className="col-span-4 space-y-1">
             <Label className="text-xs">الصنف</Label>
             <Select value={entry.inventoryItemId} onValueChange={(v) => updateEntryRow(idx, 'inventoryItemId', v)}>
               <SelectTrigger className="h-8 text-xs"><SelectValue placeholder="اختر صنف" /></SelectTrigger>
@@ -106,7 +106,11 @@ export default function GradeItemLists() {
             <Label className="text-xs">الكمية</Label>
             <Input type="number" min={1} className="h-8 text-xs" value={entry.quantity} onChange={(e) => updateEntryRow(idx, 'quantity', Number(e.target.value))} />
           </div>
-          <div className="col-span-4 space-y-1">
+          <div className="col-span-2 space-y-1">
+            <Label className="text-xs">سعر البيع</Label>
+            <Input type="number" min={0} step="0.01" className="h-8 text-xs" placeholder="اختياري" value={entry.sellingPrice ?? ''} onChange={(e) => updateEntryRow(idx, 'sellingPrice', e.target.value === '' ? undefined : Number(e.target.value))} />
+          </div>
+          <div className="col-span-3 space-y-1">
             <Label className="text-xs">المورد المفضل</Label>
             <Select value={entry.preferredSupplierId || ''} onValueChange={(v) => updateEntryRow(idx, 'preferredSupplierId', v || undefined)}>
               <SelectTrigger className="h-8 text-xs"><SelectValue placeholder="أي مورد" /></SelectTrigger>
@@ -196,7 +200,10 @@ export default function GradeItemLists() {
               {list.entries.map(e => (
                 <div key={e.id} className="flex justify-between text-sm border-b pb-1 last:border-0">
                   <span>{e.inventoryItem?.name || e.inventoryItemId}</span>
-                  <span className="text-muted-foreground">{e.quantity} {e.inventoryItem?.unit || 'وحدة'}</span>
+                  <span className="text-muted-foreground tabular-nums">
+                    {e.quantity} {e.inventoryItem?.unit || 'وحدة'}
+                    {e.sellingPrice != null && <span className="mr-2 text-xs text-blue-600">({e.sellingPrice} ج)</span>}
+                  </span>
                 </div>
               ))}
             </div>
