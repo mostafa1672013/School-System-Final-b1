@@ -270,9 +270,7 @@ router.post('/receive', async (req, res) => {
       // purchase → CR 2001 (Accounts Payable), adjustment → CR 5003 (Inventory Adjustment), opening_balance → CR 3001 (Retained Earnings)
       try {
         const asset1300 = await tx.account.findUnique({ where: { code: '1300' } });
-        const creditCode = actualSubType === 'purchase' ? '2001'
-          : actualSubType === 'opening_balance' ? '3001'
-          : '5003';  // adjustment
+        const creditCode = actualSubType === 'opening_balance' ? '3001' : '5003';
         const creditAccount = await tx.account.findUnique({ where: { code: creditCode } });
         const year = new Date().getFullYear();
 
@@ -283,7 +281,9 @@ router.post('/receive', async (req, res) => {
               entryNumber: `JE-${year}-${randomUUID().slice(0, 8)}`,
               entryDate: new Date().toISOString().split('T')[0],
               description: `${actualSubType === 'opening_balance' ? 'رصيد افتتاحي' : actualSubType === 'adjustment' ? 'تسوية مخزون' : 'استلام مخزون'}: ${item.name} (${quantity} ${item.unit})`,
-              referenceType: 'inventory_receive',
+              referenceType: actualSubType === 'opening_balance' ? 'inventory_opening_balance'
+              : actualSubType === 'adjustment' ? 'inventory_adjustment'
+              : 'inventory_receive',
               referenceId: transaction.id,
               status: 'posted',
               postedAt: new Date(),
