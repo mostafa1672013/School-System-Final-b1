@@ -20,6 +20,9 @@ import databaseRouter from './routes/database';
 import miscRouter from './routes/misc';
 import userRolesRouter from './routes/user-roles';
 import auditLogRouter from './routes/audit-log';
+import purchasingRouter from './routes/purchasing';
+import migrationRouter from './routes/migration';
+import gradeItemListsRouter from './routes/grade-item-lists';
 
 dotenv.config();
 
@@ -36,7 +39,16 @@ const isOriginAllowed = (origin: string | undefined): boolean => {
   if (!origin) return true;
   if (ALLOWED_ORIGINS.includes(origin)) return true;
   // Allow any localhost/127.0.0.1 origin in development
-  return /^https?:\/\/(localhost|127\.0\.0\.1)(:\d+)?$/.test(origin);
+  if (/^https?:\/\/(localhost|127\.0\.0\.1)(:\d+)?$/.test(origin)) return true;
+  // Allow Cloudflare quick tunnels
+  if (origin.endsWith('.trycloudflare.com')) return true;
+  // Allow LocalTunnel
+  if (origin.endsWith('.loca.lt')) return true;
+  // Allow localhost.run
+  if (origin.endsWith('.lhr.life')) return true;
+  // Allow Ngrok
+  if (origin.endsWith('.ngrok-free.dev')) return true;
+  return false;
 };
 
 const httpServer = createServer(app);
@@ -76,7 +88,7 @@ app.use(express.urlencoded({ limit: '1mb', extended: true }));
 // Login rate limiter (applied only to login endpoint)
 const loginLimiter = rateLimit({
   windowMs: 15 * 60 * 1000, // 15 minutes
-  max: 10, // 10 attempts per window
+  max: process.env.NODE_ENV === 'production' ? 10 : 1000, // 1000 attempts in dev/tunnel
   message: { error: 'Too many login attempts, please try again later' },
   standardHeaders: true,
   legacyHeaders: false,
@@ -108,6 +120,9 @@ app.use('/api/auth', usersRouter);
 // Inventory
 app.use('/api/inventory', inventoryRouter);
 
+// Purchasing
+app.use('/api/purchasing', purchasingRouter);
+
 // Stage Fees
 app.use('/api/stage-fees', feesRouter);
 
@@ -128,6 +143,12 @@ app.use('/api/user-roles', userRolesRouter);
 
 // Audit Log (read-only for management roles)
 app.use('/api/audit', auditLogRouter);
+
+// Migration (Bulk imports and data balancing)
+app.use('/api/migration', migrationRouter);
+
+// Grade Item Lists (per-grade supply lists for purchasing)
+app.use('/api/grade-item-lists', gradeItemListsRouter);
 
 // Health check endpoint
 app.get('/health', (_req, res) => {
@@ -227,3 +248,4 @@ if (process.env.NODE_ENV !== 'test') {
     console.log(`🔌 WebSocket ready on ws://localhost:${PORT}`);
   });
 }
+// trigger restart
