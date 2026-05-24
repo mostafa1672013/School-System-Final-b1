@@ -23,6 +23,7 @@ import auditLogRouter from './routes/audit-log';
 import purchasingRouter from './routes/purchasing';
 import migrationRouter from './routes/migration';
 import gradeItemListsRouter from './routes/grade-item-lists';
+import deliveryOrdersRouter from './routes/delivery-orders';
 
 dotenv.config();
 
@@ -149,6 +150,9 @@ app.use('/api/migration', migrationRouter);
 
 // Grade Item Lists (per-grade supply lists for purchasing)
 app.use('/api/grade-item-lists', gradeItemListsRouter);
+
+// Delivery Orders (create → confirm → deliver → return/cancel)
+app.use('/api/delivery-orders', deliveryOrdersRouter);
 
 // Health check endpoint
 app.get('/health', (_req, res) => {
