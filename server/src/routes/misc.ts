@@ -1,6 +1,7 @@
 import { Router } from 'express';
 import { PrismaClient } from '@prisma/client';
 import { requireAuth, requireRoles } from '../middleware/auth';
+import { getActivePeriodId } from '../lib/accounting-helpers';
 
 const router = Router();
 const prisma = new PrismaClient();
@@ -616,18 +617,69 @@ router.patch('/rental-invoices/:id', requireAuth, busTransportRoles, async (req,
   const id = Array.isArray(req.params.id) ? req.params.id[0] : req.params.id;
   try {
     const { status, paymentDate, notes, discountAmount, taxAmount, totalAmount } = req.body as Record<string, any>;
-    const invoice = await prisma.rentalInvoice.update({
-      where: { id },
-      data: {
-        ...(status != null && { status }),
-        ...(paymentDate != null && { paymentDate: new Date(paymentDate) }),
-        ...(notes != null && { notes }),
-        ...(discountAmount != null && { discountAmount: Number(discountAmount) }),
-        ...(taxAmount != null && { taxAmount: Number(taxAmount) }),
-        ...(totalAmount != null && { totalAmount: Number(totalAmount) }),
-      },
-      include: { contract: { include: { company: true } } },
+
+    const invoice = await prisma.$transaction(async (tx) => {
+      const current = await tx.rentalInvoice.findUnique({
+        where: { id },
+        include: { contract: { include: { company: true } } },
+      });
+      if (!current) throw Object.assign(new Error('Invoice not found'), { code: 'P2025' });
+
+      const updated = await tx.rentalInvoice.update({
+        where: { id },
+        data: {
+          ...(status != null && { status }),
+          ...(paymentDate != null && { paymentDate: new Date(paymentDate) }),
+          ...(notes != null && { notes }),
+          ...(discountAmount != null && { discountAmount: Number(discountAmount) }),
+          ...(taxAmount != null && { taxAmount: Number(taxAmount) }),
+          ...(totalAmount != null && { totalAmount: Number(totalAmount) }),
+        },
+        include: { contract: { include: { company: true } } },
+      });
+
+      // When approving: create journal entry (debit expense, credit payable)
+      if (status === 'approved' && current.status !== 'approved') {
+        const amount = Number(updated.totalAmount);
+        const today = new Date().toISOString().split('T')[0];
+
+        const [expenseAccount, payableAccount] = await Promise.all([
+          tx.account.findFirst({ where: { code: { in: ['5500', '5301'] } }, orderBy: { code: 'asc' } }),
+          tx.account.findFirst({ where: { code: { in: ['2002', '121002'] } }, orderBy: { code: 'asc' } }),
+        ]);
+
+        if (expenseAccount && payableAccount) {
+          const jeCount = await tx.journalEntry.count();
+          const entryNumber = `JE-${new Date().getFullYear()}-${String(jeCount + 1).padStart(6, '0')}`;
+          const periodId = await getActivePeriodId(tx as any, today);
+          const companyName = updated.contract?.company?.nameAr ?? 'شركة تأجير';
+
+          await tx.journalEntry.create({
+            data: {
+              entryNumber,
+              entryDate: today,
+              description: `فاتورة إيجار حافلات ${updated.code} — ${companyName}`,
+              referenceType: 'rental_invoice',
+              referenceId: updated.id,
+              status: 'posted',
+              postedAt: new Date(),
+              createdBy: (req as any).user?.userId ?? 'system',
+              postedBy: (req as any).user?.userId ?? 'system',
+              periodId: periodId ?? undefined,
+              lines: {
+                create: [
+                  { accountId: expenseAccount.id, debit: amount, credit: 0, lineNumber: 1, description: `إيجار حافلات — ${companyName}` },
+                  { accountId: payableAccount.id, debit: 0, credit: amount, lineNumber: 2, description: `مستحق لـ ${companyName}` },
+                ],
+              },
+            },
+          });
+        }
+      }
+
+      return updated;
     });
+
     res.json(invoice);
   } catch (error: any) {
     if (error?.code === 'P2025') return res.status(404).json({ error: 'Invoice not found' });
