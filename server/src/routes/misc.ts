@@ -652,7 +652,7 @@ router.patch('/rental-invoices/:id', requireAuth, busTransportRoles, async (req,
           await tx.expense.create({
             data: {
               amount,
-              date: today,
+              date: new Date(today),
               description: `فاتورة إيجار حافلات ${updated.code} — ${companyName}`,
               accountId: expenseAccount.id,
               paymentMethod: 'bank_transfer',

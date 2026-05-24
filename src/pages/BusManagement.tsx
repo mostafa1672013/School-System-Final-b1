@@ -795,7 +795,10 @@ export default function BusManagement() {
                             if (res.ok) {
                               const updated = await res.json();
                               setInvoices((prev) => prev.map((i: any) => i.id === inv.id ? updated : i));
-                              toast.success('تم اعتماد الفاتورة');
+                              toast.success('تم اعتماد الفاتورة وإرسالها للخزينة');
+                            } else {
+                              const err = await res.json().catch(() => ({}));
+                              toast.error(err.error || 'فشل اعتماد الفاتورة');
                             }
                           }}>اعتماد</Button>
                         )}
