@@ -487,17 +487,21 @@ router.post('/issue', async (req, res) => {
                 description: `صرف مستلزمات: ${item.name} للقسم ${departmentName || 'غير محدد'} (${quantity} ${item.unit})`,
                 referenceType: 'inventory_consumption',
                 referenceId: transaction.id,
+                status: 'posted',
+                postedAt: new Date(),
                 lines: {
                   create: [
                     {
                       accountId: expense5002.id,
                       debit: Number(item.unitCost) * quantity,
-                      credit: 0
+                      credit: 0,
+                      lineNumber: 1
                     },
                     {
                       accountId: inventory1300.id,
                       debit: 0,
-                      credit: Number(item.unitCost) * quantity
+                      credit: Number(item.unitCost) * quantity,
+                      lineNumber: 2
                     }
                   ]
                 }
