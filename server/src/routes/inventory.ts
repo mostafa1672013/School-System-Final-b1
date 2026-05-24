@@ -266,32 +266,31 @@ router.post('/receive', async (req, res) => {
         }
       });
 
-      // Create journal entry: DR 1300 (Inventory) | CR 2001 (Accounts Payable)
+      // Create journal entry with correct credit account based on subType:
+      // purchase → CR 2001 (Accounts Payable), adjustment → CR 5003 (Inventory Adjustment), opening_balance → CR 3001 (Retained Earnings)
       try {
         const asset1300 = await tx.account.findUnique({ where: { code: '1300' } });
-        const liability2001 = await tx.account.findUnique({ where: { code: '2001' } });
+        const creditCode = actualSubType === 'purchase' ? '2001'
+          : actualSubType === 'opening_balance' ? '3001'
+          : '5003';  // adjustment
+        const creditAccount = await tx.account.findUnique({ where: { code: creditCode } });
+        const year = new Date().getFullYear();
 
-        if (asset1300 && liability2001) {
-          const year = new Date().getFullYear();
+        if (asset1300 && creditAccount) {
+          const totalCost = (unitCost ?? Number(item.unitCost)) * quantity;
           const journalEntry = await tx.journalEntry.create({
             data: {
               entryNumber: `JE-${year}-${randomUUID().slice(0, 8)}`,
               entryDate: new Date().toISOString().split('T')[0],
-              description: `استلام مخزون: ${item.name} (${quantity} ${item.unit})`,
+              description: `${actualSubType === 'opening_balance' ? 'رصيد افتتاحي' : actualSubType === 'adjustment' ? 'تسوية مخزون' : 'استلام مخزون'}: ${item.name} (${quantity} ${item.unit})`,
               referenceType: 'inventory_receive',
               referenceId: transaction.id,
+              status: 'posted',
+              postedAt: new Date(),
               lines: {
                 create: [
-                  {
-                    accountId: asset1300.id,
-                    debit: (unitCost || item.unitCost) * quantity,
-                    credit: 0
-                  },
-                  {
-                    accountId: liability2001.id,
-                    debit: 0,
-                    credit: (unitCost || item.unitCost) * quantity
-                  }
+                  { accountId: asset1300.id, debit: totalCost, credit: 0, lineNumber: 1 },
+                  { accountId: creditAccount.id, debit: 0, credit: totalCost, lineNumber: 2 }
                 ]
               }
             }
@@ -303,7 +302,7 @@ router.post('/receive', async (req, res) => {
             data: { journalEntryId: journalEntry.id }
           });
         } else {
-          console.warn('⚠️ Accounting codes 1300 or 2001 not found. Stock transaction created without journal entry.');
+          console.warn(`⚠️ Account 1300 or ${creditCode} not found. Receive without journal entry.`);
         }
       } catch (journalError) {
         console.warn('⚠️ Journal entry creation failed:', journalError);
