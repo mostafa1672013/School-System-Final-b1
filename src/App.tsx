@@ -13,10 +13,14 @@ const Payments = lazy(() => import('@/pages/Payments'));
 const PaymentApprovals = lazy(() => import('@/pages/PaymentApprovals'));
 const Treasury = lazy(() => import('@/pages/Treasury'));
 const Inventory = lazy(() => import('@/pages/Inventory'));
+const Suppliers = lazy(() => import('@/pages/Suppliers'));
+const Purchasing = lazy(() => import('@/pages/Purchasing'));
 const BusManagement = lazy(() => import('@/pages/BusManagement'));
 const Reports = lazy(() => import('@/pages/Reports'));
 const Users = lazy(() => import('@/pages/Users'));
 const DatabaseManagement = lazy(() => import('@/pages/DatabaseManagement'));
+const SystemLogs = lazy(() => import('@/pages/SystemLogs'));
+const DataMigration = lazy(() => import('@/pages/DataMigration'));
 const Admission = lazy(() => import('@/pages/Admission'));
 const NewAdmission = lazy(() => import('@/pages/NewAdmission'));
 const StageFeeManagement = lazy(() => import('@/pages/StageFeeManagement'));
@@ -30,6 +34,9 @@ const JournalEntries = lazy(() => import('@/pages/JournalEntries'));
 const AccountingPeriods = lazy(() => import('@/pages/AccountingPeriods'));
 const AccountingReports = lazy(() => import('@/pages/AccountingReports'));
 const Expenses = lazy(() => import('@/pages/Expenses'));
+const GradeItemLists = lazy(() => import('@/pages/GradeItemLists'));
+const DeliveryOrders = lazy(() => import('@/pages/DeliveryOrders'));
+const InventoryDistribution = lazy(() => import('@/pages/InventoryDistribution'));
 const ExpenseApprovals = lazy(() => import('@/pages/ExpenseApprovals'));
 const ExpensePermissions = lazy(() => import('@/pages/ExpensePermissions'));
 const YearManagement = lazy(() => import('@/pages/YearManagement'));
@@ -67,10 +74,14 @@ export default function App() {
             <Route path="/payment-approvals" element={<PaymentApprovals />} />
             <Route path="/treasury" element={<Treasury />} />
             <Route path="/inventory" element={<Inventory />} />
+            <Route path="/suppliers" element={<Suppliers />} />
+            <Route path="/purchasing" element={<Purchasing />} />
             <Route path="/bus" element={<BusManagement />} />
             <Route path="/reports" element={<Reports />} />
             <Route path="/users" element={<Users />} />
             <Route path="/database" element={<DatabaseManagement />} />
+            <Route path="/data-migration" element={<DataMigration />} />
+            <Route path="/system-logs" element={<SystemLogs />} />
             <Route path="/admission" element={<Admission />} />
             <Route path="/admission/new" element={<NewAdmission />} />
             <Route path="/stage-fees" element={<StageFeeManagement />} />
@@ -87,6 +98,9 @@ export default function App() {
             <Route path="/expense-approvals" element={<ExpenseApprovals />} />
             <Route path="/expense-permissions" element={<ExpensePermissions />} />
             <Route path="/profile" element={<Profile />} />
+            <Route path="/grade-item-lists" element={<GradeItemLists />} />
+            <Route path="/delivery-orders" element={<DeliveryOrders />} />
+            <Route path="/inventory-distribution" element={<InventoryDistribution />} />
           </Route>
           <Route path="*" element={<Navigate to="/login" replace />} />
         </Routes>
