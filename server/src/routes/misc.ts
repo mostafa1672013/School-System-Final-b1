@@ -1,7 +1,6 @@
 import { Router } from 'express';
 import { PrismaClient } from '@prisma/client';
 import { requireAuth, requireRoles } from '../middleware/auth';
-import { getActivePeriodId } from '../lib/accounting-helpers';
 
 const router = Router();
 const prisma = new PrismaClient();
@@ -638,40 +637,29 @@ router.patch('/rental-invoices/:id', requireAuth, busTransportRoles, async (req,
         include: { contract: { include: { company: true } } },
       });
 
-      // When approving: create journal entry (debit expense, credit payable)
+      // When approving: create an Expense with pending_treasury so it appears in treasury for payment
       if (status === 'approved' && current.status !== 'approved') {
         const amount = Number(updated.totalAmount);
         const today = new Date().toISOString().split('T')[0];
+        const companyName = updated.contract?.company?.nameAr ?? 'شركة تأجير';
 
-        const [expenseAccount, payableAccount] = await Promise.all([
-          tx.account.findFirst({ where: { code: { in: ['5500', '5301'] } }, orderBy: { code: 'asc' } }),
-          tx.account.findFirst({ where: { code: { in: ['2002', '121002'] } }, orderBy: { code: 'asc' } }),
-        ]);
+        const expenseAccount = await tx.account.findFirst({
+          where: { code: { in: ['5500', '5301'] } },
+          orderBy: { code: 'asc' },
+        });
 
-        if (expenseAccount && payableAccount) {
-          const jeCount = await tx.journalEntry.count();
-          const entryNumber = `JE-${new Date().getFullYear()}-${String(jeCount + 1).padStart(6, '0')}`;
-          const periodId = await getActivePeriodId(tx as any, today);
-          const companyName = updated.contract?.company?.nameAr ?? 'شركة تأجير';
-
-          await tx.journalEntry.create({
+        if (expenseAccount) {
+          await tx.expense.create({
             data: {
-              entryNumber,
-              entryDate: today,
+              amount,
+              date: today,
               description: `فاتورة إيجار حافلات ${updated.code} — ${companyName}`,
-              referenceType: 'rental_invoice',
-              referenceId: updated.id,
-              status: 'posted',
-              postedAt: new Date(),
-              createdBy: (req as any).user?.userId ?? 'system',
-              postedBy: (req as any).user?.userId ?? 'system',
-              periodId: periodId ?? undefined,
-              lines: {
-                create: [
-                  { accountId: expenseAccount.id, debit: amount, credit: 0, lineNumber: 1, description: `إيجار حافلات — ${companyName}` },
-                  { accountId: payableAccount.id, debit: 0, credit: amount, lineNumber: 2, description: `مستحق لـ ${companyName}` },
-                ],
-              },
+              accountId: expenseAccount.id,
+              paymentMethod: 'bank_transfer',
+              status: 'pending_treasury',
+              requestedBy: companyName,
+              approvedBy: (req as any).user?.userId ?? 'system',
+              notes: `rental_invoice:${updated.id}`,
             },
           });
         }

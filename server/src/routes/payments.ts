@@ -332,6 +332,16 @@ router.patch('/expenses/:id/pay', requireOpenTreasury, async (req, res) => {
           }
         });
       }
+
+      // If this expense was generated from a rental invoice, mark it as paid too
+      if (exp.notes?.startsWith('rental_invoice:')) {
+        const invoiceId = exp.notes.replace('rental_invoice:', '');
+        await (tx as any).rentalInvoice.update({
+          where: { id: invoiceId },
+          data: { status: 'paid', paymentDate: new Date() },
+        }).catch(() => {}); // silently ignore if invoice not found
+      }
+
       return [exp];
     });
     res.json(expense);
@@ -419,7 +429,8 @@ router.get('/treasury/status', async (req, res) => {
       where: { date: today },
       include: {
         payments: { select: { amount: true } },
-        expenses: { where: { status: 'paid' }, select: { amount: true } }
+        expenses: { where: { status: 'paid' }, select: { amount: true } },
+        bankDeposits: { select: { amount: true } }
       }
     });
 
@@ -446,7 +457,8 @@ router.get('/treasury/status', async (req, res) => {
 
     const totalIncome = session.payments.reduce((sum: number, p: any) => sum + Number(p.amount), 0);
     const totalExpenses = session.expenses.reduce((sum: number, e: any) => sum + Number(e.amount), 0);
-    const currentBalance = Number(session.openingBalance) + totalIncome - totalExpenses;
+    const totalBankDeposits = session.bankDeposits.reduce((sum: number, d: any) => sum + Number(d.amount), 0);
+    const currentBalance = Number(session.openingBalance) + totalIncome - totalExpenses - totalBankDeposits;
 
     const opener = session.openedBy
       ? await prisma.user.findUnique({ where: { id: session.openedBy }, select: { name: true } })
@@ -461,9 +473,11 @@ router.get('/treasury/status', async (req, res) => {
         },
         totalIncome,
         totalExpenses,
+        totalBankDeposits,
         currentBalance,
         paymentsCount: session.payments.length,
-        expensesCount: session.expenses.length
+        expensesCount: session.expenses.length,
+        bankDepositsCount: session.bankDeposits.length
       });
     }
 
@@ -489,9 +503,11 @@ router.get('/treasury/status', async (req, res) => {
       },
       totalIncome,
       totalExpenses,
+      totalBankDeposits,
       currentBalance,
       paymentsCount: session.payments.length,
-      expensesCount: session.expenses.length
+      expensesCount: session.expenses.length,
+      bankDepositsCount: session.bankDeposits.length
     });
   } catch (error) {
     res.status(500).json({ error: 'Failed to fetch treasury status' });
@@ -554,7 +570,8 @@ router.post('/treasury/close-request', async (req, res) => {
       where: { date: today },
       include: {
         payments: true,
-        expenses: { where: { status: 'paid' } }
+        expenses: { where: { status: 'paid' } },
+        bankDeposits: true
       }
     });
 
@@ -577,7 +594,8 @@ router.post('/treasury/close-request', async (req, res) => {
 
     const totalIncome = session.payments.reduce((sum: number, p: any) => sum + Number(p.amount), 0);
     const totalExpenses = session.expenses.reduce((sum: number, e: any) => sum + Number(e.amount), 0);
-    const expectedBalance = Number(session.openingBalance) + totalIncome - totalExpenses;
+    const totalBankDeposits = session.bankDeposits.reduce((sum: number, d: any) => sum + Number(d.amount), 0);
+    const expectedBalance = Number(session.openingBalance) + totalIncome - totalExpenses - totalBankDeposits;
     const difference = Number(actualBalance) - expectedBalance;
 
     if (Math.abs(difference) < 0.01) {
@@ -876,6 +894,114 @@ router.post('/treasury/reopen-approve', async (req, res) => {
   }
 });
 
+// POST: توريد للبنك (إيداع بنكي)
+router.post('/treasury/bank-deposit', async (req, res) => {
+  try {
+    const { amount, bankAccountId, reference, notes } = req.body;
+    const userId = req.user!.userId;
+
+    if (!amount || Number(amount) <= 0) {
+      return res.status(400).json({ error: 'المبلغ يجب أن يكون أكبر من صفر' });
+    }
+
+    const today = new Date().toISOString().split('T')[0];
+    const session = await prisma.treasurySession.findUnique({ where: { date: today } });
+    if (!session || session.status !== 'open') {
+      return res.status(400).json({ error: 'يجب أن تكون الخزينة مفتوحة لتسجيل توريد بنكي' });
+    }
+
+    const bankAccount = await prisma.account.findUnique({ where: { id: bankAccountId } });
+    if (!bankAccount) {
+      return res.status(404).json({ error: 'حساب البنك غير موجود' });
+    }
+
+    const deposit = await prisma.bankDeposit.create({
+      data: {
+        amount: Number(amount),
+        bankAccountId,
+        reference,
+        notes,
+        sessionId: session.id,
+        createdBy: userId,
+        status: 'pending'
+      }
+    });
+
+    res.status(201).json(deposit);
+  } catch (error) {
+    console.error('Bank deposit error:', error);
+    res.status(400).json({ error: 'فشل تسجيل التوريد البنكي' });
+  }
+});
+
+// POST: اعتماد التوريد البنكي
+router.post('/treasury/bank-deposit/:id/approve', async (req, res) => {
+  try {
+    const userId = req.user!.userId;
+    const user = await prisma.user.findUnique({ where: { id: userId } });
+    if (!user || !['school_director', 'system_admin', 'head_accountant'].includes(user.role)) {
+      return res.status(403).json({ error: 'ليس لديك صلاحية لاعتماد التوريدات البنكية' });
+    }
+
+    const depositId = req.params.id;
+    const deposit = await prisma.bankDeposit.findUnique({
+      where: { id: depositId },
+      include: { bankAccount: true }
+    });
+
+    if (!deposit) return res.status(404).json({ error: 'التوريد غير موجود' });
+    if (deposit.status === 'approved') return res.status(400).json({ error: 'التوريد معتمد مسبقاً' });
+
+    const result = await prisma.$transaction(async (tx) => {
+      const updated = await tx.bankDeposit.update({
+        where: { id: depositId },
+        data: {
+          status: 'approved',
+          approvedBy: userId,
+          approvedAt: new Date()
+        }
+      });
+
+      // Journal Entry: Dr. Bank Account, Cr. Treasury (1001)
+      const cashAccount = await tx.account.findUnique({ where: { code: '1001' } });
+      if (cashAccount) {
+        const count = await tx.journalEntry.count();
+        const entryNumber = `JE-${new Date().getFullYear()}-${String(count + 1).padStart(6, '0')}`;
+        const today = new Date().toISOString().split('T')[0];
+        const periodId = await getActivePeriodId(tx as any, today);
+
+        await tx.journalEntry.create({
+          data: {
+            entryNumber,
+            entryDate: today,
+            description: `توريد للبنك (${updated.id.slice(0, 8)}) - ${deposit.bankAccount.name}`,
+            referenceType: 'bank_deposit',
+            referenceId: updated.id,
+            status: 'posted',
+            postedAt: new Date(),
+            postedBy: userId,
+            createdBy: userId,
+            periodId: periodId ?? undefined,
+            lines: {
+              create: [
+                { accountId: deposit.bankAccountId, debit: updated.amount, credit: 0, lineNumber: 1, description: 'إيداع نقدي معتمد' },
+                { accountId: cashAccount.id, debit: 0, credit: updated.amount, lineNumber: 2, description: 'نقص الخزينة بالتوريد' }
+              ]
+            }
+          }
+        });
+      }
+
+      return updated;
+    });
+
+    res.json(result);
+  } catch (error) {
+    console.error('Approve bank deposit error:', error);
+    res.status(500).json({ error: 'فشل اعتماد التوريد البنكي' });
+  }
+});
+
 // GET: تاريخ جلسات الخزينة (للتقارير)
 router.get('/treasury/sessions', async (req, res) => {
   try {
@@ -900,6 +1026,10 @@ router.get('/treasury/sessions/:id', async (req, res) => {
           where: { status: 'paid' },
           include: { account: true },
           orderBy: { createdAt: 'asc' }
+        },
+        bankDeposits: {
+          include: { bankAccount: true },
+          orderBy: { createdAt: 'asc' }
         }
       }
     });
@@ -907,9 +1037,10 @@ router.get('/treasury/sessions/:id', async (req, res) => {
 
     const totalIncome = session.payments.reduce((sum: number, p: any) => sum + Number(p.amount), 0);
     const totalExpenses = session.expenses.reduce((sum: number, e: any) => sum + Number(e.amount), 0);
-    const currentBalance = Number(session.openingBalance) + totalIncome - totalExpenses;
+    const totalBankDeposits = session.bankDeposits.reduce((sum: number, d: any) => sum + Number(d.amount), 0);
+    const currentBalance = Number(session.openingBalance) + totalIncome - totalExpenses - totalBankDeposits;
 
-    res.json({ session, totalIncome, totalExpenses, currentBalance });
+    res.json({ session, totalIncome, totalExpenses, totalBankDeposits, currentBalance });
   } catch (error) {
     res.status(500).json({ error: 'Failed to fetch session details' });
   }
