@@ -15,6 +15,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { useStudentsStore } from '@/stores/studentsStore';
 import { usePaymentsStore } from '@/stores/paymentsStore';
 import { useBusStore } from '@/stores/busStore';
+import { useDeliveryOrderStore } from '@/stores/deliveryOrderStore';
 import { useAuthStore } from '@/stores/authStore';
 import { formatCurrency, formatDateShort, stageLabels, paymentTypeLabels, paymentMethodLabels, generateId } from '@/lib/utils';
 import { getAuthHeaders } from '@/stores/authStore';
@@ -45,6 +46,7 @@ export default function StudentDetail() {
         inventoryTx: inventoryTxMap
     } = usePaymentsStore();
     const { subscriptions, routes } = useBusStore();
+    const { orders: deliveryOrders, fetchOrders: fetchDeliveryOrders } = useDeliveryOrderStore();
 
     useEffect(() => {
         fetchStudents();
@@ -54,6 +56,10 @@ export default function StudentDetail() {
             fetchStudentInventory(id);
         }
     }, [fetchStudents, fetchPayments, fetchStudentInstallments, fetchStudentInventory, id]);
+
+    useEffect(() => {
+        if (id) fetchDeliveryOrders({ studentId: id });
+    }, [id]);
 
     const student = students.find((s) => s.id === id);
     const studentPayments = useMemo(
@@ -73,6 +79,7 @@ export default function StudentDetail() {
         [inventoryTxMap, id]
     );
     const busSub = subscriptions.find((s) => s.studentId === id && s.status === 'active');
+    const studentDeliveries = deliveryOrders.filter(o => o.studentId === id);
 
     const [payDialogOpen, setPayDialogOpen] = useState(false);
     const [instDialogOpen, setInstDialogOpen] = useState(false);
@@ -139,9 +146,9 @@ export default function StudentDetail() {
         );
     }
 
-    const totalPaidFromPayments = useMemo(() => studentPayments.reduce((sum, p) => sum + p.amount, 0), [studentPayments]);
+    const totalPaidFromPayments = useMemo(() => studentPayments.reduce((sum, p) => sum + Number(p.amount), 0), [studentPayments]);
     const remaining = student.totalFees - totalPaidFromPayments;
-    const totalDebt = student.yearlyFinance?.reduce((sum, yf) => sum + (yf.totalFees - yf.paidAmount), 0) || remaining;
+    const totalDebt = student.yearlyFinance?.reduce((sum, yf) => sum + (Number(yf.totalFees) - Number(yf.paidAmount)), 0) || remaining;
     const paidPct = student.totalFees > 0 ? Math.round((totalPaidFromPayments / student.totalFees) * 100) : 0;
 
     // Initialize installment plan dialog
@@ -521,6 +528,7 @@ export default function StudentDetail() {
                     <TabsTrigger value="installments">خطط الأقساط</TabsTrigger>
                     <TabsTrigger value="history">السجل المالي للسنوات</TabsTrigger>
                     <TabsTrigger value="statement">كشف الحساب</TabsTrigger>
+                    <TabsTrigger value="deliveries">ما تم استلامه</TabsTrigger>
                 </TabsList>
 
                 <TabsContent value="payments">
@@ -683,6 +691,46 @@ export default function StudentDetail() {
                         installmentPlan={studentInstallments[0] ?? null}
                         inventoryTx={studentInventoryTx}
                     />
+                </TabsContent>
+
+                <TabsContent value="deliveries">
+                    <div className="space-y-3">
+                        {studentDeliveries.length === 0 ? (
+                            <p className="text-muted-foreground text-sm py-8 text-center">لا توجد طلبات تسليم لهذا الطالب</p>
+                        ) : (
+                            studentDeliveries.map(order => (
+                                <div key={order.id} className="border rounded-lg p-4 space-y-2">
+                                    <div className="flex justify-between items-center">
+                                        <p className="font-semibold text-sm">{order.code} — ترم {order.term}</p>
+                                        <Badge className={
+                                            order.status === 'delivered' ? 'bg-green-100 text-green-700' :
+                                            order.status === 'confirmed' ? 'bg-blue-100 text-blue-700' :
+                                            order.status === 'pending' ? 'bg-amber-100 text-amber-700' :
+                                            'bg-gray-100 text-gray-600'
+                                        }>
+                                            {order.status === 'delivered' ? 'مُسلَّم' :
+                                             order.status === 'confirmed' ? 'مؤكد' :
+                                             order.status === 'pending' ? 'معلق' : 'ملغي'}
+                                        </Badge>
+                                    </div>
+                                    <div className="space-y-1">
+                                        {order.items.map(item => (
+                                            <div key={item.id} className="flex justify-between text-xs text-muted-foreground">
+                                                <span className={item.returnedAt ? 'line-through' : ''}>
+                                                    {item.itemName} × {item.quantity}
+                                                    {item.returnedAt && ' (مُرجَع)'}
+                                                </span>
+                                                {item.deliveredAt && (
+                                                    <span>{new Date(item.deliveredAt).toLocaleDateString('ar-EG')}</span>
+                                                )}
+                                            </div>
+                                        ))}
+                                    </div>
+                                    <p className="text-xs text-muted-foreground">{order.chargeType === 'external' ? '💰 خارجي' : '📋 ضمن المصاريف'}</p>
+                                </div>
+                            ))
+                        )}
+                    </div>
                 </TabsContent>
             </Tabs>
 
