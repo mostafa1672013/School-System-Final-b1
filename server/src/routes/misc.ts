@@ -316,8 +316,29 @@ router.get('/rental-contracts', requireAuth, async (req, res) => {
 
 router.post('/rental-contracts', requireAuth, busTransportRoles, async (req, res) => {
   try {
+    const {
+      companyId, contractNumber, title, startDate, endDate,
+      monthlyFeePerBus, busesCount, includesDriver, includesFuel,
+      includesMaintenance, includesInsurance, paymentFrequency, paymentDueDay, status, notes,
+    } = req.body;
     const contract = await prisma.rentalContract.create({
-      data: req.body,
+      data: {
+        companyId,
+        contractNumber,
+        title: title || null,
+        startDate: new Date(startDate),
+        endDate: new Date(endDate),
+        monthlyFeePerBus,
+        busesCount,
+        includesDriver: includesDriver ?? true,
+        includesFuel: includesFuel ?? true,
+        includesMaintenance: includesMaintenance ?? true,
+        includesInsurance: includesInsurance ?? true,
+        paymentFrequency: paymentFrequency || 'monthly',
+        paymentDueDay: paymentDueDay ?? null,
+        status: status || 'active',
+        notes: notes || null,
+      },
       include: { company: true },
     });
     res.status(201).json(contract);
@@ -330,9 +351,29 @@ router.post('/rental-contracts', requireAuth, busTransportRoles, async (req, res
 router.patch('/rental-contracts/:id', requireAuth, busTransportRoles, async (req, res) => {
   const id = Array.isArray(req.params.id) ? req.params.id[0] : req.params.id;
   try {
+    const {
+      contractNumber, title, startDate, endDate,
+      monthlyFeePerBus, busesCount, includesDriver, includesFuel,
+      includesMaintenance, includesInsurance, paymentFrequency, paymentDueDay, status, notes,
+    } = req.body;
+    const data: Record<string, unknown> = {};
+    if (contractNumber !== undefined) data.contractNumber = contractNumber;
+    if (title !== undefined) data.title = title || null;
+    if (startDate !== undefined) data.startDate = new Date(startDate);
+    if (endDate !== undefined) data.endDate = new Date(endDate);
+    if (monthlyFeePerBus !== undefined) data.monthlyFeePerBus = monthlyFeePerBus;
+    if (busesCount !== undefined) data.busesCount = busesCount;
+    if (includesDriver !== undefined) data.includesDriver = includesDriver;
+    if (includesFuel !== undefined) data.includesFuel = includesFuel;
+    if (includesMaintenance !== undefined) data.includesMaintenance = includesMaintenance;
+    if (includesInsurance !== undefined) data.includesInsurance = includesInsurance;
+    if (paymentFrequency !== undefined) data.paymentFrequency = paymentFrequency;
+    if (paymentDueDay !== undefined) data.paymentDueDay = paymentDueDay ?? null;
+    if (status !== undefined) data.status = status;
+    if (notes !== undefined) data.notes = notes || null;
     const contract = await prisma.rentalContract.update({
       where: { id },
-      data: req.body,
+      data,
       include: { company: true },
     });
     res.json(contract);
