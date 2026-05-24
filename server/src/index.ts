@@ -24,6 +24,7 @@ import purchasingRouter from './routes/purchasing';
 import migrationRouter from './routes/migration';
 import gradeItemListsRouter from './routes/grade-item-lists';
 import deliveryOrdersRouter from './routes/delivery-orders';
+import distributionReportRouter from './routes/distribution-report';
 
 dotenv.config();
 
@@ -153,6 +154,9 @@ app.use('/api/grade-item-lists', gradeItemListsRouter);
 
 // Delivery Orders (create → confirm → deliver → return/cancel)
 app.use('/api/delivery-orders', deliveryOrdersRouter);
+
+// Distribution reports (grade-summary + per-student status)
+app.use('/api/distribution', distributionReportRouter);
 
 // Health check endpoint
 app.get('/health', (_req, res) => {
