@@ -349,6 +349,12 @@ export default function StudentDetail() {
                             {student.busFees > 0 && <div className="flex justify-between text-xs"><span className="text-muted-foreground">اشتراك باص</span><span className="font-medium tabular-nums">{formatCurrency(student.busFees)}</span></div>}
                             {student.otherFees > 0 && <div className="flex justify-between text-xs"><span className="text-muted-foreground">رسوم أخرى</span><span className="font-medium tabular-nums">{formatCurrency(student.otherFees)}</span></div>}
                         </div>
+                        {student.discountAmount > 0 && (
+                            <div className="flex justify-between text-sm text-orange-600">
+                                <span>الخصم المطبق ({Number(student.discountPercentage)}%)</span>
+                                <span className="font-bold tabular-nums">−{formatCurrency(student.discountAmount)}</span>
+                            </div>
+                        )}
                         <div className="flex justify-between text-sm"><span className="text-muted-foreground">إجمالي الرسوم المطلوبة</span><span className="font-bold tabular-nums">{formatCurrency(student.totalFees)}</span></div>
                         <div className="flex justify-between text-sm"><span className="text-muted-foreground">المدفوع (السنة الحالية)</span><span className="font-bold text-emerald-600 tabular-nums">{formatCurrency(totalPaidFromPayments)}</span></div>
                         <div className="flex justify-between text-sm border-t pt-2 mt-2"><span className="text-muted-foreground font-bold">إجمالي الرصيد المتبقي (غير مسدد)</span><span className="font-bold text-red-600 tabular-nums">{formatCurrency(totalDebt)}</span></div>
