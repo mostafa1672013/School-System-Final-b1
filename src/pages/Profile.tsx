@@ -66,7 +66,7 @@ export default function Profile() {
                         {formData.avatar ? (
                             <img src={formData.avatar} alt={user?.name} className="size-full object-cover" />
                         ) : (
-                            user?.name.charAt(0)
+                            user?.name?.charAt(0) || '?'
                         )}
                     </div>
                     <label className="absolute bottom-0 right-0 size-8 rounded-full bg-primary text-white flex items-center justify-center shadow-lg hover:scale-110 transition-transform cursor-pointer">

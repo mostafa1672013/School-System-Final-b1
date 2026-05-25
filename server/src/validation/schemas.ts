@@ -17,6 +17,13 @@ const RoleEnum = z.enum([
   'bus_supervisor',
 ]);
 
+export const PermissionSchema = z.object({
+  resource: z.string(),
+  canRead: z.boolean(),
+  canWrite: z.boolean(),
+  canDelete: z.boolean(),
+});
+
 export const CreateUserSchema = z.object({
   name: z.string().min(2, 'Name must be at least 2 characters').max(100, 'Name too long'),
   email: z.string().email('Invalid email address'),
@@ -24,6 +31,7 @@ export const CreateUserSchema = z.object({
   role: RoleEnum,
   active: z.boolean().default(true),
   discountLimitPercent: z.number().min(0).max(100).default(0),
+  permissions: z.array(PermissionSchema).optional(),
 });
 
 export const UpdateUserSchema = z.object({
@@ -33,6 +41,7 @@ export const UpdateUserSchema = z.object({
   discountLimitPercent: z.number().min(0).max(100).optional(),
   active: z.boolean().optional(),
   role: RoleEnum.optional(),
+  permissions: z.array(PermissionSchema).optional(),
 }).strict();
 
 // ---- Payment Schemas ----

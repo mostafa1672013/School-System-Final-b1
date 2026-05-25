@@ -8,6 +8,7 @@ import { useStudentsStore } from '@/stores/studentsStore';
 import { usePaymentsStore } from '@/stores/paymentsStore';
 import { formatCurrency, stageLabels, paymentMethodLabels, formatDateShort } from '@/lib/utils';
 import { generateId } from '@/lib/utils';
+import { getAuthHeaders } from '@/stores/authStore';
 
 export default function PaymentApprovals() {
     const { students, fetchStudents, addPaymentToStudent } = useStudentsStore();
@@ -60,7 +61,7 @@ export default function PaymentApprovals() {
         try {
             await fetch(`/api/students/${studentId}`, {
                 method: 'PATCH',
-                headers: { 'Content-Type': 'application/json' },
+                headers: getAuthHeaders(),
                 body: JSON.stringify({ paymentRequestStatus: 'rejected' }),
             });
             await fetchStudents();

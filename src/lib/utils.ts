@@ -7,7 +7,7 @@ export function cn(...inputs: ClassValue[]) {
 
 export function formatCurrency(amount: number | undefined | null): string {
   if (amount === undefined || amount === null) return '0 ج.م.';
-  const value = typeof amount === 'number' ? amount : 0;
+  const value = Number(amount);
   if (isNaN(value)) return '0 ج.م.';
   
   return new Intl.NumberFormat('ar-EG', {
@@ -63,6 +63,7 @@ export const paymentTypeLabels: Record<string, string> = {
   activities: 'أنشطة',
   other: 'أخرى',
   arrears: 'سداد متأخرات',
+  application_fee: 'رسوم ملف',
 };
 
 export const paymentMethodLabels: Record<string, string> = {

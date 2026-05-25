@@ -4,7 +4,7 @@ import { toast } from 'sonner';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
-import { useAuthStore } from '@/stores/authStore';
+import { useAuthStore, getAuthHeaders } from '@/stores/authStore';
 import { formatCurrency, roleLabels, stageLabels, trackLabels } from '@/lib/utils';
 import type { Student } from '@/types';
 
@@ -19,16 +19,16 @@ export default function DiscountApprovals() {
         if (!user?.id) return;
         try {
             const [discountRes, usersRes, userRes] = await Promise.all([
-                fetch(`/api/admission/pending-discounts?approverId=${user.id}`),
-                fetch('/api/users'),
-                fetch(`/api/users/${user.id}`)
+                fetch(`/api/admission/pending-discounts?approverId=${user.id}`, { headers: getAuthHeaders() }),
+                fetch('/api/users', { headers: getAuthHeaders() }),
+                fetch(`/api/users/${user.id}`, { headers: getAuthHeaders() })
             ]);
-            const discountData = await discountRes.json();
-            const usersData = await usersRes.json();
-            const userData = await userRes.json();
-            setRequests(discountData);
-            setAllUsers(usersData);
-            setUserLimit(userData.discountLimitPercent || 0);
+            const discountData = discountRes.ok ? await discountRes.json() : [];
+            const usersData = usersRes.ok ? await usersRes.json() : [];
+            const userData = userRes.ok ? await userRes.json() : {};
+            setRequests(Array.isArray(discountData) ? discountData : []);
+            setAllUsers(Array.isArray(usersData) ? usersData : []);
+            setUserLimit(userData?.discountLimitPercent || 0);
         } catch (error) {
             console.error('Failed to fetch requests');
         } finally {
@@ -57,7 +57,7 @@ export default function DiscountApprovals() {
         try {
             const response = await fetch(`/api/admission/action-discount/${studentId}`, {
                 method: 'PATCH',
-                headers: { 'Content-Type': 'application/json' },
+                headers: getAuthHeaders(),
                 body: JSON.stringify({ 
                     status, 
                     approvedBy: `${user?.name} (${roleLabels[user?.role || ''] || user?.role})`,

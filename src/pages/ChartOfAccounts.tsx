@@ -45,12 +45,15 @@ function AccountRow({
   account,
   depth,
   search,
+  allAccounts,
 }: {
   account: Account;
   depth: number;
   search: string;
+  allAccounts: Account[];
 }) {
-  const hasChildren = account.subAccounts && account.subAccounts.length > 0;
+  const subAccounts = useMemo(() => allAccounts.filter(a => a.parentId === account.id), [allAccounts, account.id]);
+  const hasChildren = subAccounts.length > 0;
   const [expanded, setExpanded] = useState(depth < 2);
 
   const matchesSearch = !search ||
@@ -58,7 +61,7 @@ function AccountRow({
     account.code.includes(search) ||
     (account.nameEn?.toLowerCase().includes(search.toLowerCase()) ?? false);
 
-  const childrenMatchSearch = hasChildren && account.subAccounts!.some(child =>
+  const childrenMatchSearch = hasChildren && subAccounts.some(child =>
     child.name.includes(search) || child.code.includes(search)
   );
 
@@ -118,8 +121,8 @@ function AccountRow({
           )}
         </td>
       </tr>
-      {expanded && hasChildren && account.subAccounts!.map(child => (
-        <AccountRow key={child.id} account={child} depth={depth + 1} search={search} />
+      {expanded && hasChildren && subAccounts.map(child => (
+        <AccountRow key={child.id} account={child} depth={depth + 1} search={search} allAccounts={allAccounts} />
       ))}
     </>
   );
@@ -278,6 +281,7 @@ export default function ChartOfAccounts() {
                       account={account}
                       depth={0}
                       search={search}
+                      allAccounts={accounts}
                     />
                   ))}
                   {filteredTop.length === 0 && (

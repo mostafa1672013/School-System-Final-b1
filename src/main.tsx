@@ -5,6 +5,29 @@ import { ErrorBoundary } from 'react-error-boundary';
 import App from './App';
 import './index.css';
 
+// Auto-heal corrupted localStorage data for all stores
+try {
+  const storesToCheck = [
+    { key: 'school-students', arrayProp: 'students' },
+    { key: 'school-payments', arrayProp: 'payments' },
+    { key: 'school-accounting', arrayProp: 'expenses' },
+    { key: 'school-inventory', arrayProp: 'items' },
+    { key: 'school-bus', arrayProp: 'buses' }
+  ];
+  storesToCheck.forEach(({ key, arrayProp }) => {
+    const data = localStorage.getItem(key);
+    if (data) {
+      const parsed = JSON.parse(data);
+      if (parsed.state && parsed.state[arrayProp] && !Array.isArray(parsed.state[arrayProp])) {
+        console.warn(`Corrupted ${key} data detected. Clearing cache...`);
+        localStorage.removeItem(key);
+      }
+    }
+  });
+} catch (e) {
+  // Ignore
+}
+
 function ErrorFallback({ error, resetErrorBoundary }: { error: Error; resetErrorBoundary: () => void }) {
   return (
     <div className="min-h-screen flex items-center justify-center bg-background p-4" dir="rtl">

@@ -22,8 +22,8 @@ export default function YearEndReport({ academicYear, students, payments }: Prop
     (s) => s.academicYear === academicYear && ['admitted', 'active'].includes(s.status)
   );
 
-  const totalFees = activeStudents.reduce((sum, s) => sum + s.totalFees, 0);
-  const totalPaid = activeStudents.reduce((sum, s) => sum + s.paidAmount, 0);
+  const totalFees = activeStudents.reduce((sum, s) => sum + Number(s.totalFees), 0);
+  const totalPaid = activeStudents.reduce((sum, s) => sum + Number(s.paidAmount), 0);
   const totalOutstanding = totalFees - totalPaid;
   const collectionRate = totalFees > 0 ? Math.round((totalPaid / totalFees) * 100) : 0;
 
@@ -32,15 +32,15 @@ export default function YearEndReport({ academicYear, students, payments }: Prop
     return {
       stage,
       count: stageStudents.length,
-      fees: stageStudents.reduce((sum, s) => sum + s.totalFees, 0),
-      paid: stageStudents.reduce((sum, s) => sum + s.paidAmount, 0),
-      outstanding: stageStudents.reduce((sum, s) => sum + Math.max(0, s.totalFees - s.paidAmount), 0),
+      fees: stageStudents.reduce((sum, s) => sum + Number(s.totalFees), 0),
+      paid: stageStudents.reduce((sum, s) => sum + Number(s.paidAmount), 0),
+      outstanding: stageStudents.reduce((sum, s) => sum + Math.max(0, Number(s.totalFees) - Number(s.paidAmount)), 0),
     };
   }).filter((r) => r.count > 0);
 
   const nonPayers = activeStudents
-    .filter((s) => s.paidAmount < s.totalFees)
-    .sort((a, b) => (b.totalFees - b.paidAmount) - (a.totalFees - a.paidAmount));
+    .filter((s) => Number(s.paidAmount) < Number(s.totalFees))
+    .sort((a, b) => (Number(b.totalFees) - Number(b.paidAmount)) - (Number(a.totalFees) - Number(a.paidAmount)));
 
   const handlePrint = () => window.print();
 
@@ -143,7 +143,7 @@ export default function YearEndReport({ academicYear, students, payments }: Prop
                       <TableCell className="font-medium">{s.name}</TableCell>
                       <TableCell>{stageLabels[s.stage]}</TableCell>
                       <TableCell className="tabular-nums text-red-600 font-bold">
-                        {formatCurrency(s.totalFees - s.paidAmount)}
+                        {formatCurrency(Number(s.totalFees) - Number(s.paidAmount))}
                       </TableCell>
                     </TableRow>
                   ))}

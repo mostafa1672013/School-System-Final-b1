@@ -22,16 +22,16 @@ function calcPromoFees(
   student: Student,
   matchedFee: StageFee | undefined | null
 ): { arrears: number; baseNewFees: number; badgeDiscount: number; netNewFees: number; totalFees: number } {
-  const arrears = Math.max(0, student.totalFees - student.paidAmount);
+  const arrears = Math.max(0, Number(student.totalFees) - Number(student.paidAmount));
   const baseNewFees = matchedFee
-    ? matchedFee.tuitionFees + matchedFee.booksFees + matchedFee.uniformFees +
-      (matchedFee.additionalFees?.filter((f: AdditionalFee) => f.isMandatory).reduce((sum, f) => sum + f.amount, 0) ?? 0)
-    : student.tuitionFees + student.booksFees + student.uniformFees;
+    ? Number(matchedFee.tuitionFees) + Number(matchedFee.booksFees) + Number(matchedFee.uniformFees) +
+      (matchedFee.additionalFees?.filter((f: AdditionalFee) => f.isMandatory).reduce((sum, f) => sum + Number(f.amount), 0) ?? 0)
+    : Number(student.tuitionFees) + Number(student.booksFees) + Number(student.uniformFees);
   const badgeDiscount = student.badge
     ? Math.round(baseNewFees * (student.badge.discountPercentage / 100) * 100) / 100
     : 0;
   const netNewFees = baseNewFees - badgeDiscount;
-  const totalFees = netNewFees + student.busFees + student.otherFees + arrears;
+  const totalFees = netNewFees + Number(student.busFees) + Number(student.otherFees) + arrears;
   return { arrears, baseNewFees, badgeDiscount, netNewFees, totalFees };
 }
 

@@ -99,10 +99,12 @@ export default function Payments() {
     }, [expenses]);
 
     const pendingApplicationFees = useMemo(() => {
+        if (!Array.isArray(students)) return [];
         return students.filter(s => s.status === 'applied' || s.status === 'failed');
     }, [students]);
 
     const pendingTuitionFees = useMemo(() => {
+        if (!Array.isArray(students)) return [];
         return students.filter(s => s.paymentRequestStatus === 'pending_treasury' && s.pendingPaymentAmount && s.pendingPaymentAmount > 0);
     }, [students]);
 
@@ -119,10 +121,10 @@ export default function Payments() {
 
     const stats = useMemo(() => {
         const today = new Date().toISOString().split('T')[0];
-        const validPayments = payments.filter(p => p && typeof p.amount === 'number');
+        const validPayments = payments.filter(p => p != null);
         const todayPayments = validPayments.filter((p) => p.date === today);
-        const totalCollected = validPayments.reduce((s, p) => s + p.amount, 0);
-        const todayTotal = todayPayments.reduce((s, p) => s + p.amount, 0);
+        const totalCollected = validPayments.reduce((s, p) => s + Number(p.amount), 0);
+        const todayTotal = todayPayments.reduce((s, p) => s + Number(p.amount), 0);
         return { totalCollected, todayTotal, todayCount: todayPayments.length, totalCount: validPayments.length };
     }, [payments]);
 

@@ -6,7 +6,7 @@ import { Input } from '@/components/ui/input';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Badge } from '@/components/ui/badge';
-import { useAuthStore } from '@/stores/authStore';
+import { useAuthStore, getAuthHeaders } from '@/stores/authStore';
 import { roleLabels } from '@/lib/utils';
 import type { User } from '@/types';
 
@@ -22,10 +22,10 @@ export default function DiscountSettings() {
 
     const fetchUsers = async () => {
         try {
-            const response = await fetch('/api/users');
+            const response = await fetch('/api/users', { headers: getAuthHeaders() });
             if (!response.ok) throw new Error();
             const data = await response.json();
-            setUsers(data);
+            setUsers(Array.isArray(data) ? data : []);
             setLoading(false);
         } catch (error) {
             toast.error('فشل في تحميل قائمة المستخدمين');
@@ -37,7 +37,7 @@ export default function DiscountSettings() {
         try {
             const response = await fetch(`/api/users/${userId}`, {
                 method: 'PATCH',
-                headers: { 'Content-Type': 'application/json' },
+                headers: getAuthHeaders(),
                 body: JSON.stringify({ discountLimitPercent: limit }),
             });
             if (response.ok) {
@@ -117,7 +117,7 @@ export default function DiscountSettings() {
                                     <TableCell className="pr-6">
                                         <div className="flex items-center gap-3">
                                             <div className="size-9 rounded-full bg-primary/10 flex items-center justify-center text-primary font-bold">
-                                                {u.name.charAt(0)}
+                                                {u.name?.charAt(0) || '?'}
                                             </div>
                                             <div className="flex flex-col">
                                                 <span className="font-bold">{u.name}</span>

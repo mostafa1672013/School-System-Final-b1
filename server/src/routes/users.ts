@@ -39,6 +39,16 @@ router.post('/login', validate(LoginSchema), async (req, res) => {
     const updatedUser = await prisma.user.update({
       where: { id: user.id },
       data: { isOnline: true, lastLoginAt: new Date() },
+      include: {
+        permissions: {
+          select: {
+            resource: true,
+            canRead: true,
+            canWrite: true,
+            canDelete: true,
+          }
+        }
+      }
     });
 
     const { password: _, ...userWithoutPassword } = updatedUser;
@@ -90,6 +100,14 @@ router.get('/', async (req, res) => {
         lastLoginAt: true,
         lastLogoutAt: true,
         createdAt: true,
+        permissions: {
+          select: {
+            resource: true,
+            canRead: true,
+            canWrite: true,
+            canDelete: true,
+          }
+        }
       },
       orderBy: { createdAt: 'desc' }
     });
@@ -116,6 +134,14 @@ router.get('/:id', async (req, res) => {
         lastLoginAt: true,
         lastLogoutAt: true,
         createdAt: true,
+        permissions: {
+          select: {
+            resource: true,
+            canRead: true,
+            canWrite: true,
+            canDelete: true,
+          }
+        }
       }
     });
     if (!user) return res.status(404).json({ error: 'User not found' });
@@ -128,10 +154,16 @@ router.get('/:id', async (req, res) => {
 // Create user (admin only, with validation and password hashing)
 router.post('/', requireAuth, adminOnly, validate(CreateUserSchema), async (req, res) => {
   try {
-    const { password, ...rest } = req.body;
+    const { password, permissions, ...rest } = req.body;
     const hashedPassword = await bcrypt.hash(password, 12);
     const user = await prisma.user.create({
-      data: { ...rest, password: hashedPassword },
+      data: { 
+        ...rest, 
+        password: hashedPassword,
+        permissions: {
+          create: permissions || []
+        }
+      },
       select: {
         id: true,
         name: true,
@@ -140,6 +172,14 @@ router.post('/', requireAuth, adminOnly, validate(CreateUserSchema), async (req,
         active: true,
         discountLimitPercent: true,
         createdAt: true,
+        permissions: {
+          select: {
+            resource: true,
+            canRead: true,
+            canWrite: true,
+            canDelete: true,
+          }
+        }
       }
     });
     res.status(201).json(user);
@@ -165,6 +205,8 @@ router.patch('/:id', requireAuth, validate(UpdateUserSchema), async (req, res) =
     const safeData: any = Object.fromEntries(
       Object.entries(req.body).filter(([k]) => allowedFields.includes(k))
     );
+
+    const permissions = req.body.permissions;
 
     // Handle password hashing if password is in the update
     if (req.body.password) {
@@ -201,8 +243,60 @@ router.patch('/:id', requireAuth, validate(UpdateUserSchema), async (req, res) =
         lastLoginAt: true,
         lastLogoutAt: true,
         createdAt: true,
+        permissions: {
+          select: {
+            resource: true,
+            canRead: true,
+            canWrite: true,
+            canDelete: true,
+          }
+        }
       }
     });
+
+    if (permissions && Array.isArray(permissions)) {
+      // Re-create permissions
+      await prisma.userPermission.deleteMany({ where: { userId: id } });
+      if (permissions.length > 0) {
+        await prisma.userPermission.createMany({
+          data: permissions.map((p: any) => ({
+            userId: id,
+            resource: p.resource,
+            canRead: p.canRead,
+            canWrite: p.canWrite,
+            canDelete: p.canDelete
+          }))
+        });
+      }
+      
+      // Re-fetch user to include the updated permissions
+      const updatedUser = await prisma.user.findUnique({
+        where: { id },
+        select: {
+          id: true,
+          name: true,
+          email: true,
+          role: true,
+          active: true,
+          discountLimitPercent: true,
+          isOnline: true,
+          lastLoginAt: true,
+          lastLogoutAt: true,
+          createdAt: true,
+          permissions: {
+            select: {
+              resource: true,
+              canRead: true,
+              canWrite: true,
+              canDelete: true,
+            }
+          }
+        }
+      });
+      console.log('✅ تم تحديث المستخدم والصلاحيات بنجاح');
+      return res.json(updatedUser);
+    }
+
     console.log('✅ تم تحديث المستخدم بنجاح');
     res.json(user);
   } catch (error) {

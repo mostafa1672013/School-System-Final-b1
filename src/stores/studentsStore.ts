@@ -56,8 +56,18 @@ export const useStudentsStore = create<StudentsState>()(
         set({ isLoading: true });
         try {
           const response = await fetch('/api/students', { headers: getAuthHeaders() });
+          if (!response.ok) {
+            console.error('Failed to fetch students:', response.status);
+            set({ isLoading: false });
+            return;
+          }
           const data = await response.json();
-          set({ students: data, isLoading: false });
+          if (Array.isArray(data)) {
+            set({ students: data, isLoading: false });
+          } else {
+            console.error('Expected array of students but got:', data);
+            set({ isLoading: false });
+          }
         } catch (error) {
           console.error('Fetch students error:', error);
           set({ isLoading: false });

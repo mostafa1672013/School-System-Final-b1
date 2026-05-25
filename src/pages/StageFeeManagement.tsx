@@ -31,7 +31,7 @@ export default function StageFeeManagement() {
             totalConfigs: stageFees.length,
             currentYearConfigs: currentYearConfigs.length,
             avgTuition: currentYearConfigs.length > 0 
-                ? currentYearConfigs.reduce((sum, f) => sum + f.tuitionFees, 0) / currentYearConfigs.length 
+                ? currentYearConfigs.reduce((sum, f) => sum + Number(f.tuitionFees), 0) / currentYearConfigs.length
                 : 0
         };
     }, [stageFees]);

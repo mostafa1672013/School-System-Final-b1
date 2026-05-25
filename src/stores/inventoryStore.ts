@@ -5,6 +5,7 @@ import type { InventoryItem, InventoryTransaction, ItemCategory } from '@/types'
 interface ReceiveStockPayload {
   itemId: string;
   quantity: number;
+  subType: 'adjustment' | 'opening_balance';
   supplierName?: string;
   unitCost?: number;
   notes?: string;

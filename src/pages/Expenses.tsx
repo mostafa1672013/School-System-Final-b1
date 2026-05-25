@@ -18,6 +18,16 @@ export default function Expenses() {
     
     const expenseAccounts = useMemo(() => accounts.filter(a => a.type === 'Expense'), [accounts]);
     
+    const displayedExpenses = useMemo(() => {
+        if (!user) return [];
+        // Admin, Director, and Head Accountant see all expenses
+        if (['system_admin', 'school_director', 'head_accountant'].includes(user.role)) {
+            return expenses;
+        }
+        // Others only see expenses they requested
+        return expenses.filter(exp => exp.requestedBy === user.name);
+    }, [expenses, user]);
+
     const [form, setForm] = useState({
         amount: '',
         date: new Date().toISOString().split('T')[0],
@@ -169,9 +179,9 @@ export default function Expenses() {
                         </tr>
                     </thead>
                     <tbody>
-                        {expenses.length === 0 ? (
+                        {displayedExpenses.length === 0 ? (
                             <tr><td colSpan={7} className="p-8 text-center text-slate-500">لا توجد مصروفات مسجلة</td></tr>
-                        ) : expenses.map((exp) => {
+                        ) : displayedExpenses.map((exp) => {
                             const conf = statusConfig[exp.status] || statusConfig.pending_approval;
                             const Icon = conf.icon;
                             return (

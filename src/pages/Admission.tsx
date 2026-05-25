@@ -12,7 +12,7 @@ import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/com
 import { useAdmissionStore } from '@/stores/admissionStore';
 import { useStudentsStore } from '@/stores/studentsStore';
 import { useBusStore } from '@/stores/busStore';
-import { useAuthStore } from '@/stores/authStore';
+import { useAuthStore, getAuthHeaders } from '@/stores/authStore';
 import { Link } from 'react-router-dom';
 import { formatCurrency, stageLabels, statusLabels, trackLabels, gradeOptions, academicYears, currentAcademicYear, roleLabels } from '@/lib/utils';
 import type { Stage, Track, Student, StudentStatus } from '@/types';
@@ -165,7 +165,7 @@ function AdmissionDetails({ student, onUpdate }: { student: Student, onUpdate: (
         try {
             const res = await fetch(`/api/admission/approve/${student.id}`, {
                 method: 'PATCH',
-                headers: { 'Content-Type': 'application/json' },
+                headers: getAuthHeaders(),
                 body: JSON.stringify({ approverId: user?.id })
             });
             if (!res.ok) {
@@ -359,9 +359,13 @@ function FeeSetupForm({ student, config, routes, onSubmit }: { student: Student,
         fetchStageFees();
         // Fetch latest user limit from backend
         if (user?.id) {
-            fetch(`/api/users/${user.id}`)
-                .then(res => res.json())
-                .then(data => setUserLimit(data.discountLimitPercent || 0))
+            fetch(`/api/users/${user.id}`, { headers: getAuthHeaders() })
+                .then(res => res.ok ? res.json() : null)
+                .then(data => {
+                    if (data && typeof data === 'object' && !data.error) {
+                        setUserLimit(data.discountLimitPercent || 0);
+                    }
+                })
                 .catch(err => console.error('Failed to fetch user limit'));
         }
     }, [fetchStageFees, user?.id]);
@@ -383,9 +387,20 @@ function FeeSetupForm({ student, config, routes, onSubmit }: { student: Student,
     const [selectedApprover, setSelectedApprover] = useState<string>('');
 
     useEffect(() => {
-        fetch('/api/users')
-            .then(res => res.json())
-            .then(data => setAllUsers(data));
+        fetch('/api/users', { headers: getAuthHeaders() })
+            .then(res => res.ok ? res.json() : [])
+            .then(data => {
+                if (Array.isArray(data)) {
+                    setAllUsers(data);
+                } else {
+                    console.error('Invalid users response format:', data);
+                    setAllUsers([]);
+                }
+            })
+            .catch(err => {
+                console.error('Failed to fetch users:', err);
+                setAllUsers([]);
+            });
     }, []);
 
     const handleDiscountChange = (val: number, type: 'amount' | 'percentage') => {

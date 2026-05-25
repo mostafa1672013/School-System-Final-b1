@@ -16,13 +16,54 @@ import { Avatar, AvatarFallback } from '@/components/ui/avatar';
 import { useUsersStore } from '@/stores/usersStore';
 import { useUserPresence } from '@/hooks/useUserPresence';
 import { roleLabels } from '@/lib/utils';
-import type { UserRole } from '@/types';
+import type { UserRole, UserPermission } from '@/types';
+
+const systemResources = [
+    { key: 'dashboard', label: 'لوحة التحكم' },
+    { key: 'students', label: 'إدارة الطلاب' },
+    { key: 'admission', label: 'القبول والتسجيل' },
+    { key: 'student-promotion', label: 'نقل الطلاب' },
+    { key: 'year-management', label: 'إدارة السنة الدراسية' },
+    { key: 'payments', label: 'المدفوعات' },
+    { key: 'treasury', label: 'إدارة الخزينة' },
+    { key: 'inventory', label: 'إدارة المخزن' },
+    { key: 'suppliers', label: 'سجل الموردين' },
+    { key: 'purchasing', label: 'دورة المشتريات' },
+    { key: 'bus', label: 'إدارة الباصات' },
+    { key: 'reports', label: 'التقارير' },
+    { key: 'stage-fees', label: 'الهياكل المالية' },
+    { key: 'discount-settings', label: 'صلاحيات الخصم' },
+    { key: 'badge-settings', label: 'إعدادات الشارات' },
+    { key: 'discount-approvals', label: 'اعتمادات الخصومات' },
+    { key: 'payment-approvals', label: 'اعتمادات التحويلات' },
+    { key: 'accounts', label: 'شجرة الحسابات' },
+    { key: 'journal-entries', label: 'القيود المحاسبية' },
+    { key: 'accounting-reports', label: 'التقارير المحاسبية' },
+    { key: 'accounting-periods', label: 'الفترات المحاسبية' },
+    { key: 'expense-permissions', label: 'حدود الصرف' },
+    { key: 'expenses', label: 'المصروفات' },
+    { key: 'expense-approvals', label: 'اعتماد المصروفات' },
+    { key: 'users', label: 'إدارة المستخدمين' },
+    { key: 'system-logs', label: 'سجلات النظام' },
+    { key: 'data-migration', label: 'هجرة البيانات' },
+    { key: 'database', label: 'إدارة قاعدة البيانات' },
+];
+
+const getDefaultPermissions = (): UserPermission[] => {
+    return systemResources.map(r => ({
+        resource: r.key,
+        canRead: false,
+        canWrite: false,
+        canDelete: false
+    }));
+};
 
 const roleOptions: { value: UserRole; label: string }[] = [
     { value: 'system_admin', label: 'مدير النظام' },
     { value: 'school_director', label: 'مدير المدرسة' },
     { value: 'head_accountant', label: 'رئيس الحسابات' },
-    { value: 'accountant', label: 'محاسب' },
+    { value: 'accountant', label: 'محاسب عام' },
+    { value: 'treasury_accountant', label: 'محاسب خزينة' },
     { value: 'warehouse_keeper', label: 'أمين المخزن' },
     { value: 'bus_supervisor', label: 'مشرف الباصات' },
 ];
@@ -32,6 +73,7 @@ const roleBadgeColors: Record<string, string> = {
     school_director: 'bg-purple-100 text-purple-700',
     head_accountant: 'bg-teal-100 text-teal-700',
     accountant: 'bg-blue-100 text-blue-700',
+    treasury_accountant: 'bg-cyan-100 text-cyan-700',
     warehouse_keeper: 'bg-amber-100 text-amber-700',
     bus_supervisor: 'bg-emerald-100 text-emerald-700',
 };
@@ -50,8 +92,8 @@ export default function Users() {
     const [deactivateConfirmOpen, setDeactivateConfirmOpen] = useState(false);
 
     // Form states
-    const [form, setForm] = useState({ name: '', email: '', role: 'accountant' as UserRole, password: '123456' });
-    const [editForm, setEditForm] = useState({ name: '', email: '', role: 'accountant' as UserRole });
+    const [form, setForm] = useState({ name: '', email: '', role: 'accountant' as UserRole, password: '12345678', permissions: getDefaultPermissions() });
+    const [editForm, setEditForm] = useState({ name: '', email: '', role: 'accountant' as UserRole, permissions: getDefaultPermissions() });
     const [passwordForm, setPasswordForm] = useState({ password: '', confirm: '' });
 
     // UI states
@@ -91,7 +133,7 @@ export default function Users() {
         await addUser(form);
         setIsSubmitting(false);
         setDialogOpen(false);
-        setForm({ name: '', email: '', role: 'accountant', password: '123456' });
+        setForm({ name: '', email: '', role: 'accountant', password: '12345678', permissions: getDefaultPermissions() });
     };
 
     const handleEdit = async (e: React.FormEvent) => {
@@ -106,7 +148,15 @@ export default function Users() {
 
     const openEdit = (user: any) => {
         setEditingUserId(user.id);
-        setEditForm({ name: user.name, email: user.email, role: user.role });
+        
+        // Merge existing permissions with defaults
+        const currentPerms = user.permissions || [];
+        const mergedPerms = systemResources.map(res => {
+            const existing = currentPerms.find((p: any) => p.resource === res.key);
+            return existing || { resource: res.key, canRead: false, canWrite: false, canDelete: false };
+        });
+
+        setEditForm({ name: user.name, email: user.email, role: user.role, permissions: mergedPerms });
         setEditDialogOpen(true);
     };
 
@@ -152,8 +202,8 @@ export default function Users() {
             toast.error('كلمة المرور وتأكيدها غير متطابقين');
             return;
         }
-        if (passwordForm.password.length < 6) {
-            toast.error('كلمة المرور يجب أن تكون 6 أحرف على الأقل');
+        if (passwordForm.password.length < 8) {
+            toast.error('كلمة المرور يجب أن تكون 8 أحرف على الأقل');
             return;
         }
         if (!targetUser) return;
@@ -163,6 +213,85 @@ export default function Users() {
         setPasswordDialogOpen(false);
         setTargetUser(null);
     };
+
+    const handlePermissionChange = (isEdit: boolean, resourceKey: string, field: 'canRead' | 'canWrite' | 'canDelete', value: boolean) => {
+        const targetForm = isEdit ? editForm : form;
+        const setTargetForm = isEdit ? setEditForm : setForm;
+
+        const updatedPermissions = targetForm.permissions.map(p => {
+            if (p.resource === resourceKey) {
+                const newPerm = { ...p, [field]: value };
+                // If granting write or delete, automatically grant read
+                if ((field === 'canWrite' || field === 'canDelete') && value) {
+                    newPerm.canRead = true;
+                }
+                // If revoking read, also revoke write and delete
+                if (field === 'canRead' && !value) {
+                    newPerm.canWrite = false;
+                    newPerm.canDelete = false;
+                }
+                return newPerm;
+            }
+            return p;
+        });
+
+        setTargetForm(prev => ({ ...prev, permissions: updatedPermissions }));
+    };
+
+    const PermissionsTable = ({ permissions, isEdit }: { permissions: UserPermission[], isEdit: boolean }) => (
+        <div className="mt-4 border rounded-lg overflow-hidden">
+            <div className="bg-muted px-4 py-2 text-sm font-semibold border-b flex justify-between items-center">
+                <span>الصلاحيات المخصصة للمستخدم</span>
+                <span className="text-xs font-normal text-muted-foreground">حدد الصلاحيات بدقة</span>
+            </div>
+            <div className="max-h-[300px] overflow-y-auto">
+                <table className="w-full text-sm">
+                    <thead className="sticky top-0 bg-card border-b z-10 shadow-sm">
+                        <tr>
+                            <th className="text-right p-3 font-semibold">الشاشة / الوحدة</th>
+                            <th className="text-center p-3 font-semibold text-blue-600">رؤية</th>
+                            <th className="text-center p-3 font-semibold text-amber-600">إضافة/تعديل</th>
+                            <th className="text-center p-3 font-semibold text-red-600">حذف</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {systemResources.map((res, index) => {
+                            const perm = permissions.find(p => p.resource === res.key) || { canRead: false, canWrite: false, canDelete: false };
+                            return (
+                                <tr key={res.key} className={`border-b last:border-0 ${index % 2 === 0 ? 'bg-muted/10' : ''} hover:bg-muted/30`}>
+                                    <td className="p-3 font-medium">{res.label}</td>
+                                    <td className="p-3 text-center">
+                                        <input 
+                                            type="checkbox" 
+                                            className="size-4 cursor-pointer accent-blue-600"
+                                            checked={perm.canRead}
+                                            onChange={(e) => handlePermissionChange(isEdit, res.key, 'canRead', e.target.checked)}
+                                        />
+                                    </td>
+                                    <td className="p-3 text-center">
+                                        <input 
+                                            type="checkbox" 
+                                            className="size-4 cursor-pointer accent-amber-600"
+                                            checked={perm.canWrite}
+                                            onChange={(e) => handlePermissionChange(isEdit, res.key, 'canWrite', e.target.checked)}
+                                        />
+                                    </td>
+                                    <td className="p-3 text-center">
+                                        <input 
+                                            type="checkbox" 
+                                            className="size-4 cursor-pointer accent-red-600"
+                                            checked={perm.canDelete}
+                                            onChange={(e) => handlePermissionChange(isEdit, res.key, 'canDelete', e.target.checked)}
+                                        />
+                                    </td>
+                                </tr>
+                            );
+                        })}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    );
 
     return (
         <div className="space-y-6">
@@ -187,9 +316,9 @@ export default function Users() {
                             <Plus className="size-4 ml-2" />إضافة مستخدم
                         </Button>
                     </DialogTrigger>
-                    <DialogContent>
+                    <DialogContent className="max-w-3xl max-h-[90vh] overflow-y-auto">
                         <DialogHeader>
-                            <DialogTitle className="font-[Noto_Kufi_Arabic]">إضافة مستخدم جديد</DialogTitle>
+                            <DialogTitle className="font-[Noto_Kufi_Arabic]">إضافة مستخدم جديد وصلاحياته</DialogTitle>
                         </DialogHeader>
                         <form onSubmit={handleAdd} className="space-y-4">
                             <div className="grid grid-cols-2 gap-4">
@@ -216,10 +345,14 @@ export default function Users() {
                                 </div>
                                 <div className="space-y-2">
                                     <Label>كلمة المرور</Label>
-                                    <Input required value={form.password} onChange={(e) => setForm({ ...form, password: e.target.value })} />
+                                    <Input required minLength={8} value={form.password} onChange={(e) => setForm({ ...form, password: e.target.value })} />
                                 </div>
                             </div>
-                            <div className="flex justify-end gap-3">
+                            
+                            {/* Add User Permissions Matrix */}
+                            <PermissionsTable permissions={form.permissions} isEdit={false} />
+
+                            <div className="flex justify-end gap-3 pt-4 border-t">
                                 <Button type="button" variant="outline" onClick={() => setDialogOpen(false)} disabled={isSubmitting}>إلغاء</Button>
                                 <Button type="submit" disabled={isSubmitting}>
                                     {isSubmitting && <Loader2 className="size-4 ml-2 animate-spin" />}
@@ -302,13 +435,17 @@ export default function Users() {
                         </thead>
                         <tbody>
                             {[
-                                { page: 'لوحة التحكم', access: [true, true, true, true, true, true] },
-                                { page: 'الطلاب', access: [true, true, true, true, false, false] },
-                                { page: 'المدفوعات', access: [true, true, true, true, false, false] },
-                                { page: 'المخزن', access: [true, true, false, false, true, false] },
-                                { page: 'الباصات', access: [true, true, false, false, false, true] },
-                                { page: 'التقارير', access: [true, true, true, false, false, false] },
-                                { page: 'المستخدمين', access: [true, false, false, false, false, false] },
+                                { page: 'لوحة التحكم', access: [true, true, true, true, true, true, true] },
+                                { page: 'إدارة الطلاب والقبول', access: [true, true, true, true, false, false, false] },
+                                { page: 'الخزينة والمدفوعات', access: [true, true, true, true, true, false, false] },
+                                { page: 'الخصومات والاعتمادات', access: [true, true, true, false, false, false, false] },
+                                { page: 'الحسابات العامة والقيود', access: [true, true, true, false, false, false, false] },
+                                { page: 'المصروفات', access: [true, true, true, true, true, false, false] },
+                                { page: 'دورة المشتريات', access: [true, true, true, true, false, true, false] },
+                                { page: 'المخازن والموردين', access: [true, true, false, false, false, true, false] },
+                                { page: 'الباصات', access: [true, true, false, false, false, false, true] },
+                                { page: 'التقارير', access: [true, true, true, false, false, true, true] },
+                                { page: 'النظام والأمان والمستخدمين', access: [true, false, false, false, false, false, false] },
                             ].map((row) => (
                                 <tr key={row.page} className="border-b last:border-0">
                                     <td className="p-2 font-medium">{row.page}</td>
@@ -364,7 +501,7 @@ export default function Users() {
                                         >
                                             <Avatar className="size-9">
                                                 <AvatarFallback className="bg-primary/10 text-primary font-bold text-sm">
-                                                    {u.name.charAt(0)}
+                                                    {u.name?.charAt(0) || '?'}
                                                 </AvatarFallback>
                                             </Avatar>
                                             <p className="font-medium hover:underline underline-offset-4">{u.name}</p>
@@ -410,6 +547,13 @@ export default function Users() {
                                     <td className="p-3">
                                         <div className="flex items-center justify-center gap-1">
                                             <button
+                                                title="تعديل المستخدم والصلاحيات"
+                                                className="p-1.5 rounded-md text-blue-500 hover:bg-blue-50 transition-colors"
+                                                onClick={() => openEdit(u)}
+                                            >
+                                                <UserCog className="size-4" />
+                                            </button>
+                                            <button
                                                 title={u.active ? 'تعطيل الحساب' : 'تفعيل الحساب'}
                                                 className={`p-1.5 rounded-md transition-colors ${
                                                     u.active
@@ -445,9 +589,9 @@ export default function Users() {
 
             {/* Edit User Dialog */}
             <Dialog open={editDialogOpen} onOpenChange={setEditDialogOpen}>
-                <DialogContent>
+                <DialogContent className="max-w-3xl max-h-[90vh] overflow-y-auto">
                     <DialogHeader>
-                        <DialogTitle className="font-[Noto_Kufi_Arabic]">تعديل بيانات المستخدم</DialogTitle>
+                        <DialogTitle className="font-[Noto_Kufi_Arabic]">تعديل بيانات وصلاحيات المستخدم</DialogTitle>
                     </DialogHeader>
                     <form onSubmit={handleEdit} className="space-y-4">
                         <div className="grid grid-cols-2 gap-4">
@@ -471,7 +615,11 @@ export default function Users() {
                                 </SelectContent>
                             </Select>
                         </div>
-                        <div className="flex justify-end gap-3">
+                        
+                        {/* Edit User Permissions Matrix */}
+                        <PermissionsTable permissions={editForm.permissions} isEdit={true} />
+
+                        <div className="flex justify-end gap-3 pt-4 border-t">
                             <Button type="button" variant="outline" onClick={() => setEditDialogOpen(false)} disabled={isSubmitting}>إلغاء</Button>
                             <Button type="submit" disabled={isSubmitting}>
                                 {isSubmitting && <Loader2 className="size-4 ml-2 animate-spin" />}

@@ -51,14 +51,15 @@ export default function Students() {
     });
 
     const enrolledStudents = useMemo(() => {
+        if (!Array.isArray(students)) return [];
         return students.filter(s => s && ['active', 'admitted', 'inactive', 'graduated', 'transferred'].includes(s.status));
     }, [students]);
 
     const stats = useMemo(() => {
         const validStudents = enrolledStudents.filter(s => s && s.id && s.name);
         const active = validStudents.filter(s => s.status === 'active' || s.status === 'admitted').length;
-        const totalFees = validStudents.reduce((sum, s) => sum + (s.totalFees || 0), 0);
-        const totalPaid = validStudents.reduce((sum, s) => sum + (s.paidAmount || 0), 0);
+        const totalFees = validStudents.reduce((sum, s) => sum + Number(s.totalFees || 0), 0);
+        const totalPaid = validStudents.reduce((sum, s) => sum + Number(s.paidAmount || 0), 0);
         const debt = totalFees - totalPaid;
         return { active, totalFees, totalPaid, debt };
     }, [enrolledStudents]);

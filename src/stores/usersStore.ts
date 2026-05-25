@@ -40,12 +40,16 @@ export const useUsersStore = create<UsersState>((set) => ({
         headers: getAuthHeaders(),
         body: JSON.stringify({ ...user, active: true }),
       });
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => ({}));
+        throw new Error(errorData.error || 'Failed to add user');
+      }
       const newUser = await response.json();
       set((state) => ({ users: [newUser, ...state.users] }));
       toast.success('تم إضافة المستخدم بنجاح');
-    } catch (error) {
+    } catch (error: any) {
       console.error('Add user error:', error);
-      toast.error('فشل في إضافة المستخدم');
+      toast.error(error.message || 'فشل في إضافة المستخدم');
     }
   },
   updateUser: async (id, data) => {
@@ -87,6 +91,7 @@ export const useUsersStore = create<UsersState>((set) => ({
     try {
       const response = await fetch(`/api/users/${id}`, {
         method: 'DELETE',
+        headers: getAuthHeaders(),
       });
       if (!response.ok) throw new Error('Failed to delete user');
       set((state) => ({

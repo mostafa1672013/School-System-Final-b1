@@ -96,6 +96,7 @@ export default function Inventory() {
     const [txStudentId, setTxStudentId] = useState('');
     const [supplierName, setSupplierName] = useState('');
     const [unitCostOverride, setUnitCostOverride] = useState<number | undefined>();
+    const [receiveSubType, setReceiveSubType] = useState<'adjustment' | 'opening_balance'>('adjustment');
     const [subType, setSubType] = useState<'sale' | 'consumption'>('consumption');
     const [departmentName, setDepartmentName] = useState('');
     const [isSubmitting, setIsSubmitting] = useState(false);
@@ -150,7 +151,7 @@ export default function Inventory() {
     }, [items, search, activeTab]);
 
     const lowStockItems = items.filter((i) => i.quantity <= i.minQuantity);
-    const totalValue = items.reduce((s, i) => s + i.quantity * i.unitCost, 0);
+    const totalValue = items.reduce((s, i) => s + Number(i.quantity) * Number(i.unitCost), 0);
 
     const filteredTransactions = useMemo(() => {
         return transactions
@@ -285,6 +286,7 @@ export default function Inventory() {
         const success = await receiveStock({
             itemId: selectedItemId,
             quantity: qty,
+            subType: receiveSubType,
             supplierName: supplierName || undefined,
             unitCost: unitCostOverride,
             notes: txNote || undefined,
@@ -351,6 +353,7 @@ export default function Inventory() {
         setTxStudentId('');
         setSupplierName('');
         setUnitCostOverride(undefined);
+        setReceiveSubType('adjustment');
         setSubType('consumption');
         setDepartmentName('');
     };
@@ -470,7 +473,13 @@ export default function Inventory() {
                             <Button variant="outline" disabled={isSubmitting}><ArrowDownToLine className="size-4 ml-2" />استلام</Button>
                         </DialogTrigger>
                         <DialogContent>
-                            <DialogHeader><DialogTitle className="font-[Noto_Kufi_Arabic]">استلام بضاعة</DialogTitle></DialogHeader>
+                            <DialogHeader><DialogTitle className="font-[Noto_Kufi_Arabic]">استلام بضاعة (تعديل / رصيد افتتاحي)</DialogTitle></DialogHeader>
+                            <Alert className="bg-blue-50 border-blue-200">
+                                <AlertDescription className="text-blue-800 text-xs font-semibold">
+                                    لإضافة مشتريات جديدة، يرجى التوجه إلى وحدة <a href="/purchasing" className="underline font-bold">دورة المشتريات</a>.
+                                    هذه الشاشة مخصصة فقط للتسويات وإضافة الرصيد الافتتاحي.
+                                </AlertDescription>
+                            </Alert>
                             <form onSubmit={handleReceive} className="space-y-4">
                                 <div className="space-y-2">
                                     <Label>الصنف</Label>
@@ -479,8 +488,23 @@ export default function Inventory() {
                                         <SelectContent>{items.map((i) => <SelectItem key={i.id} value={i.id}>{i.name}</SelectItem>)}</SelectContent>
                                     </Select>
                                 </div>
+                                <div className="space-y-2">
+                                    <Label>نوع الاستلام</Label>
+                                    <div className="flex gap-3">
+                                        <label className="flex items-center gap-2 cursor-pointer">
+                                            <input type="radio" value="adjustment" checked={receiveSubType === 'adjustment'} onChange={() => setReceiveSubType('adjustment')} />
+                                            تسوية الجرد (إضافة)
+                                        </label>
+                                        <label className="flex items-center gap-2 cursor-pointer">
+                                            <input type="radio" value="opening_balance" checked={receiveSubType === 'opening_balance'} onChange={() => setReceiveSubType('opening_balance')} />
+                                            رصيد افتتاحي
+                                        </label>
+                                    </div>
+                                </div>
                                 <div className="space-y-2"><Label>الكمية</Label><Input type="number" required min={1} value={qty || ''} onChange={(e) => setQty(Number(e.target.value))} /></div>
-                                <div className="space-y-2"><Label>اسم المورد (اختياري)</Label><Input value={supplierName} onChange={(e) => setSupplierName(e.target.value)} placeholder="مثال: شركة النيل للنشر" /></div>
+                                {receiveSubType === 'opening_balance' && (
+                                    <div className="space-y-2"><Label>اسم المورد (اختياري)</Label><Input value={supplierName} onChange={(e) => setSupplierName(e.target.value)} placeholder="مثال: شركة النيل للنشر" /></div>
+                                )}
                                 <div className="space-y-2">
                                     <Label>تكلفة الوحدة (اختياري) - ترك فارغ لاستخدام التكلفة المسجلة</Label>
                                     <Input type="number" min={0} step={0.01} value={unitCostOverride || ''} onChange={(e) => setUnitCostOverride(e.target.value ? Number(e.target.value) : undefined)} />

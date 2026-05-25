@@ -21,20 +21,20 @@ export default function Reports() {
     const [studentSearch, setStudentSearch] = useState('');
 
     const financialData = useMemo(() => {
-        const totalFees = students.reduce((s, st) => s + st.totalFees, 0);
-        const totalPaid = students.reduce((s, st) => s + st.paidAmount, 0);
+        const totalFees = students.reduce((s, st) => s + Number(st.totalFees), 0);
+        const totalPaid = students.reduce((s, st) => s + Number(st.paidAmount), 0);
         const totalRemaining = totalFees - totalPaid;
-        const overdue = Object.values(installmentPlans).flatMap((p) => p.installments.filter((i) => i.status === 'overdue')).reduce((s, i) => s + i.amount, 0);
+        const overdue = Object.values(installmentPlans).flatMap((p) => p.installments.filter((i) => i.status === 'overdue')).reduce((s, i) => s + Number(i.amount), 0);
 
         const byStage = Object.entries(stageLabels).map(([key, label]) => {
             const stageStudents = students.filter((s) => s.stage === key);
-            const fees = stageStudents.reduce((s, st) => s + st.totalFees, 0);
-            const paid = stageStudents.reduce((s, st) => s + st.paidAmount, 0);
+            const fees = stageStudents.reduce((s, st) => s + Number(st.totalFees), 0);
+            const paid = stageStudents.reduce((s, st) => s + Number(st.paidAmount), 0);
             return { name: label, الرسوم: fees, المحصل: paid, المتبقي: fees - paid };
         });
 
         const byType = Object.entries(paymentTypeLabels).map(([key, label]) => {
-            const total = payments.filter((p) => p.type === key).reduce((s, p) => s + p.amount, 0);
+            const total = payments.filter((p) => p.type === key).reduce((s, p) => s + Number(p.amount), 0);
             return { name: label, value: total };
         }).filter((d) => d.value > 0);
 
@@ -54,8 +54,8 @@ export default function Reports() {
     const inventoryReport = useMemo(() => {
         return categories.map((cat) => {
             const catItems = items.filter((i) => i.category === cat.key);
-            const totalQty = catItems.reduce((s, i) => s + i.quantity, 0);
-            const totalVal = catItems.reduce((s, i) => s + i.quantity * i.unitPrice, 0);
+            const totalQty = catItems.reduce((s, i) => s + Number(i.quantity), 0);
+            const totalVal = catItems.reduce((s, i) => s + Number(i.quantity) * Number(i.unitPrice), 0);
             const lowStock = catItems.filter((i) => i.quantity <= i.minQuantity).length;
             return { name: cat.name, items: catItems.length, quantity: totalQty, value: totalVal, lowStock };
         });
@@ -64,7 +64,7 @@ export default function Reports() {
     const busReport = useMemo(() => {
         return routes.map((r) => {
             const subs = subscriptions.filter((s) => s.routeId === r.id && s.status === 'active');
-            const revenue = subs.reduce((s, sub) => s + (sub.type === 'annual' ? r.annualFee : r.monthlyFee), 0);
+            const revenue = subs.reduce((s, sub) => s + Number(sub.type === 'annual' ? r.annualFee : r.monthlyFee), 0);
             return { name: r.name, subscribers: subs.length, capacity: r.capacity, revenue, occupancy: Math.round((subs.length / r.capacity) * 100) };
         });
     }, [routes, subscriptions]);
@@ -149,7 +149,7 @@ export default function Reports() {
                                     <div className="grid grid-cols-3 gap-6 text-center">
                                         <div><p className="text-xs text-muted-foreground">الرسوم</p><p className="font-bold tabular-nums">{formatCurrency(searchedStudent.totalFees)}</p></div>
                                         <div><p className="text-xs text-muted-foreground">المدفوع</p><p className="font-bold tabular-nums text-emerald-600">{formatCurrency(searchedStudent.paidAmount)}</p></div>
-                                        <div><p className="text-xs text-muted-foreground">المتبقي</p><p className="font-bold tabular-nums text-red-600">{formatCurrency(searchedStudent.totalFees - searchedStudent.paidAmount)}</p></div>
+                                        <div><p className="text-xs text-muted-foreground">المتبقي</p><p className="font-bold tabular-nums text-red-600">{formatCurrency(Number(searchedStudent.totalFees) - Number(searchedStudent.paidAmount))}</p></div>
                                     </div>
                                 </div>
                             </div>
@@ -185,7 +185,7 @@ export default function Reports() {
                                     <tr key={r.name} className="border-b last:border-0"><td className="p-3 font-medium">{r.name}</td><td className="p-3 tabular-nums">{r.items}</td><td className="p-3 tabular-nums font-bold">{r.quantity}</td><td className="p-3 tabular-nums text-primary font-bold">{formatCurrency(r.value)}</td><td className="p-3">{r.lowStock > 0 ? <span className="text-red-600 font-bold">{r.lowStock}</span> : <span className="text-emerald-600">✓</span>}</td></tr>
                                 ))}
                             </tbody>
-                            <tfoot><tr className="bg-muted/40 font-bold"><td className="p-3">الإجمالي</td><td className="p-3 tabular-nums">{items.length}</td><td className="p-3 tabular-nums">{items.reduce((s, i) => s + i.quantity, 0)}</td><td className="p-3 tabular-nums text-primary">{formatCurrency(items.reduce((s, i) => s + i.quantity * i.unitPrice, 0))}</td><td className="p-3">{items.filter((i) => i.quantity <= i.minQuantity).length}</td></tr></tfoot>
+                            <tfoot><tr className="bg-muted/40 font-bold"><td className="p-3">الإجمالي</td><td className="p-3 tabular-nums">{items.length}</td><td className="p-3 tabular-nums">{items.reduce((s, i) => s + Number(i.quantity), 0)}</td><td className="p-3 tabular-nums text-primary">{formatCurrency(items.reduce((s, i) => s + Number(i.quantity) * Number(i.unitPrice), 0))}</td><td className="p-3">{items.filter((i) => i.quantity <= i.minQuantity).length}</td></tr></tfoot>
                         </table>
                     </div>
                 </TabsContent>

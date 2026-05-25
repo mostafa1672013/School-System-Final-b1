@@ -1,4 +1,4 @@
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useEffect } from 'react';
 import { toast } from 'sonner';
 import { ChevronLeft, CheckCircle2, Loader2, AlertTriangle } from 'lucide-react';
 import { Button } from '@/components/ui/button';
@@ -42,16 +42,16 @@ function calcPromoFees(
   student: Student,
   matchedFee: StageFee | undefined | null
 ): { arrears: number; baseNewFees: number; badgeDiscount: number; netNewFees: number; totalFees: number } {
-  const arrears = Math.max(0, student.totalFees - student.paidAmount);
+  const arrears = Math.max(0, Number(student.totalFees) - Number(student.paidAmount));
   const baseNewFees = matchedFee
-    ? matchedFee.tuitionFees + matchedFee.booksFees + matchedFee.uniformFees +
-      (matchedFee.additionalFees?.filter((f: AdditionalFee) => f.isMandatory).reduce((sum, f) => sum + f.amount, 0) ?? 0)
-    : student.tuitionFees + student.booksFees + student.uniformFees;
+    ? Number(matchedFee.tuitionFees) + Number(matchedFee.booksFees) + Number(matchedFee.uniformFees) +
+      (matchedFee.additionalFees?.filter((f: AdditionalFee) => f.isMandatory).reduce((sum, f) => sum + Number(f.amount), 0) ?? 0)
+    : Number(student.tuitionFees) + Number(student.booksFees) + Number(student.uniformFees);
   const badgeDiscount = student.badge
     ? Math.round(baseNewFees * (student.badge.discountPercentage / 100) * 100) / 100
     : 0;
   const netNewFees = baseNewFees - badgeDiscount;
-  const totalFees = netNewFees + student.busFees + student.otherFees + arrears;
+  const totalFees = netNewFees + Number(student.busFees) + Number(student.otherFees) + arrears;
   return { arrears, baseNewFees, badgeDiscount, netNewFees, totalFees };
 }
 
@@ -72,6 +72,10 @@ export default function YearManagement() {
   const [promotionResult, setPromotionResult] = useState<{ promoted: number; skipped: { id: string; name: string; reason: string }[] } | null>(null);
   const [confirmText, setConfirmText] = useState('');
   const [activating, setActivating] = useState(false);
+
+  useEffect(() => {
+    fetchStudents();
+  }, [fetchStudents]);
 
   const eligibleStudents = useMemo(
     () => students.filter((s) => s.academicYear === activeAcademicYear && ['admitted', 'active'].includes(s.status)),
@@ -112,14 +116,14 @@ export default function YearManagement() {
           stage: nextStage,
           grade: nextGrade,
           academicYear: targetYear,
-          tuitionFees: matchedFee?.tuitionFees ?? student.tuitionFees,
-          booksFees: matchedFee?.booksFees ?? student.booksFees,
-          uniformFees: matchedFee?.uniformFees ?? student.uniformFees,
-          busFees: student.busFees,
-          otherFees: student.otherFees,
+          tuitionFees: Number(matchedFee?.tuitionFees ?? student.tuitionFees),
+          booksFees: Number(matchedFee?.booksFees ?? student.booksFees),
+          uniformFees: Number(matchedFee?.uniformFees ?? student.uniformFees),
+          busFees: Number(student.busFees),
+          otherFees: Number(student.otherFees),
           arrearsFees: fees.arrears,
-          discountAmount: student.badge ? fees.badgeDiscount : student.discountAmount,
-          discountPercentage: student.badge ? student.badge.discountPercentage : student.discountPercentage,
+          discountAmount: student.badge ? fees.badgeDiscount : Number(student.discountAmount),
+          discountPercentage: student.badge ? Number(student.badge.discountPercentage) : Number(student.discountPercentage),
           totalFees: fees.totalFees,
           status: 'admitted',
         })),
@@ -129,15 +133,15 @@ export default function YearManagement() {
           stage: s.stage,
           grade: s.grade,
           academicYear: targetYear,
-          tuitionFees: s.tuitionFees,
-          booksFees: s.booksFees,
-          uniformFees: s.uniformFees,
-          busFees: s.busFees,
-          otherFees: s.otherFees,
-          arrearsFees: Math.max(0, s.totalFees - s.paidAmount),
-          discountAmount: s.discountAmount,
-          discountPercentage: s.discountPercentage,
-          totalFees: s.totalFees,
+          tuitionFees: Number(s.tuitionFees),
+          booksFees: Number(s.booksFees),
+          uniformFees: Number(s.uniformFees),
+          busFees: Number(s.busFees),
+          otherFees: Number(s.otherFees),
+          arrearsFees: Math.max(0, Number(s.totalFees) - Number(s.paidAmount)),
+          discountAmount: Number(s.discountAmount),
+          discountPercentage: Number(s.discountPercentage),
+          totalFees: Number(s.totalFees),
           status: 'graduated',
         })),
       ];
