@@ -346,18 +346,9 @@ router.patch('/:id/badge', requireAuth, async (req, res) => {
     const student = await prisma.student.findUnique({ where: { id } });
     if (!student) return res.status(404).json({ error: 'Student not found' });
 
-    // Gross fees = sum of individual components (never use totalFees which may already be net)
-    const additionalFeesArr = Array.isArray(student.additionalFees) ? student.additionalFees as any[] : [];
-    const grossFees =
-      Number(student.tuitionFees  || 0) +
-      Number(student.booksFees    || 0) +
-      Number(student.uniformFees  || 0) +
-      Number(student.busFees      || 0) +
-      Number(student.otherFees    || 0) +
-      additionalFeesArr.reduce((s: number, f: any) => {
-        const amt = Number(f?.amount);
-        return s + (f?.selected && !isNaN(amt) ? amt : 0);
-      }, 0);
+    // Gross = net + existing discount. Always correct regardless of fee structure.
+    // Invariant: totalFees = gross - discountAmount → gross = totalFees + discountAmount
+    const grossFees = Number(student.totalFees) + Number(student.discountAmount);
 
     let discountData: Record<string, unknown>;
 
