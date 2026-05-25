@@ -339,44 +339,59 @@ router.get('/:id/inventory', async (req, res) => {
 });
 
 // Assign badge to student (auto-apply discount)
-router.patch('/:id/badge', async (req, res) => {
-  const { id } = req.params;
+router.patch('/:id/badge', requireAuth, async (req, res) => {
+  const id = Array.isArray(req.params.id) ? req.params.id[0] : req.params.id;
   const { badgeId } = req.body; // null to remove badge
   try {
-    let discountData: Record<string, unknown> = {};
+    const student = await prisma.student.findUnique({ where: { id } });
+    if (!student) return res.status(404).json({ error: 'Student not found' });
+
+    // Gross fees = sum of individual components (never use totalFees which may already be net)
+    const additionalFeesArr = Array.isArray(student.additionalFees) ? student.additionalFees as any[] : [];
+    const grossFees =
+      Number(student.tuitionFees  || 0) +
+      Number(student.booksFees    || 0) +
+      Number(student.uniformFees  || 0) +
+      Number(student.busFees      || 0) +
+      Number(student.otherFees    || 0) +
+      additionalFeesArr.reduce((s: number, f: any) => {
+        const amt = Number(f?.amount);
+        return s + (f?.selected && !isNaN(amt) ? amt : 0);
+      }, 0);
+
+    let discountData: Record<string, unknown>;
 
     if (badgeId) {
       const badge = await prisma.badge.findUnique({ where: { id: badgeId } });
       if (!badge) return res.status(404).json({ error: 'Badge not found' });
 
-      const student = await prisma.student.findUnique({ where: { id } });
-      if (!student) return res.status(404).json({ error: 'Student not found' });
-
-      const discountAmount = Math.round((Number(student.totalFees) * Number(badge.discountPercentage)) / 100);
+      const discountAmount = Math.round(grossFees * Number(badge.discountPercentage) / 100);
       discountData = {
         badgeId,
         discountPercentage: badge.discountPercentage,
         discountAmount,
+        totalFees: grossFees - discountAmount,   // apply the deduction
         discountStatus: 'approved',
         discountApprovedBy: 'badge_system',
       };
     } else {
-      // Remove badge → remove badge-based discount only if it was from badge
+      // Remove badge → zero the discount and restore full gross fees
       discountData = {
         badgeId: null,
         discountPercentage: 0,
         discountAmount: 0,
+        totalFees: grossFees,                    // restore gross when badge removed
         discountStatus: 'approved',
         discountApprovedBy: null,
       };
     }
 
-    const student = await prisma.student.update({
+    const updated = await prisma.student.update({
       where: { id },
       data: discountData,
       include: { yearlyFinance: { orderBy: { academicYear: 'asc' } }, badge: true }
     });
-    res.json(student);
+    res.json(updated);
   } catch (error) {
     console.error('Assign badge error:', error);
     res.status(400).json({ error: 'Failed to assign badge' });
