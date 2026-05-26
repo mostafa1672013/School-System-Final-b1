@@ -96,6 +96,7 @@ export default function StudentDetail() {
     const [classDialogOpen, setClassDialogOpen] = useState(false);
     const [classForm, setClassForm] = useState({ grade: '', className: '' });
     const [savingField, setSavingField] = useState(false);
+    const [uploadingPhoto, setUploadingPhoto] = useState(false);
 
     useEffect(() => {
         fetch('/api/badges', { headers: getAuthHeaders() })
@@ -134,6 +135,31 @@ export default function StudentDetail() {
         } finally {
             setSavingField(false);
         }
+    };
+
+    const handlePhotoUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+        const file = e.target.files?.[0];
+        if (!file || !student) return;
+        if (file.size > 500 * 1024) { toast.error('الصورة أكبر من 500KB — يرجى ضغطها أولاً'); return; }
+        setUploadingPhoto(true);
+        const reader = new FileReader();
+        reader.onload = async () => {
+            try {
+                const res = await fetch(`/api/students/${student.id}/photo`, {
+                    method: 'POST',
+                    headers: { ...getAuthHeaders(), 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ photoUrl: reader.result as string }),
+                });
+                if (!res.ok) throw new Error();
+                await fetchStudents();
+                toast.success('تم تحديث الصورة');
+            } catch {
+                toast.error('فشل رفع الصورة');
+            } finally {
+                setUploadingPhoto(false);
+            }
+        };
+        reader.readAsDataURL(file);
     };
 
     const handleSaveClass = async (e: React.FormEvent<HTMLFormElement>) => {
@@ -341,9 +367,17 @@ export default function StudentDetail() {
             <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
                 <div className="lg:col-span-2 rounded-lg border bg-card p-6">
                     <div className="flex items-start gap-4">
-                        <div className="size-16 rounded-xl bg-primary/10 flex items-center justify-center text-primary">
-                            <User className="size-8" />
-                        </div>
+                        <label className="size-16 rounded-xl bg-primary/10 flex items-center justify-center text-primary cursor-pointer hover:bg-primary/20 transition-colors overflow-hidden relative group" title="انقر لتغيير الصورة">
+                            {student.photoUrl ? (
+                                <img src={student.photoUrl} alt={student.name} className="size-full object-cover" />
+                            ) : (
+                                <User className="size-8" />
+                            )}
+                            <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center text-white text-xs">
+                                {uploadingPhoto ? '...' : '📷'}
+                            </div>
+                            <input type="file" accept="image/*" className="hidden" onChange={handlePhotoUpload} disabled={uploadingPhoto} />
+                        </label>
                         <div className="flex-1">
                             <div className="flex items-center gap-2 flex-wrap">
                                 <h2 className="text-xl font-bold font-[Noto_Kufi_Arabic]">{student.name}</h2>
