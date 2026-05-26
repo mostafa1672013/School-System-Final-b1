@@ -141,7 +141,7 @@ export default function StudentDetail() {
         if (!student) return;
         setSavingField(true);
         try {
-            await updateStudent(student.id, { grade: classForm.grade, className: classForm.className });
+            await updateStudent(student.id, { grade: classForm.grade.trim(), className: classForm.className.trim() });
             setClassDialogOpen(false);
             toast.success('تم نقل الطالب للفصل الجديد');
         } catch {
@@ -388,8 +388,8 @@ export default function StudentDetail() {
                                                 onChange={e => setPhoneValue(e.target.value)}
                                                 onKeyDown={e => { if (e.key === 'Enter') handleSavePhone(); if (e.key === 'Escape') setEditingPhone(false); }}
                                             />
-                                            <Button size="icon" className="size-7" onClick={handleSavePhone} disabled={savingField}>✓</Button>
-                                            <Button size="icon" variant="ghost" className="size-7" onClick={() => setEditingPhone(false)}>✕</Button>
+                                            <Button size="icon" className="size-7" onClick={handleSavePhone} disabled={savingField || !phoneValue.trim()}>✓</Button>
+                                            <Button size="icon" variant="ghost" className="size-7" onClick={() => { setPhoneValue(''); setEditingPhone(false); }}>✕</Button>
                                         </span>
                                     ) : (
                                         <span className="tabular-nums font-medium text-foreground" dir="ltr">
