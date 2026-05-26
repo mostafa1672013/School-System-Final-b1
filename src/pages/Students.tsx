@@ -8,6 +8,7 @@ import { Label } from '@/components/ui/label';
 import { Badge } from '@/components/ui/badge';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { useStudentsStore } from '@/stores/studentsStore';
 import { usePaymentsStore } from '@/stores/paymentsStore';
 import { formatCurrency, formatDateShort, stageLabels, statusLabels } from '@/lib/utils';
@@ -38,9 +39,9 @@ const statusColors: Record<string, string> = {
 export default function Students() {
     const { students, isLoading, fetchStudents, updateStudent, deleteStudent } = useStudentsStore();
     const { payments, fetchPayments } = usePaymentsStore();
+    const [activeTab, setActiveTab] = useState<'active' | 'archived'>('active');
     const [search, setSearch] = useState('');
     const [stageFilter, setStageFilter] = useState<string>('all');
-    const [statusFilter, setStatusFilter] = useState<string>('all');
     const [gradeFilter, setGradeFilter] = useState<string>('all');
     const [editDialogOpen, setEditDialogOpen] = useState(false);
     const [editingStudent, setEditingStudent] = useState<Student | null>(null);
@@ -61,6 +62,9 @@ export default function Students() {
         return students.filter(s => s && ['active', 'admitted', 'inactive', 'graduated', 'transferred'].includes(s.status));
     }, [students]);
 
+    const activeStudents = useMemo(() => enrolledStudents.filter(s => ['active', 'admitted'].includes(s.status)), [enrolledStudents]);
+    const archivedStudents = useMemo(() => enrolledStudents.filter(s => ['graduated', 'transferred', 'inactive'].includes(s.status)), [enrolledStudents]);
+
     const stats = useMemo(() => {
         const validStudents = enrolledStudents.filter(s => s && s.id && s.name);
         const active = validStudents.filter(s => s.status === 'active' || s.status === 'admitted').length;
@@ -75,17 +79,17 @@ export default function Students() {
     }, [enrolledStudents]);
 
     const filtered = useMemo(() => {
-        return enrolledStudents.filter((s) => {
+        const base = activeTab === 'active' ? activeStudents : archivedStudents;
+        return base.filter((s) => {
             if (!s || !s.name || !s.nationalId) return false;
             const matchSearch = (s.name || '').toLowerCase().includes(search.toLowerCase()) ||
                               (s.nationalId || '').includes(search) ||
                               (s.guardianPhone || '').includes(search);
             const matchStage = stageFilter === 'all' || s.stage === stageFilter;
-            const matchStatus = statusFilter === 'all' || s.status === statusFilter;
             const matchGrade = gradeFilter === 'all' || s.grade === gradeFilter;
-            return matchSearch && matchStage && matchStatus && matchGrade;
+            return matchSearch && matchStage && matchGrade;
         });
-    }, [enrolledStudents, search, stageFilter, statusFilter, gradeFilter]);
+    }, [activeTab, activeStudents, archivedStudents, search, stageFilter, gradeFilter]);
 
     const lastPaymentByStudent = useMemo(() => {
         const map: Record<string, string> = {};
@@ -99,9 +103,10 @@ export default function Students() {
     }, [payments]);
 
     const gradeOptions = useMemo(() => {
-        const grades = [...new Set(enrolledStudents.map(s => s.grade).filter(Boolean))].sort();
+        const base = activeTab === 'active' ? activeStudents : archivedStudents;
+        const grades = [...new Set(base.map(s => s.grade).filter(Boolean))].sort();
         return grades;
-    }, [enrolledStudents]);
+    }, [activeTab, activeStudents, archivedStudents]);
 
     const handleEdit = async (e: React.FormEvent) => {
         e.preventDefault();
@@ -174,9 +179,17 @@ export default function Students() {
                 <StatCard title="المستحقات المتأخرة" value={formatCurrency(stats.debt)} icon={AlertCircle} colorClass="rose" />
             </div>
 
+            {/* Tabs */}
+            <Tabs value={activeTab} onValueChange={(v) => { setActiveTab(v as 'active' | 'archived'); setSearch(''); setStageFilter('all'); setGradeFilter('all'); }}>
+                <TabsList>
+                    <TabsTrigger value="active">الطلاب النشطون <span className="mr-1.5 bg-primary/10 text-primary text-[10px] px-1.5 rounded-full">{activeStudents.length}</span></TabsTrigger>
+                    <TabsTrigger value="archived">الأرشيف <span className="mr-1.5 bg-muted text-muted-foreground text-[10px] px-1.5 rounded-full">{archivedStudents.length}</span></TabsTrigger>
+                </TabsList>
+            </Tabs>
+
             {/* Toolbar */}
-            <div className="flex flex-wrap gap-3 items-center justify-between bg-card p-4 rounded-lg border">
-                <div className="relative flex-1 max-w-sm">
+            <div className="flex flex-wrap gap-3 items-center bg-card p-4 rounded-lg border">
+                <div className="relative flex-1 min-w-[180px] max-w-sm">
                     <Search className="absolute right-3 top-1/2 -translate-y-1/2 size-4 text-muted-foreground" />
                     <Input placeholder="بحث بالاسم أو الرقم القومي..." value={search} onChange={(e) => setSearch(e.target.value)} className="pr-10" />
                 </div>
@@ -192,17 +205,6 @@ export default function Students() {
                         ))}
                     </SelectContent>
                 </Select>
-                <Select value={statusFilter} onValueChange={setStatusFilter}>
-                    <SelectTrigger className="w-36">
-                        <SelectValue placeholder="كل الحالات" />
-                    </SelectTrigger>
-                    <SelectContent>
-                        <SelectItem value="all">كل الحالات</SelectItem>
-                        {statusOptions.map((s) => (
-                            <SelectItem key={s.value} value={s.value}>{s.label}</SelectItem>
-                        ))}
-                    </SelectContent>
-                </Select>
                 <Select value={gradeFilter} onValueChange={setGradeFilter}>
                     <SelectTrigger className="w-32">
                         <SelectValue placeholder="كل الصفوف" />
@@ -214,8 +216,8 @@ export default function Students() {
                         ))}
                     </SelectContent>
                 </Select>
-                {(stageFilter !== 'all' || statusFilter !== 'all' || gradeFilter !== 'all') && (
-                    <Button variant="ghost" size="sm" onClick={() => { setStageFilter('all'); setStatusFilter('all'); setGradeFilter('all'); }}>
+                {(stageFilter !== 'all' || gradeFilter !== 'all') && (
+                    <Button variant="ghost" size="sm" onClick={() => { setStageFilter('all'); setGradeFilter('all'); }}>
                         مسح الفلاتر ✕
                     </Button>
                 )}
@@ -302,10 +304,12 @@ export default function Students() {
                                                 <Link to={`/students/${s.id}`}>
                                                     <Button variant="ghost" size="icon" className="size-8" title="عرض"><Eye className="size-4" /></Button>
                                                 </Link>
-                                                {!['graduated', 'transferred', 'inactive'].includes(s.status) && (
-                                                    <Button variant="ghost" size="icon" className="size-8" onClick={() => openEditDialog(s)} title="تعديل"><Edit className="size-4" /></Button>
+                                                {activeTab === 'active' && (
+                                                    <>
+                                                        <Button variant="ghost" size="icon" className="size-8" onClick={() => openEditDialog(s)} title="تعديل"><Edit className="size-4" /></Button>
+                                                        <Button variant="ghost" size="icon" className="size-8 text-red-500 hover:text-red-600 hover:bg-red-50" onClick={() => handleDelete(s.id)} title="حذف"><Trash2 className="size-4" /></Button>
+                                                    </>
                                                 )}
-                                                <Button variant="ghost" size="icon" className="size-8 text-red-500 hover:text-red-600 hover:bg-red-50" onClick={() => handleDelete(s.id)} title="حذف"><Trash2 className="size-4" /></Button>
                                             </div>
                                         </td>
                                     </tr>
