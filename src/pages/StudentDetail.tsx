@@ -19,7 +19,7 @@ import { useDeliveryOrderStore } from '@/stores/deliveryOrderStore';
 import { useAuthStore } from '@/stores/authStore';
 import { formatCurrency, formatDateShort, stageLabels, paymentTypeLabels, paymentMethodLabels, generateId } from '@/lib/utils';
 import { getAuthHeaders } from '@/stores/authStore';
-import type { PaymentType, PaymentMethod, Badge } from '@/types';
+import type { PaymentType, PaymentMethod, Badge, StudentContactLog, ContactOutcome } from '@/types';
 import { printPaymentReceipt } from '@/hooks/usePrintReceipt';
 import StudentStatement from '@/components/student/StudentStatement';
 
@@ -97,11 +97,20 @@ export default function StudentDetail() {
     const [classForm, setClassForm] = useState({ grade: '', className: '' });
     const [savingField, setSavingField] = useState(false);
     const [uploadingPhoto, setUploadingPhoto] = useState(false);
+    const [contactLogs, setContactLogs] = useState<StudentContactLog[]>([]);
+    const [contactForm, setContactForm] = useState({ date: new Date().toISOString().split('T')[0], notes: '', outcome: 'contacted' as ContactOutcome });
+    const [savingContact, setSavingContact] = useState(false);
 
     useEffect(() => {
         fetch('/api/badges', { headers: getAuthHeaders() })
             .then(r => r.json()).then(setBadges).catch(() => {});
     }, []);
+
+    useEffect(() => {
+        if (!id) return;
+        fetch(`/api/students/${id}/contacts`, { headers: getAuthHeaders() })
+            .then(r => r.json()).then(setContactLogs).catch(() => {});
+    }, [id]);
 
     const handleAssignBadge = async (badgeId: string | null) => {
         if (!student) return;
@@ -161,6 +170,28 @@ export default function StudentDetail() {
         };
         reader.readAsDataURL(file);
         e.target.value = '';
+    };
+
+    const handleSaveContact = async (e: React.FormEvent<HTMLFormElement>) => {
+        e.preventDefault();
+        if (!student || !contactForm.notes.trim()) return;
+        setSavingContact(true);
+        try {
+            const res = await fetch(`/api/students/${student.id}/contacts`, {
+                method: 'POST',
+                headers: { ...getAuthHeaders(), 'Content-Type': 'application/json' },
+                body: JSON.stringify(contactForm),
+            });
+            if (!res.ok) throw new Error();
+            const newLog = await res.json();
+            setContactLogs(prev => [newLog, ...prev]);
+            setContactForm(f => ({ ...f, notes: '', outcome: 'contacted' }));
+            toast.success('تم تسجيل التواصل');
+        } catch {
+            toast.error('فشل حفظ السجل');
+        } finally {
+            setSavingContact(false);
+        }
     };
 
     const handleSaveClass = async (e: React.FormEvent<HTMLFormElement>) => {
@@ -664,12 +695,83 @@ export default function StudentDetail() {
             {/* Tabs */}
             <Tabs defaultValue="payments" className="space-y-4">
                 <TabsList>
+                    <TabsTrigger value="contacts">سجل التواصل {contactLogs.length > 0 && <span className="mr-1 bg-primary/10 text-primary text-[10px] px-1.5 rounded-full">{contactLogs.length}</span>}</TabsTrigger>
                     <TabsTrigger value="payments">سجل المدفوعات</TabsTrigger>
                     <TabsTrigger value="installments">خطط الأقساط</TabsTrigger>
                     <TabsTrigger value="history">السجل المالي للسنوات</TabsTrigger>
                     <TabsTrigger value="statement">كشف الحساب</TabsTrigger>
                     <TabsTrigger value="deliveries">ما تم استلامه</TabsTrigger>
                 </TabsList>
+
+                <TabsContent value="contacts" className="space-y-4">
+                    {/* Add new contact */}
+                    <div className="rounded-lg border bg-card p-5">
+                        <h4 className="font-bold mb-4 font-[Noto_Kufi_Arabic]">تسجيل محاولة تواصل جديدة</h4>
+                        <form onSubmit={handleSaveContact} className="space-y-3">
+                            <div className="grid grid-cols-2 gap-3">
+                                <div className="space-y-1.5">
+                                    <Label>التاريخ</Label>
+                                    <Input type="date" value={contactForm.date} onChange={e => setContactForm(f => ({ ...f, date: e.target.value }))} />
+                                </div>
+                                <div className="space-y-1.5">
+                                    <Label>النتيجة</Label>
+                                    <Select value={contactForm.outcome} onValueChange={v => setContactForm(f => ({ ...f, outcome: v as ContactOutcome }))}>
+                                        <SelectTrigger><SelectValue /></SelectTrigger>
+                                        <SelectContent>
+                                            <SelectItem value="contacted">تم التواصل</SelectItem>
+                                            <SelectItem value="no_answer">لم يرد</SelectItem>
+                                            <SelectItem value="promised">وعد بالسداد</SelectItem>
+                                            <SelectItem value="paid_after">سدد بعد التواصل</SelectItem>
+                                        </SelectContent>
+                                    </Select>
+                                </div>
+                            </div>
+                            <div className="space-y-1.5">
+                                <Label>ملاحظات</Label>
+                                <Input
+                                    required
+                                    placeholder="مثال: وعد بالحضور الأسبوع القادم..."
+                                    value={contactForm.notes}
+                                    onChange={e => setContactForm(f => ({ ...f, notes: e.target.value }))}
+                                />
+                            </div>
+                            <div className="flex justify-end">
+                                <Button type="submit" disabled={savingContact || !contactForm.notes.trim()} size="sm">
+                                    {savingContact ? 'جارٍ الحفظ...' : 'حفظ التواصل'}
+                                </Button>
+                            </div>
+                        </form>
+                    </div>
+
+                    {/* Contact log list */}
+                    {contactLogs.length === 0 ? (
+                        <div className="text-center py-10 text-muted-foreground">
+                            <Phone className="size-10 mx-auto mb-3 opacity-30" />
+                            <p>لا يوجد سجل تواصل بعد</p>
+                        </div>
+                    ) : (
+                        <div className="space-y-2">
+                            {contactLogs.map(log => {
+                                const outcomeConfig: Record<string, { label: string; color: string }> = {
+                                    contacted:  { label: 'تم التواصل',        color: 'bg-emerald-100 text-emerald-700' },
+                                    no_answer:  { label: 'لم يرد',            color: 'bg-gray-100 text-gray-600' },
+                                    promised:   { label: 'وعد بالسداد',       color: 'bg-blue-100 text-blue-700' },
+                                    paid_after: { label: 'سدد بعد التواصل',   color: 'bg-violet-100 text-violet-700' },
+                                };
+                                const cfg = outcomeConfig[log.outcome] ?? { label: log.outcome, color: 'bg-gray-100 text-gray-600' };
+                                return (
+                                    <div key={log.id} className="rounded-lg border bg-card p-4 flex items-start justify-between gap-4">
+                                        <div className="flex-1 min-w-0">
+                                            <p className="text-sm">{log.notes}</p>
+                                            <p className="text-xs text-muted-foreground mt-1">{formatDateShort(log.date)} · {log.createdBy}</p>
+                                        </div>
+                                        <span className={`shrink-0 text-xs font-medium px-2.5 py-1 rounded-full ${cfg.color}`}>{cfg.label}</span>
+                                    </div>
+                                );
+                            })}
+                        </div>
+                    )}
+                </TabsContent>
 
                 <TabsContent value="payments">
                     <div className="rounded-lg border bg-card overflow-x-auto">
