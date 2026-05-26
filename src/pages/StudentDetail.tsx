@@ -362,6 +362,8 @@ export default function StudentDetail() {
     const uniformReceived = studentPayments.some(p => p.type === 'uniform');
     const booksRequired = student ? Number(student.booksFees) > 0 : false;
     const uniformRequired = student ? Number(student.uniformFees) > 0 : false;
+    const isReadOnly = student ? ['graduated', 'transferred', 'inactive'].includes(student.status) : false;
+    const readOnlyLabel: Record<string, string> = { graduated: 'متخرج', transferred: 'منقول', inactive: 'غير نشط' };
 
     return (
         <div className="space-y-6">
@@ -373,6 +375,11 @@ export default function StudentDetail() {
             {/* Status Bar */}
             {student && (
                 <div className="flex flex-wrap gap-2">
+                    {isReadOnly && (
+                        <span className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-bold border bg-slate-100 text-slate-600 border-slate-300">
+                            🔒 عرض فقط — {readOnlyLabel[student.status] ?? student.status}
+                        </span>
+                    )}
                     <span className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-bold border ${isOverdue ? 'bg-red-50 text-red-700 border-red-200' : 'bg-emerald-50 text-emerald-700 border-emerald-200'}`}>
                         <span className={`size-2 rounded-full ${isOverdue ? 'bg-red-500' : 'bg-emerald-500'}`} />
                         {isOverdue ? `متأخر — متبقي ${formatCurrency(Number(student.totalFees) - Number(student.paidAmount))}` : 'منتظم في السداد'}
@@ -399,17 +406,27 @@ export default function StudentDetail() {
             <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
                 <div className="lg:col-span-2 rounded-lg border bg-card p-6">
                     <div className="flex items-start gap-4">
-                        <label className="size-16 rounded-xl bg-primary/10 flex items-center justify-center text-primary cursor-pointer hover:bg-primary/20 transition-colors overflow-hidden relative group" title="انقر لتغيير الصورة">
-                            {student.photoUrl ? (
-                                <img src={student.photoUrl} alt={student.name} className="size-full object-cover" />
-                            ) : (
-                                <User className="size-8" />
-                            )}
-                            <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center text-white text-xs">
-                                {uploadingPhoto ? '...' : '📷'}
+                        {isReadOnly ? (
+                            <div className="size-16 rounded-xl bg-primary/10 flex items-center justify-center text-primary overflow-hidden">
+                                {student.photoUrl ? (
+                                    <img src={student.photoUrl} alt={student.name} className="size-full object-cover" />
+                                ) : (
+                                    <User className="size-8" />
+                                )}
                             </div>
-                            <input type="file" accept="image/*" className="hidden" onChange={handlePhotoUpload} disabled={uploadingPhoto} />
-                        </label>
+                        ) : (
+                            <label className="size-16 rounded-xl bg-primary/10 flex items-center justify-center text-primary cursor-pointer hover:bg-primary/20 transition-colors overflow-hidden relative group" title="انقر لتغيير الصورة">
+                                {student.photoUrl ? (
+                                    <img src={student.photoUrl} alt={student.name} className="size-full object-cover" />
+                                ) : (
+                                    <User className="size-8" />
+                                )}
+                                <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center text-white text-xs">
+                                    {uploadingPhoto ? '...' : '📷'}
+                                </div>
+                                <input type="file" accept="image/*" className="hidden" onChange={handlePhotoUpload} disabled={uploadingPhoto} />
+                            </label>
+                        )}
                         <div className="flex-1">
                             <div className="flex items-center gap-2 flex-wrap">
                                 <h2 className="text-xl font-bold font-[Noto_Kufi_Arabic]">{student.name}</h2>
@@ -423,21 +440,25 @@ export default function StudentDetail() {
                                         {student.badge.name}
                                     </span>
                                 )}
-                                <button
-                                    onClick={() => setBadgeDialogOpen(true)}
-                                    className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs border border-dashed border-muted-foreground/40 text-muted-foreground hover:border-primary hover:text-primary transition-colors"
-                                >
-                                    <Tag className="size-3" />
-                                    {student.badge ? 'تغيير الشارة' : 'تعيين شارة'}
-                                </button>
+                                {!isReadOnly && (
+                                    <button
+                                        onClick={() => setBadgeDialogOpen(true)}
+                                        className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs border border-dashed border-muted-foreground/40 text-muted-foreground hover:border-primary hover:text-primary transition-colors"
+                                    >
+                                        <Tag className="size-3" />
+                                        {student.badge ? 'تغيير الشارة' : 'تعيين شارة'}
+                                    </button>
+                                )}
                             </div>
                             <p className="text-sm text-muted-foreground mt-1">
                                 {stageLabels[student.stage]} — {student.grade} / {student.className}
-                                <button
-                                    className="mr-1 text-muted-foreground hover:text-primary opacity-60 hover:opacity-100 text-xs"
-                                    onClick={() => { setClassForm({ grade: student.grade, className: student.className || '' }); setClassDialogOpen(true); }}
-                                    title="نقل لفصل آخر"
-                                >✏️</button>
+                                {!isReadOnly && (
+                                    <button
+                                        className="mr-1 text-muted-foreground hover:text-primary opacity-60 hover:opacity-100 text-xs"
+                                        onClick={() => { setClassForm({ grade: student.grade, className: student.className || '' }); setClassDialogOpen(true); }}
+                                        title="نقل لفصل آخر"
+                                    >✏️</button>
+                                )}
                             </p>
                             <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 mt-4 text-sm">
                                 <div className="flex items-center gap-2 text-muted-foreground"><BookOpen className="size-4" /> الرقم القومي: <span className="tabular-nums font-medium text-foreground">{student.nationalId}</span></div>
@@ -460,11 +481,13 @@ export default function StudentDetail() {
                                     ) : (
                                         <span className="tabular-nums font-medium text-foreground" dir="ltr">
                                             {student.guardianPhone}
-                                            <button
-                                                className="mr-1 text-muted-foreground hover:text-primary opacity-60 hover:opacity-100"
-                                                onClick={() => { setPhoneValue(student.guardianPhone); setEditingPhone(true); }}
-                                                title="تعديل الرقم"
-                                            >✏️</button>
+                                            {!isReadOnly && (
+                                                <button
+                                                    className="mr-1 text-muted-foreground hover:text-primary opacity-60 hover:opacity-100"
+                                                    onClick={() => { setPhoneValue(student.guardianPhone); setEditingPhone(true); }}
+                                                    title="تعديل الرقم"
+                                                >✏️</button>
+                                            )}
                                         </span>
                                     )}
                                 </div>
@@ -488,7 +511,7 @@ export default function StudentDetail() {
                         <span className="font-bold tabular-nums">{formatCurrency(student.arrearsFees)}</span>
                       </p>
                     </div>
-                    <Button
+                    {!isReadOnly && <Button
                       size="sm"
                       variant="outline"
                       className="border-amber-300 text-amber-800 hover:bg-amber-100 shrink-0"
@@ -498,7 +521,7 @@ export default function StudentDetail() {
                       }}
                     >
                       تسجيل دفعة للمتأخرات
-                    </Button>
+                    </Button>}
                   </div>
                 )}
 
@@ -532,9 +555,9 @@ export default function StudentDetail() {
                     </div>
                     <div className="flex gap-2 pt-2">
                         <Dialog open={payDialogOpen} onOpenChange={setPayDialogOpen}>
-                            <DialogTrigger asChild>
+                            {!isReadOnly && <DialogTrigger asChild>
                                 <Button className="flex-1" size="sm"><CreditCard className="size-4 ml-1" />تسجيل دفعة</Button>
-                            </DialogTrigger>
+                            </DialogTrigger>}
                             <DialogContent>
                                 <DialogHeader><DialogTitle className="font-[Noto_Kufi_Arabic]">تسجيل دفعة جديدة</DialogTitle></DialogHeader>
                                 <form onSubmit={handlePay} className="space-y-4">
@@ -590,11 +613,11 @@ export default function StudentDetail() {
                             </DialogContent>
                         </Dialog>
                         <Dialog open={instDialogOpen} onOpenChange={setInstDialogOpen}>
-                            <DialogTrigger asChild>
+                            {!isReadOnly && <DialogTrigger asChild>
                                 <Button variant="outline" className="flex-1" size="sm" disabled={studentInstallments.length > 0}>
                                     {studentInstallments.length > 0 ? 'يوجد خطة أقساط (للتعديل من الأسفل)' : 'خطة أقساط'}
                                 </Button>
-                            </DialogTrigger>
+                            </DialogTrigger>}
                             <DialogContent>
                                 <DialogHeader><DialogTitle className="font-[Noto_Kufi_Arabic]">{editingPlanId ? 'تعديل خطة الأقساط' : 'إنشاء خطة أقساط'}</DialogTitle></DialogHeader>
                                 <form onSubmit={handleCreatePlan} className="space-y-4">
@@ -829,12 +852,12 @@ export default function StudentDetail() {
                                         <h4 className="font-bold font-[Noto_Kufi_Arabic]">خطة أقساط — إجمالي المستحق: {formatCurrency(plan.totalAmount)}</h4>
                                         <p className="text-xs text-muted-foreground">{plan.installments.length} أقساط • السنة الدراسية: {plan.academicYear}</p>
                                     </div>
-                                    <Button size="sm" variant="outline" onClick={() => {
+                                    {!isReadOnly && <Button size="sm" variant="outline" onClick={() => {
                                         setEditingPlanId(plan.id);
                                         setInstDialogOpen(true);
                                     }}>
                                         {user?.role === 'school_director' || user?.role === 'system_admin' ? 'تعديل التواريخ / الخطة' : 'طلب تعديل تواريخ'}
-                                    </Button>
+                                    </Button>}
                                 </div>
                                 <div className="space-y-2">
                                     {plan.installments.map((inst) => {
@@ -858,7 +881,7 @@ export default function StudentDetail() {
                                                         {(inst.paidAmount || 0) > 0 && <span className="text-emerald-700 text-xs font-bold mt-1">مسدد: {formatCurrency(inst.paidAmount || 0)}</span>}
                                                         {remainingAmount > 0 && remainingAmount < inst.amount && <span className="text-amber-700 text-xs font-bold mt-0.5">متبقي: {formatCurrency(remainingAmount)}</span>}
                                                     </div>
-                                                    {(currentStatus === 'pending' || currentStatus === 'overdue') && remainingAmount > 0 && (
+                                                    {!isReadOnly && (currentStatus === 'pending' || currentStatus === 'overdue') && remainingAmount > 0 && (
                                                         <Button size="sm" variant="outline" className="text-amber-600 border-amber-200 hover:bg-amber-50 h-8" onClick={() => handlePayInstallment(plan.id, inst.id, remainingAmount)}>تسديد</Button>
                                                     )}
                                                 </div>
