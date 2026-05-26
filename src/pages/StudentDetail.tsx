@@ -263,12 +263,45 @@ export default function StudentDetail() {
         setPayDialogOpen(true);
     };
 
+    const isOverdue = student
+        ? Number(student.totalFees) - Number(student.paidAmount) > 0
+        : false;
+    const booksReceived = studentPayments.some(p => p.type === 'books');
+    const uniformReceived = studentPayments.some(p => p.type === 'uniform');
+    const booksRequired = student ? Number(student.booksFees) > 0 : false;
+    const uniformRequired = student ? Number(student.uniformFees) > 0 : false;
+
     return (
         <div className="space-y-6">
             <Link to="/students" className="inline-flex items-center gap-2 text-sm text-muted-foreground hover:text-foreground transition-colors">
                 <ArrowRight className="size-4" />
                 العودة لقائمة الطلاب
             </Link>
+
+            {/* Status Bar */}
+            {student && (
+                <div className="flex flex-wrap gap-2">
+                    <span className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-bold border ${isOverdue ? 'bg-red-50 text-red-700 border-red-200' : 'bg-emerald-50 text-emerald-700 border-emerald-200'}`}>
+                        <span className={`size-2 rounded-full ${isOverdue ? 'bg-red-500' : 'bg-emerald-500'}`} />
+                        {isOverdue ? `متأخر — متبقي ${formatCurrency(Number(student.totalFees) - Number(student.paidAmount))}` : 'منتظم في السداد'}
+                    </span>
+                    {booksRequired && (
+                        <span className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-bold border ${booksReceived ? 'bg-emerald-50 text-emerald-700 border-emerald-200' : 'bg-amber-50 text-amber-700 border-amber-200'}`}>
+                            📚 الكتب: {booksReceived ? 'مُسدَّدة ✓' : 'لم تُسدَّد'}
+                        </span>
+                    )}
+                    {uniformRequired && (
+                        <span className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-bold border ${uniformReceived ? 'bg-emerald-50 text-emerald-700 border-emerald-200' : 'bg-amber-50 text-amber-700 border-amber-200'}`}>
+                            👔 الزي: {uniformReceived ? 'مُسدَّد ✓' : 'لم يُسدَّد'}
+                        </span>
+                    )}
+                    {student.arrearsFees > 0 && (
+                        <span className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-bold border bg-orange-50 text-orange-700 border-orange-200">
+                            ⚠️ مديونية سابقة: {formatCurrency(student.arrearsFees)}
+                        </span>
+                    )}
+                </div>
+            )}
 
             {/* Student Header */}
             <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
