@@ -9,7 +9,8 @@ import { Badge } from '@/components/ui/badge';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { useStudentsStore } from '@/stores/studentsStore';
-import { formatCurrency, stageLabels, statusLabels } from '@/lib/utils';
+import { usePaymentsStore } from '@/stores/paymentsStore';
+import { formatCurrency, formatDateShort, stageLabels, statusLabels } from '@/lib/utils';
 import type { Stage, Student, StudentStatus } from '@/types';
 import StatCard from '@/components/features/StatCard';
 
@@ -36,14 +37,19 @@ const statusColors: Record<string, string> = {
 
 export default function Students() {
     const { students, isLoading, fetchStudents, updateStudent, deleteStudent } = useStudentsStore();
+    const { payments, fetchPayments } = usePaymentsStore();
     const [search, setSearch] = useState('');
     const [stageFilter, setStageFilter] = useState<string>('all');
+    const [statusFilter, setStatusFilter] = useState<string>('all');
+    const [gradeFilter, setGradeFilter] = useState<string>('all');
     const [editDialogOpen, setEditDialogOpen] = useState(false);
     const [editingStudent, setEditingStudent] = useState<Student | null>(null);
 
     useEffect(() => {
         fetchStudents();
     }, [fetchStudents]);
+
+    useEffect(() => { fetchPayments(); }, [fetchPayments]);
 
     const [form, setForm] = useState({
         nationalId: '', name: '', stage: 'primary' as Stage, grade: '', className: '',
@@ -71,13 +77,31 @@ export default function Students() {
     const filtered = useMemo(() => {
         return enrolledStudents.filter((s) => {
             if (!s || !s.name || !s.nationalId) return false;
-            const matchSearch = (s.name || '').toLowerCase().includes(search.toLowerCase()) || 
-                              (s.nationalId || '').includes(search) || 
+            const matchSearch = (s.name || '').toLowerCase().includes(search.toLowerCase()) ||
+                              (s.nationalId || '').includes(search) ||
                               (s.guardianPhone || '').includes(search);
             const matchStage = stageFilter === 'all' || s.stage === stageFilter;
-            return matchSearch && matchStage;
+            const matchStatus = statusFilter === 'all' || s.status === statusFilter;
+            const matchGrade = gradeFilter === 'all' || s.grade === gradeFilter;
+            return matchSearch && matchStage && matchStatus && matchGrade;
         });
-    }, [enrolledStudents, search, stageFilter]);
+    }, [enrolledStudents, search, stageFilter, statusFilter, gradeFilter]);
+
+    const lastPaymentByStudent = useMemo(() => {
+        const map: Record<string, string> = {};
+        for (const p of payments) {
+            if (!p.studentId) continue;
+            if (!map[p.studentId] || p.date > map[p.studentId]) {
+                map[p.studentId] = p.date;
+            }
+        }
+        return map;
+    }, [payments]);
+
+    const gradeOptions = useMemo(() => {
+        const grades = [...new Set(enrolledStudents.map(s => s.grade).filter(Boolean))].sort();
+        return grades;
+    }, [enrolledStudents]);
 
     const handleEdit = async (e: React.FormEvent) => {
         e.preventDefault();
@@ -151,27 +175,50 @@ export default function Students() {
             </div>
 
             {/* Toolbar */}
-            <div className="flex flex-col sm:row gap-4 items-start sm:items-center justify-between bg-card p-4 rounded-lg border">
-                <div className="flex items-center gap-3 flex-1 w-full sm:w-auto">
-                    <div className="relative flex-1 max-w-sm">
-                        <Search className="absolute right-3 top-1/2 -translate-y-1/2 size-4 text-muted-foreground" />
-                        <Input placeholder="بحث بالاسم أو الرقم القومي..." value={search} onChange={(e) => setSearch(e.target.value)} className="pr-10" />
-                    </div>
-                    <Select value={stageFilter} onValueChange={setStageFilter}>
-                        <SelectTrigger className="w-44">
-                            <Filter className="size-4 ml-2" />
-                            <SelectValue placeholder="كل المراحل" />
-                        </SelectTrigger>
-                        <SelectContent>
-                            <SelectItem value="all">كل المراحل</SelectItem>
-                            {stageOptions.map((s) => (
-                                <SelectItem key={s.value} value={s.value}>{s.label}</SelectItem>
-                            ))}
-                        </SelectContent>
-                    </Select>
+            <div className="flex flex-wrap gap-3 items-center justify-between bg-card p-4 rounded-lg border">
+                <div className="relative flex-1 max-w-sm">
+                    <Search className="absolute right-3 top-1/2 -translate-y-1/2 size-4 text-muted-foreground" />
+                    <Input placeholder="بحث بالاسم أو الرقم القومي..." value={search} onChange={(e) => setSearch(e.target.value)} className="pr-10" />
                 </div>
-
-
+                <Select value={stageFilter} onValueChange={setStageFilter}>
+                    <SelectTrigger className="w-44">
+                        <Filter className="size-4 ml-2" />
+                        <SelectValue placeholder="كل المراحل" />
+                    </SelectTrigger>
+                    <SelectContent>
+                        <SelectItem value="all">كل المراحل</SelectItem>
+                        {stageOptions.map((s) => (
+                            <SelectItem key={s.value} value={s.value}>{s.label}</SelectItem>
+                        ))}
+                    </SelectContent>
+                </Select>
+                <Select value={statusFilter} onValueChange={setStatusFilter}>
+                    <SelectTrigger className="w-36">
+                        <SelectValue placeholder="كل الحالات" />
+                    </SelectTrigger>
+                    <SelectContent>
+                        <SelectItem value="all">كل الحالات</SelectItem>
+                        {statusOptions.map((s) => (
+                            <SelectItem key={s.value} value={s.value}>{s.label}</SelectItem>
+                        ))}
+                    </SelectContent>
+                </Select>
+                <Select value={gradeFilter} onValueChange={setGradeFilter}>
+                    <SelectTrigger className="w-32">
+                        <SelectValue placeholder="كل الصفوف" />
+                    </SelectTrigger>
+                    <SelectContent>
+                        <SelectItem value="all">كل الصفوف</SelectItem>
+                        {gradeOptions.map(g => (
+                            <SelectItem key={g} value={g}>{g}</SelectItem>
+                        ))}
+                    </SelectContent>
+                </Select>
+                {(stageFilter !== 'all' || statusFilter !== 'all' || gradeFilter !== 'all') && (
+                    <Button variant="ghost" size="sm" onClick={() => { setStageFilter('all'); setStatusFilter('all'); setGradeFilter('all'); }}>
+                        مسح الفلاتر ✕
+                    </Button>
+                )}
             </div>
 
             {/* Edit Dialog */}
@@ -198,6 +245,7 @@ export default function Students() {
                             <th className="text-right p-3 font-semibold">الصف / الفصل</th>
                             <th className="text-right p-3 font-semibold hidden lg:table-cell">ولي الأمر</th>
                             <th className="text-right p-3 font-semibold">التحصيل المالي</th>
+                            <th className="text-right p-3 font-semibold hidden xl:table-cell">آخر دفعة</th>
                             <th className="text-right p-3 font-semibold hidden sm:table-cell">الحالة</th>
                             <th className="text-right p-3 font-semibold w-24">إجراءات</th>
                         </tr>
@@ -240,6 +288,9 @@ export default function Students() {
                                                 <span className="text-[10px] tabular-nums font-medium">{pct}%</span>
                                             </div>
                                             <p className="text-[10px] text-muted-foreground mt-0.5">{formatCurrency(s.paidAmount)} / {formatCurrency(s.totalFees)}</p>
+                                        </td>
+                                        <td className="p-3 hidden xl:table-cell text-xs text-muted-foreground tabular-nums">
+                                            {lastPaymentByStudent[s.id] ? formatDateShort(lastPaymentByStudent[s.id]) : '—'}
                                         </td>
                                         <td className="p-3 hidden sm:table-cell">
                                             <span className={`inline-flex px-2 py-1 rounded-full text-[10px] font-medium ${statusColors[s.status]}`}>
