@@ -17,7 +17,7 @@ import { usePaymentsStore } from '@/stores/paymentsStore';
 import { useBusStore } from '@/stores/busStore';
 import { useDeliveryOrderStore } from '@/stores/deliveryOrderStore';
 import { useAuthStore } from '@/stores/authStore';
-import { formatCurrency, formatDateShort, stageLabels, paymentTypeLabels, paymentMethodLabels, generateId } from '@/lib/utils';
+import { formatCurrency, formatDateShort, stageLabels, paymentTypeLabels, paymentMethodLabels } from '@/lib/utils';
 import { getAuthHeaders } from '@/stores/authStore';
 import type { PaymentType, PaymentMethod, Badge, StudentContactLog, ContactOutcome } from '@/types';
 import { printPaymentReceipt } from '@/hooks/usePrintReceipt';

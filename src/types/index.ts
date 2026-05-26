@@ -107,6 +107,7 @@ export interface Student {
   pendingWalletPhoneNumber?: string;
   pendingPaymentNotes?: string;
   pendingInstallmentPlanId?: string;
+  pendingInstallmentId?: string;
   paymentRequestStatus?: string;
   yearlyFinance?: StudentYearlyFinance[];
 }
