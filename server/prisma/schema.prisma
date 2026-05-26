@@ -79,6 +79,7 @@ model Student {
   badge                       Badge?                 @relation(fields: [badgeId], references: [id])
   yearlyFinance               StudentYearlyFinance[]
   deliveryOrders              DeliveryOrder[]
+  contactLogs                 StudentContactLog[]
 }
 
 model StageFee {
@@ -873,4 +874,17 @@ model DeliveryOrderItem {
   returnedAt      DateTime?
   returnNotes     String?
   createdAt       DateTime      @default(now())
+}
+
+model StudentContactLog {
+  id        String   @id @default(uuid())
+  studentId String
+  student   Student  @relation(fields: [studentId], references: [id], onDelete: Cascade)
+  date      String
+  notes     String
+  outcome   String
+  createdBy String
+  createdAt DateTime @default(now())
+
+  @@index([studentId])
 }
