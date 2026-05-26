@@ -111,6 +111,18 @@ export interface Student {
   yearlyFinance?: StudentYearlyFinance[];
 }
 
+export type ContactOutcome = 'contacted' | 'no_answer' | 'promised' | 'paid_after';
+
+export interface StudentContactLog {
+  id: string;
+  studentId: string;
+  date: string;
+  notes: string;
+  outcome: ContactOutcome;
+  createdBy: string;
+  createdAt: string;
+}
+
 export interface StageFee {
   id: string;
   stage: Stage;
