@@ -716,4 +716,51 @@ router.patch('/approve/:id', async (req, res) => {
   }
 });
 
+// GET contact log for a student
+router.get('/:id/contacts', requireAuth, async (req, res) => {
+  const id = Array.isArray(req.params.id) ? req.params.id[0] : req.params.id;
+  try {
+    const logs = await prisma.studentContactLog.findMany({
+      where: { studentId: id },
+      orderBy: { createdAt: 'desc' },
+    });
+    res.json(logs);
+  } catch (error) {
+    res.status(500).json({ error: 'Failed to fetch contact logs' });
+  }
+});
+
+// POST new contact log entry
+router.post('/:id/contacts', requireAuth, async (req, res) => {
+  const id = Array.isArray(req.params.id) ? req.params.id[0] : req.params.id;
+  const { date, notes, outcome } = req.body;
+  const createdBy = req.user?.userId ?? 'unknown';
+  try {
+    const log = await prisma.studentContactLog.create({
+      data: { studentId: id, date, notes, outcome, createdBy },
+    });
+    res.status(201).json(log);
+  } catch (error) {
+    res.status(400).json({ error: 'Failed to create contact log' });
+  }
+});
+
+// POST photo upload (stores base64 in photoUrl field)
+router.post('/:id/photo', requireAuth, async (req, res) => {
+  const id = Array.isArray(req.params.id) ? req.params.id[0] : req.params.id;
+  const { photoUrl } = req.body; // base64 data URL: "data:image/jpeg;base64,..."
+  if (!photoUrl || !photoUrl.startsWith('data:image/')) {
+    return res.status(400).json({ error: 'Invalid image data' });
+  }
+  try {
+    const student = await prisma.student.update({
+      where: { id },
+      data: { photoUrl },
+    });
+    res.json({ photoUrl: student.photoUrl });
+  } catch (error) {
+    res.status(400).json({ error: 'Failed to update photo' });
+  }
+});
+
 export default router;
