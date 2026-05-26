@@ -160,6 +160,7 @@ export default function StudentDetail() {
             }
         };
         reader.readAsDataURL(file);
+        e.target.value = '';
     };
 
     const handleSaveClass = async (e: React.FormEvent<HTMLFormElement>) => {
