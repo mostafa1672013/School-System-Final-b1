@@ -302,7 +302,9 @@ export default function Students() {
                                                 <Link to={`/students/${s.id}`}>
                                                     <Button variant="ghost" size="icon" className="size-8" title="عرض"><Eye className="size-4" /></Button>
                                                 </Link>
-                                                <Button variant="ghost" size="icon" className="size-8" onClick={() => openEditDialog(s)} title="تعديل"><Edit className="size-4" /></Button>
+                                                {!['graduated', 'transferred', 'inactive'].includes(s.status) && (
+                                                    <Button variant="ghost" size="icon" className="size-8" onClick={() => openEditDialog(s)} title="تعديل"><Edit className="size-4" /></Button>
+                                                )}
                                                 <Button variant="ghost" size="icon" className="size-8 text-red-500 hover:text-red-600 hover:bg-red-50" onClick={() => handleDelete(s.id)} title="حذف"><Trash2 className="size-4" /></Button>
                                             </div>
                                         </td>
