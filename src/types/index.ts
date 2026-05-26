@@ -112,7 +112,6 @@ export interface Student {
 }
 
 export type ContactOutcome = 'contacted' | 'no_answer' | 'promised' | 'paid_after';
-
 export interface StudentContactLog {
   id: string;
   studentId: string;
