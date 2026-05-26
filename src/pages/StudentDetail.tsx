@@ -91,6 +91,11 @@ export default function StudentDetail() {
     const [badges, setBadges] = useState<Badge[]>([]);
     const [badgeDialogOpen, setBadgeDialogOpen] = useState(false);
     const [assigningBadge, setAssigningBadge] = useState(false);
+    const [editingPhone, setEditingPhone] = useState(false);
+    const [phoneValue, setPhoneValue] = useState('');
+    const [classDialogOpen, setClassDialogOpen] = useState(false);
+    const [classForm, setClassForm] = useState({ grade: '', className: '' });
+    const [savingField, setSavingField] = useState(false);
 
     useEffect(() => {
         fetch('/api/badges', { headers: getAuthHeaders() })
@@ -114,6 +119,35 @@ export default function StudentDetail() {
             toast.error('فشل تعيين الشارة');
         } finally {
             setAssigningBadge(false);
+        }
+    };
+
+    const handleSavePhone = async () => {
+        if (!student || !phoneValue.trim()) return;
+        setSavingField(true);
+        try {
+            await updateStudent(student.id, { guardianPhone: phoneValue.trim() });
+            setEditingPhone(false);
+            toast.success('تم تحديث رقم الهاتف');
+        } catch {
+            toast.error('فشل تحديث الرقم');
+        } finally {
+            setSavingField(false);
+        }
+    };
+
+    const handleSaveClass = async (e: React.FormEvent<HTMLFormElement>) => {
+        e.preventDefault();
+        if (!student) return;
+        setSavingField(true);
+        try {
+            await updateStudent(student.id, { grade: classForm.grade, className: classForm.className });
+            setClassDialogOpen(false);
+            toast.success('تم نقل الطالب للفصل الجديد');
+        } catch {
+            toast.error('فشل تحديث الفصل');
+        } finally {
+            setSavingField(false);
         }
     };
 
@@ -331,11 +365,43 @@ export default function StudentDetail() {
                                     {student.badge ? 'تغيير الشارة' : 'تعيين شارة'}
                                 </button>
                             </div>
-                            <p className="text-sm text-muted-foreground mt-1">{stageLabels[student.stage]} — {student.grade} / {student.className}</p>
+                            <p className="text-sm text-muted-foreground mt-1">
+                                {stageLabels[student.stage]} — {student.grade} / {student.className}
+                                <button
+                                    className="mr-1 text-muted-foreground hover:text-primary opacity-60 hover:opacity-100 text-xs"
+                                    onClick={() => { setClassForm({ grade: student.grade, className: student.className || '' }); setClassDialogOpen(true); }}
+                                    title="نقل لفصل آخر"
+                                >✏️</button>
+                            </p>
                             <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 mt-4 text-sm">
                                 <div className="flex items-center gap-2 text-muted-foreground"><BookOpen className="size-4" /> الرقم القومي: <span className="tabular-nums font-medium text-foreground">{student.nationalId}</span></div>
                                 <div className="flex items-center gap-2 text-muted-foreground"><Phone className="size-4" /> ولي الأمر: <span className="font-medium text-foreground">{student.guardianName}</span></div>
-                                <div className="flex items-center gap-2 text-muted-foreground"><Phone className="size-4" /> الهاتف: <span className="tabular-nums font-medium text-foreground" dir="ltr">{student.guardianPhone}</span></div>
+                                <div className="flex items-center gap-2 text-muted-foreground">
+                                    <Phone className="size-4" /> الهاتف:{' '}
+                                    {editingPhone ? (
+                                        <span className="flex items-center gap-1">
+                                            <Input
+                                                autoFocus
+                                                dir="ltr"
+                                                className="h-7 w-36 tabular-nums text-sm"
+                                                value={phoneValue}
+                                                onChange={e => setPhoneValue(e.target.value)}
+                                                onKeyDown={e => { if (e.key === 'Enter') handleSavePhone(); if (e.key === 'Escape') setEditingPhone(false); }}
+                                            />
+                                            <Button size="icon" className="size-7" onClick={handleSavePhone} disabled={savingField}>✓</Button>
+                                            <Button size="icon" variant="ghost" className="size-7" onClick={() => setEditingPhone(false)}>✕</Button>
+                                        </span>
+                                    ) : (
+                                        <span className="tabular-nums font-medium text-foreground" dir="ltr">
+                                            {student.guardianPhone}
+                                            <button
+                                                className="mr-1 text-muted-foreground hover:text-primary opacity-60 hover:opacity-100"
+                                                onClick={() => { setPhoneValue(student.guardianPhone); setEditingPhone(true); }}
+                                                title="تعديل الرقم"
+                                            >✏️</button>
+                                        </span>
+                                    )}
+                                </div>
                                 <div className="flex items-center gap-2 text-muted-foreground"><MapPin className="size-4" /> العنوان: <span className="font-medium text-foreground">{student.address}</span></div>
                                 <div className="flex items-center gap-2 text-muted-foreground"><Calendar className="size-4" /> تاريخ التسجيل: <span className="font-medium text-foreground">{formatDateShort(student.enrollmentDate)}</span></div>
                                 {busSub && (
@@ -772,6 +838,39 @@ export default function StudentDetail() {
                     </div>
                 </TabsContent>
             </Tabs>
+
+            {/* Class Change Dialog */}
+            {classDialogOpen && (
+                <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4" onClick={() => setClassDialogOpen(false)}>
+                    <div className="bg-white rounded-xl p-6 w-full max-w-sm shadow-2xl" onClick={e => e.stopPropagation()}>
+                        <h3 className="font-bold text-lg mb-4 font-[Noto_Kufi_Arabic]">نقل لفصل آخر</h3>
+                        <form onSubmit={handleSaveClass} className="space-y-4">
+                            <div className="space-y-2">
+                                <Label>الصف</Label>
+                                <Input
+                                    required
+                                    value={classForm.grade}
+                                    onChange={e => setClassForm(f => ({ ...f, grade: e.target.value }))}
+                                    placeholder="مثال: الثاني"
+                                />
+                            </div>
+                            <div className="space-y-2">
+                                <Label>الفصل</Label>
+                                <Input
+                                    required
+                                    value={classForm.className}
+                                    onChange={e => setClassForm(f => ({ ...f, className: e.target.value }))}
+                                    placeholder="مثال: 2/ب"
+                                />
+                            </div>
+                            <div className="flex justify-end gap-3 pt-2">
+                                <Button type="button" variant="outline" onClick={() => setClassDialogOpen(false)}>إلغاء</Button>
+                                <Button type="submit" disabled={savingField}>حفظ النقل</Button>
+                            </div>
+                        </form>
+                    </div>
+                </div>
+            )}
 
             {/* Badge Assignment Dialog */}
             {badgeDialogOpen && (
