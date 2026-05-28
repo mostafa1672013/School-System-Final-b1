@@ -32,6 +32,10 @@ export default defineConfig({
     globals: true,
     environment: 'happy-dom',
     setupFiles: ['./src/__tests__/setup.ts'],
+    // Vitest auto-discovers tests across the whole repo; restrict to the
+    // frontend so it doesn't try to run the backend's Jest-based suites.
+    include: ['src/**/*.{test,spec}.{ts,tsx}'],
+    exclude: ['node_modules', 'dist', 'server'],
     coverage: {
       provider: 'v8',
       reporter: ['text', 'lcov'],
