@@ -1,16 +1,15 @@
-import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { requireAuth, requireRoles, signToken } from '../middleware/auth';
 import jwt from 'jsonwebtoken';
 import { PrismaClient } from '@prisma/client';
 
-const findUniqueMock = vi.fn();
-const findManyMock = vi.fn();
+const findUniqueMock = jest.fn();
+const findManyMock = jest.fn();
 
 // Mock dependencies
-vi.mock('@prisma/client', () => {
-  const mockPrismaClient = vi.fn();
-  mockPrismaClient.prototype.user = { findUnique: vi.fn() };
-  mockPrismaClient.prototype.userRole = { findMany: vi.fn() };
+jest.mock('@prisma/client', () => {
+  const mockPrismaClient = jest.fn();
+  mockPrismaClient.prototype.user = { findUnique: jest.fn() };
+  mockPrismaClient.prototype.userRole = { findMany: jest.fn() };
   return {
     PrismaClient: mockPrismaClient
   };
@@ -30,17 +29,17 @@ describe('Auth Middleware', () => {
       headers: {},
     };
     mockRes = {
-      status: vi.fn().mockReturnThis(),
-      json: vi.fn(),
+      status: jest.fn().mockReturnThis(),
+      json: jest.fn(),
     };
-    mockNext = vi.fn();
+    mockNext = jest.fn();
 
     // Reset mocks on the prototype since the module instantiates it
-    PrismaClient.prototype.user.findUnique = vi.fn();
-    PrismaClient.prototype.userRole.findMany = vi.fn();
+    PrismaClient.prototype.user.findUnique = jest.fn();
+    PrismaClient.prototype.userRole.findMany = jest.fn();
     prismaMock = PrismaClient.prototype;
     
-    vi.clearAllMocks();
+    jest.clearAllMocks();
   });
 
   describe('signToken', () => {

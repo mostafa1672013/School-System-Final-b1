@@ -167,7 +167,7 @@ export default function BadgeSettings() {
     setSaving(true);
     try {
       const url = editingBadge
-        ? `${API_BASE}/api/badges/${editingBadge.id}`
+        ? `/api/badges/${editingBadge.id}`
         : `/api/badges`;
       const method = editingBadge ? 'PATCH' : 'POST';
       const res = await fetch(url, {

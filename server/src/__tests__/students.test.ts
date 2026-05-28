@@ -1,4 +1,3 @@
-import { describe, it, expect, vi, beforeEach } from 'vitest';
 import request from 'supertest';
 import express from 'express';
 import studentsRouter from '../routes/students';
@@ -6,14 +5,14 @@ import { encryptNationalId, decryptNationalId } from '../lib/crypto';
 import { PrismaClient } from '@prisma/client';
 
 // Mock crypto module
-vi.mock('../lib/crypto', () => ({
-  encryptNationalId: vi.fn((id: string) => `encrypted_${id}`),
-  decryptNationalId: vi.fn((id: string) => id.replace('encrypted_', '')),
-  hashNationalId: vi.fn((id: string) => `hashed_${id}`),
+jest.mock('../lib/crypto', () => ({
+  encryptNationalId: jest.fn((id: string) => `encrypted_${id}`),
+  decryptNationalId: jest.fn((id: string) => id.replace('encrypted_', '')),
+  hashNationalId: jest.fn((id: string) => `hashed_${id}`),
 }));
 
 // Mock authentication middleware to pass through
-vi.mock('../middleware/auth', () => ({
+jest.mock('../middleware/auth', () => ({
   requireAuth: (req: any, res: any, next: any) => next(),
   requireRoles: () => (req: any, res: any, next: any) => next(),
   managementRoles: (req: any, res: any, next: any) => next(),
@@ -24,19 +23,19 @@ const app = express();
 app.use(express.json());
 app.use('/api/students', studentsRouter);
 
-vi.mock('@prisma/client', () => {
-  const mockPrismaClient = vi.fn();
-  mockPrismaClient.prototype.student = { findMany: vi.fn(), findUnique: vi.fn(), create: vi.fn(), update: vi.fn() };
-  mockPrismaClient.prototype.studentYearlyFinance = { upsert: vi.fn() };
-  mockPrismaClient.prototype.payment = { count: vi.fn() };
-  mockPrismaClient.prototype.$transaction = vi.fn((callback: any) => {
+jest.mock('@prisma/client', () => {
+  const mockPrismaClient = jest.fn();
+  mockPrismaClient.prototype.student = { findMany: jest.fn(), findUnique: jest.fn(), create: jest.fn(), update: jest.fn() };
+  mockPrismaClient.prototype.studentYearlyFinance = { upsert: jest.fn() };
+  mockPrismaClient.prototype.payment = { count: jest.fn() };
+  mockPrismaClient.prototype.$transaction = jest.fn((callback: any) => {
     if (Array.isArray(callback)) return Promise.all(callback);
     if (typeof callback === 'function') return callback(mockPrismaClient.prototype);
     return callback;
   });
-  mockPrismaClient.prototype.account = { findUnique: vi.fn(), findMany: vi.fn() };
-  mockPrismaClient.prototype.journalEntry = { findFirst: vi.fn(), count: vi.fn().mockResolvedValue(10), create: vi.fn() };
-  mockPrismaClient.prototype.badge = { findUnique: vi.fn() };
+  mockPrismaClient.prototype.account = { findUnique: jest.fn(), findMany: jest.fn() };
+  mockPrismaClient.prototype.journalEntry = { findFirst: jest.fn(), count: jest.fn().mockResolvedValue(10), create: jest.fn() };
+  mockPrismaClient.prototype.badge = { findUnique: jest.fn() };
   return { PrismaClient: mockPrismaClient };
 });
 
@@ -44,7 +43,7 @@ describe('Students Routes', () => {
   let prismaMock: any;
 
   beforeEach(() => {
-    vi.clearAllMocks();
+    jest.clearAllMocks();
     prismaMock = PrismaClient.prototype;
   });
 

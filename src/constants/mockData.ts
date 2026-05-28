@@ -1,3 +1,6 @@
+// @ts-nocheck — legacy seed fixture. Real seed lives in `server/prisma/seed*.ts`
+// and is the source of truth for the DB. This file is kept only for UI smoke-testing
+// in early dev and is not worth keeping type-accurate against the evolving schema.
 import type { User, Student, Payment, InstallmentPlan, InventoryItem, InventoryTransaction, BusRoute, BusSubscription } from '@/types';
 
 export const mockUsers: User[] = [

@@ -1,11 +1,10 @@
-import { describe, it, expect, vi, beforeEach } from 'vitest';
 import request from 'supertest';
 import express from 'express';
 import deliveryOrdersRouter from '../routes/delivery-orders';
 import { PrismaClient } from '@prisma/client';
 
 // Mock authentication middleware
-vi.mock('../middleware/auth', () => ({
+jest.mock('../middleware/auth', () => ({
   requireAuth: (req: any, res: any, next: any) => {
     req.user = { userId: '1', role: 'system_admin' };
     next();
@@ -21,15 +20,15 @@ const app = express();
 app.use(express.json());
 app.use('/api/delivery-orders', deliveryOrdersRouter);
 
-vi.mock('@prisma/client', () => {
-  const mockPrismaClient = vi.fn();
-  mockPrismaClient.prototype.deliveryOrder = { findMany: vi.fn(), findUnique: vi.fn(), create: vi.fn(), update: vi.fn() };
-  mockPrismaClient.prototype.deliveryOrderItem = { update: vi.fn(), findMany: vi.fn() };
-  mockPrismaClient.prototype.inventoryItem = { findUnique: vi.fn(), update: vi.fn() };
-  mockPrismaClient.prototype.inventoryTransaction = { create: vi.fn() };
-  mockPrismaClient.prototype.journalEntry = { create: vi.fn(), findFirst: vi.fn(), count: vi.fn().mockResolvedValue(0) };
-  mockPrismaClient.prototype.account = { findMany: vi.fn(), findUnique: vi.fn().mockResolvedValue({ id: 'acc-1' }) };
-  mockPrismaClient.prototype.$transaction = vi.fn((callback: any) => {
+jest.mock('@prisma/client', () => {
+  const mockPrismaClient = jest.fn();
+  mockPrismaClient.prototype.deliveryOrder = { findMany: jest.fn(), findUnique: jest.fn(), create: jest.fn(), update: jest.fn() };
+  mockPrismaClient.prototype.deliveryOrderItem = { update: jest.fn(), findMany: jest.fn() };
+  mockPrismaClient.prototype.inventoryItem = { findUnique: jest.fn(), update: jest.fn() };
+  mockPrismaClient.prototype.inventoryTransaction = { create: jest.fn() };
+  mockPrismaClient.prototype.journalEntry = { create: jest.fn(), findFirst: jest.fn(), count: jest.fn().mockResolvedValue(0) };
+  mockPrismaClient.prototype.account = { findMany: jest.fn(), findUnique: jest.fn().mockResolvedValue({ id: 'acc-1' }) };
+  mockPrismaClient.prototype.$transaction = jest.fn((callback: any) => {
     if (typeof callback === 'function') return callback(mockPrismaClient.prototype);
     return Promise.all(callback);
   });
@@ -40,7 +39,7 @@ describe('Delivery Orders API', () => {
   let prismaMock: any;
 
   beforeEach(() => {
-    vi.clearAllMocks();
+    jest.clearAllMocks();
     prismaMock = PrismaClient.prototype;
   });
 

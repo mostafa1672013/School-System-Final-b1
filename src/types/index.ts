@@ -35,7 +35,7 @@ export interface User {
   permissions?: UserPermission[];
 }
 
-export type StudentStatus = 'applied' | 'under_testing' | 'fee_setup' | 'pending_approval' | 'active' | 'admitted' | 'inactive' | 'graduated' | 'transferred';
+export type StudentStatus = 'applied' | 'under_testing' | 'fee_setup' | 'pending_approval' | 'pending_discount' | 'active' | 'admitted' | 'failed' | 'inactive' | 'graduated' | 'transferred';
 export type Stage = 'kg' | 'primary' | 'preparatory' | 'secondary';
 export type Track = 'local' | 'international';
 
@@ -130,9 +130,13 @@ export interface StageFee {
   track: Track;
   academicYear: string;
   tuitionFees: number;
+  tuitionMandatory?: boolean;
   booksFees: number;
+  booksMandatory?: boolean;
   uniformFees: number;
+  uniformMandatory?: boolean;
   applicationFees: number;
+  applicationMandatory?: boolean;
   additionalFees?: AdditionalFee[];
 }
 
@@ -174,6 +178,9 @@ export interface InstallmentPlan {
   numberOfInstallments: number;
   installments: InstallmentItem[];
   createdDate: string;
+  /** Returned by the API since the Prisma `InstallmentPlan` model has these. */
+  academicYear?: string;
+  status?: 'active' | 'completed' | 'cancelled';
 }
 
 export type InventoryCategory = string; // Dynamic categories populated from ItemCategory API
@@ -182,6 +189,8 @@ export interface InventoryItem {
   id: string;
   name: string;
   category: InventoryCategory;
+  /** Optional FK to the ItemCategory row — some endpoints expose it. */
+  categoryId?: string;
   itemType: 'sale' | 'consumable';
   quantity: number;
   minQuantity: number;
@@ -248,6 +257,10 @@ export interface BusSubscription {
   studentId?: string;
   subscriberName: string;
   routeId: string;
+  /** Denormalized route name returned by some API endpoints for convenience. */
+  routeName?: string;
+  /** Subscription mode (e.g. 'one_way' / 'two_way') when surfaced by the API. */
+  type?: string;
   route?: BusRoute;
   academicYear: string;
   startDate: string;
@@ -493,6 +506,10 @@ export interface TreasurySession {
 
 export interface TreasuryStatus {
   status: 'open' | 'pending_close' | 'no_session' | 'pending_reopen';
+  /** Derived flag: true when status === 'open'. Set by the store/API. */
+  isOpen?: boolean;
+  /** True when a close has been requested but not yet approved. */
+  pendingClosure?: boolean;
   session?: TreasurySession;
   totalIncome?: number;
   totalExpenses?: number;
