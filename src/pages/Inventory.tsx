@@ -18,7 +18,7 @@ import { useAuthStore } from '@/stores/authStore';
 import { usePrintInventoryReport } from '@/hooks/usePrintInventoryReport';
 import { formatCurrency, formatDateShort } from '@/lib/utils';
 import StatCard from '@/components/features/StatCard';
-import type { InventoryItem, ItemCategory } from '@/types';
+import type { InventoryItem, ItemCategory, InventoryCategory } from '@/types';
 
 
 const txTypeOptions = [

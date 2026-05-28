@@ -9,11 +9,13 @@ const config: Config = {
   },
   collectCoverageFrom: ['src/**/*.ts', '!src/__tests__/**', '!src/index.ts'],
   coverageReporters: ['text', 'lcov'],
-  testPathIgnorePatterns: ['/node_modules/', '/dist/'],
+  testPathIgnorePatterns: ['/node_modules/', '/dist/', 'setup\\.ts$'],
   testTimeout: 10000,
   transform: {
     '^.+\\.tsx?$': ['ts-jest', { tsconfig: 'tsconfig.json' }],
   },
+  // Sets required env vars (e.g. JWT_SECRET) before importing app modules.
+  setupFiles: ['<rootDir>/src/__tests__/setup.ts'],
 };
 
 export default config;

@@ -193,7 +193,8 @@ export default function StudentStatement({ student, payments, installmentPlan, i
       import('jspdf'),
       import('html2canvas'),
     ]);
-    const canvas = await html2canvas(printRef.current, { scale: 2, useCORS: true });
+    // `scale` is supported by html2canvas at runtime but missing from the bundled types.
+    const canvas = await html2canvas(printRef.current, { useCORS: true, scale: 2 } as Parameters<typeof html2canvas>[1]);
     const imgData = canvas.toDataURL('image/png');
     const pdf = new jsPDF({ orientation: 'portrait', unit: 'mm', format: 'a4' });
     const pdfW = pdf.internal.pageSize.getWidth();

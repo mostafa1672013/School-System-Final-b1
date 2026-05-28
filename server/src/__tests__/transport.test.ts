@@ -1,11 +1,10 @@
-import { describe, it, expect, vi, beforeEach } from 'vitest';
 import request from 'supertest';
 import express from 'express';
 import miscRouter from '../routes/misc';
 import { PrismaClient } from '@prisma/client';
 
 // Mock authentication middleware
-vi.mock('../middleware/auth', () => ({
+jest.mock('../middleware/auth', () => ({
   requireAuth: (req: any, res: any, next: any) => {
     req.user = { userId: '1', role: 'system_admin' };
     next();
@@ -19,14 +18,14 @@ app.use(express.json());
 // Mount the miscRouter on the root or on /api, we'll mount on root to simulate the main app
 app.use('/api', miscRouter);
 
-vi.mock('@prisma/client', () => {
-  const mockPrismaClient = vi.fn();
-  mockPrismaClient.prototype.busSubscription = { findMany: vi.fn(), findUnique: vi.fn(), create: vi.fn(), update: vi.fn(), findFirst: vi.fn() };
-  mockPrismaClient.prototype.busRoute = { findUnique: vi.fn() };
-  mockPrismaClient.prototype.student = { findUnique: vi.fn(), update: vi.fn() };
-  mockPrismaClient.prototype.user = { findUnique: vi.fn() };
-  mockPrismaClient.prototype.studentYearlyFinance = { findUnique: vi.fn(), update: vi.fn() };
-  mockPrismaClient.prototype.$transaction = vi.fn((callback: any) => {
+jest.mock('@prisma/client', () => {
+  const mockPrismaClient = jest.fn();
+  mockPrismaClient.prototype.busSubscription = { findMany: jest.fn(), findUnique: jest.fn(), create: jest.fn(), update: jest.fn(), findFirst: jest.fn() };
+  mockPrismaClient.prototype.busRoute = { findUnique: jest.fn() };
+  mockPrismaClient.prototype.student = { findUnique: jest.fn(), update: jest.fn() };
+  mockPrismaClient.prototype.user = { findUnique: jest.fn() };
+  mockPrismaClient.prototype.studentYearlyFinance = { findUnique: jest.fn(), update: jest.fn() };
+  mockPrismaClient.prototype.$transaction = jest.fn((callback: any) => {
     if (typeof callback === 'function') return callback(mockPrismaClient.prototype);
     return Promise.all(callback);
   });
@@ -37,7 +36,7 @@ describe('Bus Subscriptions API', () => {
   let prismaMock: any;
 
   beforeEach(() => {
-    vi.clearAllMocks();
+    jest.clearAllMocks();
     prismaMock = PrismaClient.prototype;
   });
 

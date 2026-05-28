@@ -48,7 +48,8 @@ export default function YearEndReport({ academicYear, students, payments }: Prop
     if (!reportRef.current) return;
     const { default: html2canvas } = await import('html2canvas');
     const { jsPDF } = await import('jspdf');
-    const canvas = await html2canvas(reportRef.current, { scale: 2, useCORS: true });
+    // `scale` is supported by html2canvas at runtime but missing from the bundled types.
+    const canvas = await html2canvas(reportRef.current, { useCORS: true, scale: 2 } as Parameters<typeof html2canvas>[1]);
     const imgData = canvas.toDataURL('image/png');
     const pdf = new jsPDF({ orientation: 'portrait', unit: 'mm', format: 'a4' });
     const pdfWidth = pdf.internal.pageSize.getWidth();

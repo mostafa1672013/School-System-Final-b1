@@ -47,7 +47,7 @@ export default function NewStageFee() {
             return;
         }
         try {
-            await saveStageFee(form);
+            await saveStageFee(form as Omit<import('@/types').StageFee, 'id'>);
             toast.success('تم حفظ إعدادات الرسوم بنجاح');
             navigate('/stage-fees');
         } catch (error: any) {

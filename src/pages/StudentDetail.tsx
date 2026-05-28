@@ -19,7 +19,7 @@ import { useDeliveryOrderStore } from '@/stores/deliveryOrderStore';
 import { useAuthStore } from '@/stores/authStore';
 import { formatCurrency, formatDateShort, stageLabels, paymentTypeLabels, paymentMethodLabels } from '@/lib/utils';
 import { getAuthHeaders } from '@/stores/authStore';
-import type { PaymentType, PaymentMethod, Badge, StudentContactLog, ContactOutcome } from '@/types';
+import type { PaymentType, PaymentMethod, Badge as BadgeType, StudentContactLog, ContactOutcome } from '@/types';
 import { printPaymentReceipt } from '@/hooks/usePrintReceipt';
 import StudentStatement from '@/components/student/StudentStatement';
 
@@ -41,7 +41,6 @@ export default function StudentDetail() {
         fetchStudentInstallments,
         saveInstallmentPlan,
         payInstallment,
-        updateInstallmentPlan,
         fetchStudentInventory,
         inventoryTx: inventoryTxMap
     } = usePaymentsStore();
@@ -88,7 +87,7 @@ export default function StudentDetail() {
     const [installmentsPreview, setInstallmentsPreview] = useState<{id?: string, dueDate: string, amount: number, status?: string, paidAmount?: number}[]>([]);
     const [payingInstallment, setPayingInstallment] = useState<{planId: string, instId: string, maxAmount: number} | null>(null);
     const [editingPlanId, setEditingPlanId] = useState<string | null>(null);
-    const [badges, setBadges] = useState<Badge[]>([]);
+    const [badges, setBadges] = useState<BadgeType[]>([]);
     const [badgeDialogOpen, setBadgeDialogOpen] = useState(false);
     const [assigningBadge, setAssigningBadge] = useState(false);
     const [editingPhone, setEditingPhone] = useState(false);

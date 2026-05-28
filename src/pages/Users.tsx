@@ -92,7 +92,7 @@ export default function Users() {
     const [deactivateConfirmOpen, setDeactivateConfirmOpen] = useState(false);
 
     // Form states
-    const [form, setForm] = useState({ name: '', email: '', role: 'accountant' as UserRole, password: '12345678', permissions: getDefaultPermissions() });
+    const [form, setForm] = useState({ name: '', email: '', role: 'accountant' as UserRole, password: '12345678', permissions: getDefaultPermissions(), active: true, discountLimitPercent: 0 });
     const [editForm, setEditForm] = useState({ name: '', email: '', role: 'accountant' as UserRole, permissions: getDefaultPermissions() });
     const [passwordForm, setPasswordForm] = useState({ password: '', confirm: '' });
 
@@ -133,7 +133,7 @@ export default function Users() {
         await addUser(form);
         setIsSubmitting(false);
         setDialogOpen(false);
-        setForm({ name: '', email: '', role: 'accountant', password: '12345678', permissions: getDefaultPermissions() });
+        setForm({ name: '', email: '', role: 'accountant', password: '12345678', permissions: getDefaultPermissions(), active: true, discountLimitPercent: 0 });
     };
 
     const handleEdit = async (e: React.FormEvent) => {
