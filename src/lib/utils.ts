@@ -51,8 +51,10 @@ export const roleLabels: Record<string, string> = {
   school_director: 'مدير المدرسة',
   head_accountant: 'رئيس الحسابات',
   accountant: 'محاسب',
+  treasury_accountant: 'محاسب الخزنة',
   warehouse_keeper: 'أمين المخزن',
   bus_supervisor: 'مشرف الباصات',
+  student_affairs: 'شؤون الطلاب',
 };
 
 export const paymentTypeLabels: Record<string, string> = {

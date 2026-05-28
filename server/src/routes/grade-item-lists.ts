@@ -1,9 +1,8 @@
 import { Router } from 'express';
-import { PrismaClient } from '@prisma/client';
 import { requireAuth, accountantRoles, accountingAndWarehouse } from '../middleware/auth';
 
 const router = Router();
-const prisma = new PrismaClient();
+import { prisma } from '../lib/prisma';
 
 // GET all lists (filterable by academicYear, term, stage, grade, track)
 router.get('/', requireAuth, accountingAndWarehouse, async (req, res) => {

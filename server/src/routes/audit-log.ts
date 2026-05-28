@@ -1,9 +1,8 @@
 import { Router } from 'express';
-import { PrismaClient } from '@prisma/client';
 import { requireAuth, managementRoles } from '../middleware/auth';
 
 const router = Router();
-const prisma = new PrismaClient();
+import { prisma } from '../lib/prisma';
 
 // GET /api/audit?entityType=Payment&entityId=xxx&userId=yyy&page=1
 router.get('/', requireAuth, managementRoles, async (req, res) => {

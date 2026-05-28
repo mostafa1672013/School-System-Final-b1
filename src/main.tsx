@@ -2,7 +2,9 @@ import { StrictMode } from 'react';
 import { createRoot } from 'react-dom/client';
 import { BrowserRouter } from 'react-router-dom';
 import { ErrorBoundary } from 'react-error-boundary';
+import { QueryClientProvider } from '@tanstack/react-query';
 import App from './App';
+import { queryClient } from './lib/query-client';
 import './index.css';
 
 // Auto-heal corrupted localStorage data for all stores
@@ -50,9 +52,11 @@ function ErrorFallback({ error, resetErrorBoundary }: { error: Error; resetError
 createRoot(document.getElementById('root')!).render(
   <StrictMode>
     <ErrorBoundary FallbackComponent={ErrorFallback} onReset={() => window.location.replace('/')}>
-      <BrowserRouter>
-        <App />
-      </BrowserRouter>
+      <QueryClientProvider client={queryClient}>
+        <BrowserRouter>
+          <App />
+        </BrowserRouter>
+      </QueryClientProvider>
     </ErrorBoundary>
   </StrictMode>
 );

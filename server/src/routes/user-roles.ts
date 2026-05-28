@@ -1,9 +1,8 @@
 import { Router } from 'express';
-import { PrismaClient } from '@prisma/client';
 import { requireAuth, adminOnly } from '../middleware/auth';
 
 const router = Router();
-const prisma = new PrismaClient();
+import { prisma } from '../lib/prisma';
 
 // GET /api/user-roles/:userId — list all roles for a user
 router.get('/:userId', requireAuth, adminOnly, async (req, res) => {

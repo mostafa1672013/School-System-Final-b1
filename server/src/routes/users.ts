@@ -1,12 +1,11 @@
 import { Router } from 'express';
-import { PrismaClient } from '@prisma/client';
 import bcrypt from 'bcrypt';
 import { signToken, requireAuth, adminOnly } from '../middleware/auth';
 import { validate, LoginSchema, CreateUserSchema, UpdateUserSchema } from '../validation/schemas';
 import { decryptNationalId } from '../lib/crypto';
 
 const router = Router();
-const prisma = new PrismaClient();
+import { prisma } from '../lib/prisma';
 
 // ===== AUTH =====
 // NOTE: Login rate limiter is applied in index.ts before mounting this router

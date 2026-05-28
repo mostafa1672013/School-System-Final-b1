@@ -1,30 +1,86 @@
 import { Router } from 'express';
-import { PrismaClient } from '@prisma/client';
 import { requireAuth, requireRoles, managementRoles } from '../middleware/auth';
 import { audit, getAuditContext } from '../middleware/audit';
 import { encryptNationalId, decryptNationalId, hashNationalId } from '../lib/crypto';
 
 const router = Router();
-const prisma = new PrismaClient();
+import { prisma } from '../lib/prisma';
 
 // ===== STUDENTS =====
 
-// Get all students
+// Get all students (paginated + filterable)
+// Backward-compatible: if no `page` query param, returns first 100 in legacy array shape.
+// Otherwise returns { items, total, page, pageSize }.
 router.get('/', async (req, res) => {
   try {
+    const {
+      page: pageRaw,
+      pageSize: pageSizeRaw,
+      status,
+      stage,
+      grade,
+      academicYear,
+      search,
+    } = req.query as Record<string, string | undefined>;
+
+    const isPaginated = pageRaw !== undefined;
+    const page = Math.max(1, Number.parseInt(pageRaw ?? '1', 10) || 1);
+    const pageSize = Math.min(
+      500,
+      Math.max(1, Number.parseInt(pageSizeRaw ?? '100', 10) || 100),
+    );
+
+    const where: Record<string, unknown> = { deletedAt: null };
+    if (status) where.status = status;
+    if (stage) where.stage = stage;
+    if (grade) where.grade = grade;
+    if (academicYear) where.academicYear = academicYear;
+    if (search) {
+      where.OR = [
+        { name: { contains: search, mode: 'insensitive' } },
+        { guardianName: { contains: search, mode: 'insensitive' } },
+        { guardianPhone: { contains: search } },
+      ];
+    }
+
+    if (isPaginated) {
+      const [items, total] = await prisma.$transaction([
+        prisma.student.findMany({
+          where,
+          include: {
+            yearlyFinance: { orderBy: { academicYear: 'asc' } },
+            badge: true,
+          },
+          orderBy: { createdAt: 'desc' },
+          skip: (page - 1) * pageSize,
+          take: pageSize,
+        }),
+        prisma.student.count({ where }),
+      ]);
+      const safeItems = items.map((s) => ({
+        ...s,
+        nationalId: decryptNationalId(s.nationalId),
+      }));
+      return res.json({ items: safeItems, total, page, pageSize });
+    }
+
+    // Legacy path — capped at 100 to prevent accidental full-table loads.
     const students = await prisma.student.findMany({
-      where: { deletedAt: null },
+      where,
       include: {
-        yearlyFinance: {
-          orderBy: { academicYear: 'asc' }
-        },
-        badge: true
+        yearlyFinance: { orderBy: { academicYear: 'asc' } },
+        badge: true,
       },
-      orderBy: { createdAt: 'desc' }
+      orderBy: { createdAt: 'desc' },
+      take: pageSize,
     });
-    const safeStudents = students.map(s => ({ ...s, nationalId: decryptNationalId(s.nationalId) }));
+    const safeStudents = students.map((s) => ({
+      ...s,
+      nationalId: decryptNationalId(s.nationalId),
+    }));
     res.json(safeStudents);
   } catch (error) {
+    console.error('List students error:', error);
     res.status(500).json({ error: 'Failed to fetch students' });
   }
 });

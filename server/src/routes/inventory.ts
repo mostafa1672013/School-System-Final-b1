@@ -1,10 +1,9 @@
 import { Router } from 'express';
-import { PrismaClient } from '@prisma/client';
 import { randomUUID } from 'crypto';
 import { requireAuth, warehouseRoles, accountingAndWarehouse } from '../middleware/auth';
 
 const router = Router();
-const prisma = new PrismaClient();
+import { prisma } from '../lib/prisma';
 
 // ===== INVENTORY CATEGORIES =====
 
@@ -87,11 +86,49 @@ router.delete('/categories/:id', async (req, res) => {
 
 router.get('/', async (req, res) => {
   try {
+    const {
+      page: pageRaw,
+      pageSize: pageSizeRaw,
+      category,
+      grade,
+      itemType,
+      search,
+    } = req.query as Record<string, string | undefined>;
+
+    const isPaginated = pageRaw !== undefined;
+    const page = Math.max(1, Number.parseInt(pageRaw ?? '1', 10) || 1);
+    const pageSize = Math.min(
+      500,
+      Math.max(1, Number.parseInt(pageSizeRaw ?? '200', 10) || 200),
+    );
+
+    const where: Record<string, unknown> = {};
+    if (category) where.category = category;
+    if (grade) where.grade = grade;
+    if (itemType) where.itemType = itemType;
+    if (search) where.name = { contains: search, mode: 'insensitive' };
+
+    if (isPaginated) {
+      const [items, total] = await prisma.$transaction([
+        prisma.inventoryItem.findMany({
+          where,
+          orderBy: { createdAt: 'desc' },
+          skip: (page - 1) * pageSize,
+          take: pageSize,
+        }),
+        prisma.inventoryItem.count({ where }),
+      ]);
+      return res.json({ items, total, page, pageSize });
+    }
+
     const items = await prisma.inventoryItem.findMany({
-      orderBy: { createdAt: 'desc' }
+      where,
+      orderBy: { createdAt: 'desc' },
+      take: pageSize,
     });
     res.json(items);
   } catch (error) {
+    console.error('List inventory error:', error);
     res.status(500).json({ error: 'Failed to fetch inventory' });
   }
 });
@@ -197,14 +234,54 @@ router.get('/low-stock', async (req, res) => {
 // GET: All inventory transactions
 router.get('/transactions', async (req, res) => {
   try {
-    const { itemId } = req.query;
+    const {
+      itemId,
+      type,
+      studentId,
+      from,
+      to,
+      page: pageRaw,
+      pageSize: pageSizeRaw,
+    } = req.query as Record<string, string | undefined>;
+
+    const isPaginated = pageRaw !== undefined;
+    const page = Math.max(1, Number.parseInt(pageRaw ?? '1', 10) || 1);
+    const pageSize = Math.min(
+      500,
+      Math.max(1, Number.parseInt(pageSizeRaw ?? '100', 10) || 100),
+    );
+
+    const where: Record<string, unknown> = {};
+    if (itemId) where.itemId = itemId;
+    if (type) where.type = type;
+    if (studentId) where.studentId = studentId;
+    if (from || to) {
+      const range: Record<string, Date> = {};
+      if (from) range.gte = new Date(from);
+      if (to) range.lte = new Date(to);
+      where.date = range;
+    }
+
+    if (isPaginated) {
+      const [items, total] = await prisma.$transaction([
+        prisma.inventoryTransaction.findMany({
+          where,
+          include: { item: true },
+          orderBy: { date: 'desc' },
+          skip: (page - 1) * pageSize,
+          take: pageSize,
+        }),
+        prisma.inventoryTransaction.count({ where }),
+      ]);
+      return res.json({ items, total, page, pageSize });
+    }
 
     const transactions = await prisma.inventoryTransaction.findMany({
-      where: itemId ? { itemId: String(itemId) } : undefined,
+      where,
       include: { item: true },
-      orderBy: { createdAt: 'desc' }
+      orderBy: { date: 'desc' },
+      take: 500,
     });
-
     res.json(transactions);
   } catch (error: any) {
     console.error('Inventory transactions query error:', error);

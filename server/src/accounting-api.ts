@@ -1,8 +1,7 @@
-import { PrismaClient } from '@prisma/client';
 import express from 'express';
 import { requireAuth, requireRoles, adminOnly, accountantRoles } from './middleware/auth';
 
-const prisma = new PrismaClient();
+import { prisma } from './lib/prisma';
 const router = express.Router();
 
 // ======= EXPENSE LIMITS =======

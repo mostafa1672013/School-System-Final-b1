@@ -1,11 +1,10 @@
 import express, { Router } from 'express';
-import { PrismaClient } from '@prisma/client';
 import { requireAuth } from '../middleware/auth';
 import { audit, getAuditContext } from '../middleware/audit';
 import { getActivePeriodId } from '../lib/accounting-helpers';
 
 const router = Router();
-const prisma = new PrismaClient();
+import { prisma } from '../lib/prisma';
 
 // ===== Treasury Guard Middleware =====
 async function requireOpenTreasury(req: express.Request, res: express.Response, next: express.NextFunction) {
@@ -52,12 +51,58 @@ async function requireOpenTreasury(req: express.Request, res: express.Response, 
 
 router.get('/payments', async (req, res) => {
   try {
+    const {
+      page: pageRaw,
+      pageSize: pageSizeRaw,
+      studentId,
+      type,
+      academicYear,
+      sessionId,
+      from,
+      to,
+    } = req.query as Record<string, string | undefined>;
+
+    const isPaginated = pageRaw !== undefined;
+    const page = Math.max(1, Number.parseInt(pageRaw ?? '1', 10) || 1);
+    const pageSize = Math.min(
+      500,
+      Math.max(1, Number.parseInt(pageSizeRaw ?? '100', 10) || 100),
+    );
+
+    const where: Record<string, unknown> = { deletedAt: null };
+    if (studentId) where.studentId = studentId;
+    if (type) where.type = type;
+    if (academicYear) where.academicYear = academicYear;
+    if (sessionId) where.sessionId = sessionId;
+    if (from || to) {
+      const range: Record<string, Date> = {};
+      if (from) range.gte = new Date(from);
+      if (to) range.lte = new Date(to);
+      where.date = range;
+    }
+
+    if (isPaginated) {
+      const [items, total] = await prisma.$transaction([
+        prisma.payment.findMany({
+          where,
+          orderBy: { date: 'desc' },
+          skip: (page - 1) * pageSize,
+          take: pageSize,
+        }),
+        prisma.payment.count({ where }),
+      ]);
+      return res.json({ items, total, page, pageSize });
+    }
+
+    // Legacy path — cap at 500 to avoid full-table loads.
     const payments = await prisma.payment.findMany({
-      where: { deletedAt: null },
-      orderBy: { date: 'desc' }
+      where,
+      orderBy: { date: 'desc' },
+      take: 500,
     });
     res.json(payments);
   } catch (error) {
+    console.error('List payments error:', error);
     res.status(500).json({ error: 'Failed to fetch payments' });
   }
 });

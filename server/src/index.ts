@@ -1,6 +1,5 @@
 import express from 'express';
 import cors from 'cors';
-import { PrismaClient } from '@prisma/client';
 import * as dotenv from 'dotenv';
 import { createServer } from 'http';
 import { Server as SocketIOServer } from 'socket.io';
@@ -8,6 +7,7 @@ import helmet from 'helmet';
 import rateLimit from 'express-rate-limit';
 import accountingRouter from './accounting-api';
 import { requireAuth, socketAuth } from './middleware/auth';
+import { perfLogger } from './middleware/perf';
 
 // Domain routers
 import studentsRouter from './routes/students';
@@ -28,7 +28,7 @@ import distributionReportRouter from './routes/distribution-report';
 
 dotenv.config();
 
-const prisma = new PrismaClient();
+import { prisma } from './lib/prisma';
 const app = express();
 const PORT = process.env.PORT || 3000;
 
@@ -67,6 +67,22 @@ const io = new SocketIOServer(httpServer, {
     credentials: true,
   }
 });
+
+// Performance instrumentation — runs first so it sees full request time.
+app.use(perfLogger);
+
+// Optional gzip/brotli compression — only kicks in when the `compression`
+// package is installed. We require it lazily so the server still boots
+// without it installed.
+try {
+  // eslint-disable-next-line @typescript-eslint/no-require-imports, @typescript-eslint/no-var-requires
+  const compression = require('compression');
+  app.use(compression({ threshold: 1024 }));
+} catch {
+  console.warn(
+    '[perf] `compression` package not installed — skipping. Install with: npm i compression @types/compression',
+  );
+}
 
 // Security middleware
 app.use(helmet());

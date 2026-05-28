@@ -1,10 +1,9 @@
 import { Router } from 'express';
-import { PrismaClient } from '@prisma/client';
 import { requireAuth, adminOnly } from '../middleware/auth';
 import { decryptNationalId } from '../lib/crypto';
 
 const router = Router();
-const prisma = new PrismaClient();
+import { prisma } from '../lib/prisma';
 
 // ===== DATABASE MANAGEMENT (system_admin only) =====
 

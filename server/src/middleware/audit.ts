@@ -1,7 +1,6 @@
-import { PrismaClient } from '@prisma/client';
 import { Request } from 'express';
 
-const prisma = new PrismaClient();
+import { prisma } from '../lib/prisma';
 
 export interface AuditContext {
   userId: string;

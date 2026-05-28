@@ -1,10 +1,9 @@
 import { Router } from 'express';
-import { PrismaClient } from '@prisma/client';
 import { requireAuth, managementRoles } from '../middleware/auth';
 import { z } from 'zod';
 
 const router = Router();
-const prisma = new PrismaClient();
+import { prisma } from '../lib/prisma';
 
 // Helper to get or create the Opening Balances Equity Account
 async function getOpeningBalanceAccount() {

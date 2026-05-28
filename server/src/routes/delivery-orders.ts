@@ -1,10 +1,9 @@
 import { Router } from 'express';
-import { PrismaClient } from '@prisma/client';
 import { randomUUID } from 'crypto';
 import { requireAuth, accountantRoles, warehouseRoles, accountingAndWarehouse } from '../middleware/auth';
 
 const router = Router();
-const prisma = new PrismaClient();
+import { prisma } from '../lib/prisma';
 
 async function generateDeliveryCode(tx: any): Promise<string> {
   const count = await tx.deliveryOrder.count();
@@ -15,23 +14,70 @@ async function generateDeliveryCode(tx: any): Promise<string> {
 // GET list with filters
 router.get('/', requireAuth, accountingAndWarehouse, async (req, res) => {
   try {
-    const { status, studentId, academicYear, term } = req.query;
-    const where: any = {};
-    if (status) where.status = String(status);
-    if (studentId) where.studentId = String(studentId);
-    if (academicYear) where.academicYear = String(academicYear);
-    if (term) where.term = String(term);
+    const {
+      status,
+      studentId,
+      academicYear,
+      term,
+      page: pageRaw,
+      pageSize: pageSizeRaw,
+    } = req.query as Record<string, string | undefined>;
+
+    const isPaginated = pageRaw !== undefined;
+    const page = Math.max(1, Number.parseInt(pageRaw ?? '1', 10) || 1);
+    const pageSize = Math.min(
+      500,
+      Math.max(1, Number.parseInt(pageSizeRaw ?? '100', 10) || 100),
+    );
+
+    const where: Record<string, unknown> = {};
+    if (status) where.status = status;
+    if (studentId) where.studentId = studentId;
+    if (academicYear) where.academicYear = academicYear;
+    if (term) where.term = term;
+
+    const includeShape = {
+      student: {
+        select: {
+          id: true,
+          name: true,
+          stage: true,
+          grade: true,
+          track: true,
+        },
+      },
+      items: {
+        include: {
+          inventoryItem: {
+            select: { id: true, name: true, unit: true, grade: true },
+          },
+        },
+      },
+    } as const;
+
+    if (isPaginated) {
+      const [items, total] = await prisma.$transaction([
+        prisma.deliveryOrder.findMany({
+          where,
+          include: includeShape,
+          orderBy: { createdAt: 'desc' },
+          skip: (page - 1) * pageSize,
+          take: pageSize,
+        }),
+        prisma.deliveryOrder.count({ where }),
+      ]);
+      return res.json({ items, total, page, pageSize });
+    }
 
     const orders = await prisma.deliveryOrder.findMany({
       where,
-      include: {
-        student: { select: { id: true, name: true, stage: true, grade: true, track: true } },
-        items: { include: { inventoryItem: { select: { id: true, name: true, unit: true, grade: true } } } }
-      },
-      orderBy: { createdAt: 'desc' }
+      include: includeShape,
+      orderBy: { createdAt: 'desc' },
+      take: 500,
     });
     res.json(orders);
   } catch (error) {
+    console.error('List delivery orders error:', error);
     res.status(500).json({ error: 'فشل تحميل طلبات التسليم' });
   }
 });
