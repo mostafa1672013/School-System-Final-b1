@@ -20,9 +20,16 @@ docker compose up -d
 npm install
 ```
 
-### 3. تشغيل وضع التطوير
+### 3. تشغيل وضع التطوير (Frontend + Backend معاً)
 ```bash
 npm run dev
+```
+> ✅ هذا الأمر الواحد يشغّل **الواجهة** (Vite على المنفذ 5173) و**السيرفر** (Express على المنفذ 4000) في نفس الوقت تلقائياً.
+
+#### أوامر إضافية (اختيارية):
+```bash
+npm run client   # تشغيل الواجهة فقط
+npm run server   # تشغيل السيرفر فقط
 ```
 
 ---
@@ -39,6 +46,7 @@ npm run deploy
 
 ## التقنيات المستخدمة
 - **Frontend:** React + Vite + TypeScript
+- **Backend:** Express + Prisma ORM
 - **Styling:** Tailwind CSS + Shadcn UI
 - **Database:** PostgreSQL 16 (via Docker)
 - **Deployment:** GitHub Pages

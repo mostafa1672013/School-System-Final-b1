@@ -1,16 +1,41 @@
-export type UserRole = 'system_admin' | 'school_director' | 'head_accountant' | 'accountant' | 'warehouse_keeper' | 'bus_supervisor';
+export type UserRole = 'system_admin' | 'school_director' | 'head_accountant' | 'accountant' | 'treasury_accountant' | 'warehouse_keeper' | 'bus_supervisor' | 'student_affairs';
+
+export interface Badge {
+  id: string;
+  name: string;
+  color: string;
+  icon?: string;
+  discountPercentage: number;
+  description?: string;
+  createdAt: string;
+  updatedAt: string;
+  _count?: { students: number };
+}
+
+export interface UserPermission {
+  resource: string;
+  canRead: boolean;
+  canWrite: boolean;
+  canDelete: boolean;
+}
 
 export interface User {
   id: string;
   name: string;
   email: string;
-  password: string;
+  password?: string;
   role: UserRole;
   active: boolean;
   discountLimitPercent: number;
+  avatar?: string | null;
+  isOnline?: boolean;
+  lastLoginAt?: Date | null;
+  lastLogoutAt?: Date | null;
+  createdAt?: Date;
+  permissions?: UserPermission[];
 }
 
-export type StudentStatus = 'applied' | 'under_testing' | 'fee_setup' | 'pending_approval' | 'admitted' | 'inactive' | 'graduated' | 'transferred';
+export type StudentStatus = 'applied' | 'under_testing' | 'fee_setup' | 'pending_approval' | 'active' | 'admitted' | 'inactive' | 'graduated' | 'transferred';
 export type Stage = 'kg' | 'primary' | 'preparatory' | 'secondary';
 export type Track = 'local' | 'international';
 
@@ -31,6 +56,7 @@ export interface StudentYearlyFinance {
   uniformFees: number;
   busFees: number;
   otherFees: number;
+  arrearsFees: number;
   totalFees: number;
   paidAmount: number;
 }
@@ -48,6 +74,7 @@ export interface Student {
   guardianName: string;
   guardianPhone: string;
   address?: string;
+  birthDate?: string;
   enrollmentDate?: string;
   status: StudentStatus;
   hasSiblings: boolean;
@@ -57,17 +84,43 @@ export interface Student {
   uniformFees: number;
   busFees: number;
   otherFees: number;
+  arrearsFees: number;
   totalFees: number;
   paidAmount: number;
   discountAmount: number;
+  discountPercentage: number;
   discountApprovedBy?: string;
+  discountStatus: 'approved' | 'pending' | 'rejected';
+  requestedDiscountAmount?: number;
+  requestedDiscountPercentage?: number;
+  discountRequesterId?: string;
+  discountApproverId?: string;
   busRouteId?: string;
-  documents?: Record<string, string>;
+  badgeId?: string | null;
+  badge?: Badge | null;
+  documents?: Record<string, { name: string, url: string, label: string }>;
+  extraFields?: { label: string, value: string }[];
   additionalFees?: AdditionalFee[];
   pendingPaymentAmount?: number;
   pendingPaymentType?: string;
+  pendingPaymentMethod?: string;
+  pendingWalletPhoneNumber?: string;
+  pendingPaymentNotes?: string;
+  pendingInstallmentPlanId?: string;
+  pendingInstallmentId?: string;
   paymentRequestStatus?: string;
   yearlyFinance?: StudentYearlyFinance[];
+}
+
+export type ContactOutcome = 'contacted' | 'no_answer' | 'promised' | 'paid_after';
+export interface StudentContactLog {
+  id: string;
+  studentId: string;
+  date: string;
+  notes: string;
+  outcome: ContactOutcome;
+  createdBy: string;
+  createdAt: string;
 }
 
 export interface StageFee {
@@ -83,8 +136,8 @@ export interface StageFee {
   additionalFees?: AdditionalFee[];
 }
 
-export type PaymentType = 'tuition' | 'books' | 'uniform' | 'bus' | 'activities' | 'other';
-export type PaymentMethod = 'cash' | 'bank_transfer' | 'check';
+export type PaymentType = 'tuition' | 'books' | 'uniform' | 'bus' | 'activities' | 'other' | 'application_fee' | 'arrears';
+export type PaymentMethod = 'cash' | 'bank_transfer' | 'wallet';
 
 export interface Payment {
   id: string;
@@ -97,6 +150,9 @@ export interface Payment {
   receiptNumber: string;
   collectedBy: string;
   notes?: string;
+  walletPhoneNumber?: string;
+  sessionId?: string | null;
+  academicYear?: string;
 }
 
 export type InstallmentStatus = 'paid' | 'pending' | 'overdue';
@@ -105,6 +161,7 @@ export interface InstallmentItem {
   id: string;
   dueDate: string;
   amount: number;
+  paidAmount?: number;
   status: InstallmentStatus;
   paidDate?: string;
 }
@@ -119,31 +176,55 @@ export interface InstallmentPlan {
   createdDate: string;
 }
 
-export type InventoryCategory = 'books' | 'uniform' | 'tools' | 'lab_equipment' | 'operational';
+export type InventoryCategory = string; // Dynamic categories populated from ItemCategory API
 
 export interface InventoryItem {
   id: string;
   name: string;
   category: InventoryCategory;
+  itemType: 'sale' | 'consumable';
   quantity: number;
   minQuantity: number;
+  maxQuantity?: number;
+  unit: string;
+  unitCost: number;
   unitPrice: number;
   grade?: string;
   description?: string;
   lastUpdated: string;
+  createdAt?: string;
+  updatedAt?: string;
 }
 
 export interface InventoryTransaction {
   id: string;
   itemId: string;
-  itemName: string;
+  item?: InventoryItem;
+  itemName?: string;
   type: 'in' | 'out';
+  subType?: 'purchase' | 'sale' | 'consumption' | 'adjustment';
   quantity: number;
-  date: string;
+  unitCostSnapshot: number;
+  unitPriceSnapshot: number;
+  totalAmount: number;
+  supplierName?: string;
+  departmentName?: string;
   studentId?: string;
   studentName?: string;
   notes?: string;
   performedBy: string;
+  performedByUserId?: string;
+  journalEntryId?: string;
+  date: string;
+  createdAt: string;
+}
+
+export interface ItemCategory {
+  id: string;
+  key: string;
+  name: string;
+  createdAt: string;
+  updatedAt: string;
 }
 
 export interface BusRoute {
@@ -158,14 +239,418 @@ export interface BusRoute {
   stops: string[];
 }
 
+export type SubscriberType = 'student' | 'employee' | 'supervisor';
+
 export interface BusSubscription {
   id: string;
-  studentId: string;
-  studentName: string;
+  code: string;
+  subscriberType: SubscriberType;
+  studentId?: string;
+  subscriberName: string;
   routeId: string;
-  routeName: string;
-  type: 'monthly' | 'annual';
+  route?: BusRoute;
+  academicYear: string;
+  startDate: string;
+  endDate?: string;
+  fullFeeAmount: number;
+  discountPct: number;
+  actualAmount: number;
+  pickupAddress?: string;
+  pickupPhone?: string;
+  status: 'active' | 'suspended' | 'cancelled' | 'completed';
+  notes?: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface CreateSubscriptionInput {
+  subscriberType: SubscriberType;
+  studentId?: string;
+  subscriberName: string;
+  routeId: string;
+  academicYear: string;
+  startDate: string;
+  endDate?: string;
+  fullFeeAmount: number;
+  discountPct: number;
+  actualAmount: number;
+  pickupAddress?: string;
+  pickupPhone?: string;
+  notes?: string;
+}
+
+export interface RentalCompany {
+  id: string;
+  code: string;
+  nameAr: string;
+  nameEn?: string;
+  contactPerson?: string;
+  phone?: string;
+  email?: string;
+  address?: string;
+  taxId?: string;
+  bankName?: string;
+  bankAccountNumber?: string;
+  notes?: string;
+  isActive: boolean;
+  createdAt: string;
+  updatedAt: string;
+  _count?: { contracts: number; drivers: number };
+}
+
+export interface RentalContract {
+  id: string;
+  companyId: string;
+  company?: RentalCompany;
+  contractNumber: string;
+  title?: string;
   startDate: string;
   endDate: string;
-  status: 'active' | 'expired' | 'cancelled';
+  monthlyFeePerBus: number;
+  busesCount: number;
+  includesDriver: boolean;
+  includesFuel: boolean;
+  includesMaintenance: boolean;
+  includesInsurance: boolean;
+  paymentFrequency: string;
+  paymentDueDay?: number;
+  status: 'draft' | 'active' | 'expired' | 'terminated';
+  notes?: string;
+  createdAt: string;
+  updatedAt: string;
+  _count?: { buses: number };
+}
+
+export interface FleetBus {
+  id: string;
+  code: string;
+  plateNumber: string;
+  capacity: number;
+  ownershipType: 'rented_full' | 'rented_no_driver' | 'owned';
+  rentalContractId?: string;
+  rentalContract?: RentalContract;
+  make?: string;
+  model?: string;
+  year?: number;
+  color?: string;
+  status: 'active' | 'maintenance' | 'retired';
+  insuranceExpiry?: string;
+  licenseExpiry?: string;
+  notes?: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface ExternalDriver {
+  id: string;
+  code: string;
+  fullName: string;
+  phone?: string;
+  companyId: string;
+  company?: RentalCompany;
+  licenseNumber?: string;
+  licenseExpiry?: string;
+  isActive: boolean;
+  notes?: string;
+  createdAt: string;
+}
+
+export interface Account {
+  id: string;
+  code: string;
+  name: string;
+  nameEn?: string;
+  type: string;
+  level?: number;
+  normalBalance?: string;
+  parentId?: string | null;
+  isSystemAccount?: boolean;
+  allowManualEntry?: boolean;
+  isActive?: boolean;
+  subAccounts?: Account[];
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface FiscalYear {
+  id: string;
+  yearCode: string;
+  nameAr: string;
+  nameEn: string;
+  startDate: string;
+  endDate: string;
+  status: 'active' | 'closed';
+  closedAt?: string;
+  closedBy?: string;
+  createdAt: string;
+  periods?: AccountingPeriod[];
+}
+
+export interface AccountingPeriod {
+  id: string;
+  periodCode: string;
+  nameAr: string;
+  nameEn: string;
+  startDate: string;
+  endDate: string;
+  fiscalYearId: string;
+  fiscalYear?: FiscalYear;
+  status: 'open' | 'closed' | 'locked';
+  closedAt?: string;
+  closedBy?: string;
+  createdAt: string;
+}
+
+export interface CostCenter {
+  id: string;
+  code: string;
+  nameAr: string;
+  nameEn: string;
+  description?: string;
+  parentId?: string;
+  isActive: boolean;
+  createdAt: string;
+  children?: CostCenter[];
+}
+
+export interface JournalEntryLine {
+  id: string;
+  journalEntryId: string;
+  accountId: string;
+  account?: Account;
+  debit: number;
+  credit: number;
+  description?: string;
+  costCenterId?: string;
+  costCenter?: CostCenter;
+  lineNumber: number;
+}
+
+export interface JournalEntry {
+  id: string;
+  entryNumber: string;
+  entryDate: string;
+  postingDate?: string;
+  description: string;
+  notes?: string;
+  referenceType?: string;
+  referenceId?: string;
+  status: 'draft' | 'pending_approval' | 'approved' | 'posted' | 'reversed';
+  periodId?: string;
+  period?: AccountingPeriod;
+  isReversal: boolean;
+  reversalOfId?: string;
+  reversedById?: string;
+  lines: JournalEntryLine[];
+  createdAt: string;
+  createdBy?: string;
+  approvedAt?: string;
+  approvedBy?: string;
+  postedAt?: string;
+  postedBy?: string;
+}
+
+export interface Expense {
+  id: string;
+  amount: number;
+  date: string;
+  description: string;
+  accountId: string;
+  account?: Account;
+  paymentMethod: string;
+  status: 'pending' | 'approved' | 'rejected' | 'pending_approval' | 'pending_treasury' | 'paid';
+  requestedBy: string;
+  approvedBy?: string | null;
+  paidBy?: string | null;
+  notes?: string | null;
+  sessionId?: string | null;
+  createdAt: string;
+}
+
+// ===== Treasury Types =====
+
+export type TreasurySessionStatus = 'open' | 'pending_close' | 'closed' | 'pending_reopen';
+
+export interface TreasurySession {
+  id: string;
+  date: string;
+  openingBalance: number;
+  closingBalance: number | null;
+  actualBalance: number | null;
+  difference: number | null;
+  status: TreasurySessionStatus;
+  openedBy: string;
+  openedByName?: string;
+  reopenRequestedByName?: string;
+  closedBy: string | null;
+  closureNote: string | null;
+  approvedBy: string | null;
+  openedAt: string;
+  closedAt: string | null;
+  payments?: Payment[];
+  expenses?: Expense[];
+}
+
+export interface TreasuryStatus {
+  status: 'open' | 'pending_close' | 'no_session' | 'pending_reopen';
+  session?: TreasurySession;
+  totalIncome?: number;
+  totalExpenses?: number;
+  currentBalance?: number;
+  paymentsCount?: number;
+  expensesCount?: number;
+  suggestedOpeningBalance?: number | null;
+  isFirstEver?: boolean;
+  closedToday?: boolean;
+  userHasPreviousSession?: boolean;
+  reopenRequestedByName?: string;
+}
+
+export interface TreasuryCloseResult {
+  status: 'closed' | 'needs_approval';
+  expectedBalance: number;
+  actualBalance: number;
+  difference: number;
+  sessionId?: string;
+  session?: TreasurySession;
+}
+
+export interface SystemSetting {
+  key: string;
+  value: string;
+}
+
+export interface AuditLog {
+  id: string;
+  userId: string;
+  userName: string;
+  action: string;
+  entityType: string;
+  entityId?: string | null;
+  before?: any;
+  after?: any;
+  ip?: string | null;
+  userAgent?: string | null;
+  createdAt: string;
+}
+
+export interface AuditLogsResponse {
+  logs: AuditLog[];
+  total: number;
+  page: number;
+  pageSize: number;
+  totalPages: number;
+}
+
+// ========================
+// Inventory Distribution
+// ========================
+
+export interface GradeItemListEntry {
+  id: string;
+  listId: string;
+  inventoryItemId: string;
+  inventoryItem?: {
+    id: string;
+    name: string;
+    unit: string;
+    category: string;
+    quantity: number;
+    grade?: string;
+    unitPrice: number;
+  };
+  quantity: number;
+  sellingPrice?: number;
+  preferredSupplierId?: string;
+  preferredSupplier?: { id: string; name: string };
+  notes?: string;
+  createdAt: string;
+}
+
+export interface GradeItemList {
+  id: string;
+  stage: string;
+  grade: string;
+  track: string;
+  academicYear: string;
+  term: string;
+  createdBy: string;
+  createdAt: string;
+  updatedAt: string;
+  entries: GradeItemListEntry[];
+}
+
+export type DeliveryOrderStatus = 'pending' | 'confirmed' | 'delivered' | 'cancelled';
+export type DeliveryChargeType = 'within_fees' | 'external';
+
+export interface DeliveryOrderItem {
+  id: string;
+  orderId: string;
+  inventoryItemId: string;
+  inventoryItem?: { id: string; name: string; unit: string; grade?: string; quantity: number };
+  itemName: string;
+  quantity: number;
+  unitPrice: number;
+  totalAmount: number;
+  deliveredAt?: string;
+  returnedAt?: string;
+  returnNotes?: string;
+  createdAt: string;
+}
+
+export interface DeliveryOrder {
+  id: string;
+  code: string;
+  studentId: string;
+  student?: { id: string; name: string; stage: string; grade: string; track: string };
+  academicYear: string;
+  term: string;
+  status: DeliveryOrderStatus;
+  chargeType: DeliveryChargeType;
+  requestedBy: string;
+  confirmedBy?: string;
+  deliveredBy?: string;
+  totalAmount: number;
+  notes?: string;
+  createdAt: string;
+  updatedAt: string;
+  items: DeliveryOrderItem[];
+}
+
+export interface DistributionItemStat {
+  inventoryItemId: string;
+  itemName: string;
+  unit: string;
+  quantityPerStudent: number;
+  preferredSupplierId?: string;
+  required: number;
+  currentStock: number;
+  delivered: number;
+  deficit: number;
+  needsPurchase: boolean;
+}
+
+export interface GradeDistributionSummary {
+  listId: string;
+  stage: string;
+  grade: string;
+  track: string;
+  term: string;
+  studentCount: number;
+  items: DistributionItemStat[];
+}
+
+export interface StudentDeliveryStatus {
+  studentId: string;
+  studentName: string;
+  status: 'delivered' | 'in_progress' | 'not_started';
+  receivedItems: Array<{
+    itemName: string;
+    inventoryItemId: string;
+    quantity: number;
+    deliveredAt: string;
+    orderCode: string;
+  }>;
+  pendingOrdersCount: number;
+  confirmedOrdersCount: number;
 }

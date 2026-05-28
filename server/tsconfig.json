@@ -9,8 +9,13 @@
     "esModuleInterop": true,
     "skipLibCheck": true,
     "forceConsistentCasingInFileNames": true,
-    "types": ["node"]
+    "types": ["node", "jest"],
+    "noEmitOnError": false,
+    "noImplicitAny": false,
+    "moduleResolution": "bundler",
+    "ignoreDeprecations": "5.0",
+    "isolatedModules": true
   },
-  "include": ["src/**/*", "prisma/**/*"],
-  "exclude": ["node_modules"]
+  "include": ["src/**/*"],
+  "exclude": ["node_modules", "prisma/**/*"]
 }

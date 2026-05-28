@@ -1,437 +1,275 @@
 import express from 'express';
 import cors from 'cors';
-import { PrismaClient } from '@prisma/client';
 import * as dotenv from 'dotenv';
+import { createServer } from 'http';
+import { Server as SocketIOServer } from 'socket.io';
+import helmet from 'helmet';
+import rateLimit from 'express-rate-limit';
+import accountingRouter from './accounting-api';
+import { requireAuth, socketAuth } from './middleware/auth';
+import { perfLogger } from './middleware/perf';
+
+// Domain routers
+import studentsRouter from './routes/students';
+import paymentsRouter from './routes/payments';
+import usersRouter from './routes/users';
+import inventoryRouter from './routes/inventory';
+import feesRouter from './routes/fees';
+import installmentsRouter from './routes/installments';
+import databaseRouter from './routes/database';
+import miscRouter from './routes/misc';
+import userRolesRouter from './routes/user-roles';
+import auditLogRouter from './routes/audit-log';
+import purchasingRouter from './routes/purchasing';
+import migrationRouter from './routes/migration';
+import gradeItemListsRouter from './routes/grade-item-lists';
+import deliveryOrdersRouter from './routes/delivery-orders';
+import distributionReportRouter from './routes/distribution-report';
 
 dotenv.config();
 
-const prisma = new PrismaClient();
+import { prisma } from './lib/prisma';
 const app = express();
 const PORT = process.env.PORT || 3000;
 
+// Parse allowed origins from env
+const ALLOWED_ORIGINS = (process.env.ALLOWED_ORIGINS || 'http://localhost:5173,http://localhost:8080')
+  .split(',')
+  .map(s => s.trim());
+
+const isOriginAllowed = (origin: string | undefined): boolean => {
+  if (!origin) return true;
+  if (ALLOWED_ORIGINS.includes(origin)) return true;
+  // Allow any localhost/127.0.0.1 origin in development
+  if (/^https?:\/\/(localhost|127\.0\.0\.1)(:\d+)?$/.test(origin)) return true;
+  // Allow Cloudflare quick tunnels
+  if (origin.endsWith('.trycloudflare.com')) return true;
+  // Allow LocalTunnel
+  if (origin.endsWith('.loca.lt')) return true;
+  // Allow localhost.run
+  if (origin.endsWith('.lhr.life')) return true;
+  // Allow Ngrok
+  if (origin.endsWith('.ngrok-free.dev')) return true;
+  return false;
+};
+
+const httpServer = createServer(app);
+const io = new SocketIOServer(httpServer, {
+  cors: {
+    origin: (origin, callback) => {
+      if (isOriginAllowed(origin)) {
+        callback(null, origin);
+      } else {
+        callback(new Error(`CORS: origin ${origin} not allowed`));
+      }
+    },
+    methods: ['GET', 'POST'],
+    credentials: true,
+  }
+});
+
+// Performance instrumentation — runs first so it sees full request time.
+app.use(perfLogger);
+
+// Optional gzip/brotli compression — only kicks in when the `compression`
+// package is installed. We require it lazily so the server still boots
+// without it installed.
+try {
+  // eslint-disable-next-line @typescript-eslint/no-require-imports, @typescript-eslint/no-var-requires
+  const compression = require('compression');
+  app.use(compression({ threshold: 1024 }));
+} catch {
+  console.warn(
+    '[perf] `compression` package not installed — skipping. Install with: npm i compression @types/compression',
+  );
+}
+
+// Security middleware
+app.use(helmet());
+
 app.use(cors({
-  origin: '*', // السماح لجميع المصادر بالاتصال
-  methods: ['GET', 'POST', 'PATCH', 'DELETE', 'PUT'],
-  allowedHeaders: ['Content-Type', 'Authorization']
-}));
-app.use(express.json({ limit: '50mb' }));
-app.use(express.urlencoded({ limit: '50mb', extended: true }));
-
-// --- Students API ---
-
-// Get all students
-app.get('/api/students', async (req, res) => {
-  try {
-    const students = await prisma.student.findMany({
-      include: {
-        yearlyFinance: {
-          orderBy: { academicYear: 'asc' }
-        }
-      },
-      orderBy: { createdAt: 'desc' }
-    });
-    res.json(students);
-  } catch (error) {
-    res.status(500).json({ error: 'Failed to fetch students' });
-  }
-});
-
-// Create a new student
-app.post('/api/students', async (req, res) => {
-  try {
-    const student = await prisma.student.create({
-      data: req.body
-    });
-    res.status(201).json(student);
-  } catch (error) {
-    res.status(400).json({ error: 'Failed to create student' });
-  }
-});
-
-// Update student
-app.patch('/api/students/:id', async (req, res) => {
-  const { id } = req.params;
-  try {
-    const student = await prisma.student.update({
-      where: { id },
-      data: req.body,
-      include: {
-        yearlyFinance: {
-          orderBy: { academicYear: 'asc' }
-        }
-      }
-    });
-    res.json(student);
-  } catch (error) {
-    res.status(400).json({ error: 'Failed to update student' });
-  }
-});
-
-// Delete student
-app.delete('/api/students/:id', async (req, res) => {
-  const { id } = req.params;
-  try {
-    await prisma.student.delete({ where: { id } });
-    res.status(204).send();
-  } catch (error) {
-    res.status(400).json({ error: 'Failed to delete student' });
-  }
-});
-
-// --- Payments API ---
-app.get('/api/payments', async (req, res) => {
-  try {
-    const payments = await prisma.payment.findMany({
-      orderBy: { date: 'desc' }
-    });
-    res.json(payments);
-  } catch (error) {
-    res.status(500).json({ error: 'Failed to fetch payments' });
-  }
-});
-
-// --- Auth API (Simple mock for now) ---
-app.post('/api/auth/login', async (req, res) => {
-  const { email, password } = req.body;
-  console.log(`🔑 محاولة دخول: ${email}`);
-  try {
-    const user = await prisma.user.findUnique({ where: { email } });
-    
-    if (!user) {
-      console.log(`❌ المستخدم غير موجود: ${email}`);
-      return res.status(401).json({ error: 'Invalid credentials' });
-    }
-
-    if (!user.active) {
-      console.log(`⚠️ محاولة دخول مستخدم معطل: ${email}`);
-      return res.status(403).json({ error: 'Account is disabled' });
-    }
-
-    if (user.password === password) {
-      console.log(`✅ دخول ناجح: ${user.name}`);
-      const { password: _, ...userWithoutPassword } = user;
-      res.json(userWithoutPassword);
+  origin: (origin, callback) => {
+    if (isOriginAllowed(origin)) {
+      callback(null, true);
     } else {
-      console.log(`❌ كلمة مرور خاطئة للمستخدم: ${email}`);
-      res.status(401).json({ error: 'Invalid credentials' });
+      callback(new Error(`CORS: origin ${origin} not allowed`));
     }
-  } catch (error) {
-    console.error('Login failed:', error);
-    res.status(500).json({ error: 'Login failed' });
-  }
+  },
+  methods: ['GET', 'POST', 'PATCH', 'DELETE', 'PUT'],
+  allowedHeaders: ['Content-Type', 'Authorization'],
+  credentials: true,
+}));
+
+app.use(express.json({ limit: '1mb' }));
+app.use(express.urlencoded({ limit: '1mb', extended: true }));
+
+// Login rate limiter (applied only to login endpoint)
+const loginLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000, // 15 minutes
+  max: process.env.NODE_ENV === 'production' ? 10 : 1000, // 1000 attempts in dev/tunnel
+  message: { error: 'Too many login attempts, please try again later' },
+  standardHeaders: true,
+  legacyHeaders: false,
 });
 
-// --- Users API ---
+// Apply rate limiter to login endpoint specifically
+app.use('/api/auth/login', loginLimiter);
 
-// Get all users
-app.get('/api/users', async (req, res) => {
-  try {
-    const users = await prisma.user.findMany({
-      orderBy: { createdAt: 'desc' }
-    });
-    res.json(users);
-  } catch (error) {
-    res.status(500).json({ error: 'Failed to fetch users' });
-  }
+// Global auth middleware for all protected routes
+const PUBLIC_PATHS = ['/api/auth/login', '/health'];
+app.use((req, res, next) => {
+  if (PUBLIC_PATHS.includes(req.path)) return next();
+  requireAuth(req, res, next);
 });
 
-// Create user
-app.post('/api/users', async (req, res) => {
-  try {
-    const user = await prisma.user.create({ data: req.body });
-    res.status(201).json(user);
-  } catch (error) {
-    res.status(400).json({ error: 'Failed to create user' });
-  }
+// ===== Router Mounts =====
+
+// Students + Admission (same router, different prefix)
+app.use('/api/students', studentsRouter);
+app.use('/api/admission', studentsRouter);
+
+// Payments + Treasury + Expenses + Accounts (all mounted at /api)
+app.use('/api', paymentsRouter);
+
+// Users + Auth (same router, different prefix)
+app.use('/api/users', usersRouter);
+app.use('/api/auth', usersRouter);
+
+// Inventory
+app.use('/api/inventory', inventoryRouter);
+
+// Purchasing
+app.use('/api/purchasing', purchasingRouter);
+
+// Stage Fees
+app.use('/api/stage-fees', feesRouter);
+
+// Installments
+app.use('/api/installments', installmentsRouter);
+
+// Database management
+app.use('/api/database', databaseRouter);
+
+// Misc: badges, bus-routes, settings (mounted at /api)
+app.use('/api', miscRouter);
+
+// Accounting (fiscal years, periods, cost centers, journal entries, reports)
+app.use('/api', accountingRouter);
+
+// User Roles (multi-role management)
+app.use('/api/user-roles', userRolesRouter);
+
+// Audit Log (read-only for management roles)
+app.use('/api/audit', auditLogRouter);
+
+// Migration (Bulk imports and data balancing)
+app.use('/api/migration', migrationRouter);
+
+// Grade Item Lists (per-grade supply lists for purchasing)
+app.use('/api/grade-item-lists', gradeItemListsRouter);
+
+// Delivery Orders (create → confirm → deliver → return/cancel)
+app.use('/api/delivery-orders', deliveryOrdersRouter);
+
+// Distribution reports (grade-summary + per-student status)
+app.use('/api/distribution', distributionReportRouter);
+
+// Health check endpoint
+app.get('/health', (_req, res) => {
+  res.json({ status: 'ok', timestamp: new Date().toISOString() });
 });
 
-// Update user
-app.patch('/api/users/:id', async (req, res) => {
-  const { id } = req.params;
-  console.log(`📝 محاولة تحديث بيانات المستخدم: ${id}`);
-  try {
-    const user = await prisma.user.update({
-      where: { id },
-      data: req.body
-    });
-    console.log('✅ تم تحديث المستخدم بنجاح');
-    res.json(user);
-  } catch (error) {
-    console.error('❌ فشل تحديث المستخدم:', error);
-    res.status(400).json({ error: 'Failed to update user' });
-  }
-});
+// ===== Socket.IO Real-time User Presence =====
 
-// --- Payments API ---
-app.get('/api/payments', async (req, res) => {
-  try {
-    const payments = await prisma.payment.findMany({
-      orderBy: { date: 'desc' }
-    });
-    res.json(payments);
-  } catch (error) {
-    res.status(500).json({ error: 'Failed to fetch payments' });
-  }
-});
+// Apply Socket.IO authentication middleware
+io.use(socketAuth);
 
-app.post('/api/payments', async (req, res) => {
-  const { studentId, studentName, amount, type, method, date, receiptNumber, collectedBy, notes, academicYear } = req.body;
-  
-  try {
-    // 1. Fetch student's yearly finance records ordered by year (oldest first)
-    const yearlyFinances = await prisma.studentYearlyFinance.findMany({
-      where: { studentId },
-      orderBy: { academicYear: 'asc' }
-    });
+// Track connected users by socket ID (in-memory store)
+const userSockets = new Map<string, { userId: string; socketId: string; connectTime: Date }>();
 
-    let remainingAmount = amount;
-    const updates = [];
+io.on('connection', (socket) => {
+  const userId = socket.data.user.userId;
+  console.log(`✅ New socket connection: ${socket.id} (user: ${userId})`);
 
-    // 2. Allocate payment to oldest years first
-    for (const finance of yearlyFinances) {
-      if (remainingAmount <= 0) break;
-      
-      const balance = finance.totalFees - finance.paidAmount;
-      if (balance > 0) {
-        const paymentToThisYear = Math.min(remainingAmount, balance);
-        updates.push(
-          prisma.studentYearlyFinance.update({
-            where: { id: finance.id },
-            data: { paidAmount: { increment: paymentToThisYear } }
-          })
-        );
-        remainingAmount -= paymentToThisYear;
-      }
+  // When user logs in or connects
+  socket.on('user-login', async () => {
+    try {
+      // userId comes from socket.data.user (JWT), not from event parameter
+      userSockets.set(socket.id, { userId, socketId: socket.id, connectTime: new Date() });
+      console.log(`🟢 User online: ${userId}`);
+
+      // Notify all connected clients about this user being online
+      io.emit('user-status-changed', {
+        userId,
+        isOnline: true,
+        lastLogoutAt: null
+      });
+    } catch (error) {
+      console.error('❌ user-login error:', error);
     }
+  });
 
-    // 3. Execute transaction: Create payment, update yearly records, update student summary
-    const [payment] = await prisma.$transaction([
-      prisma.payment.create({
-        data: { studentId, studentName, amount, type, method, date, receiptNumber, collectedBy, notes, academicYear }
-      }),
-      ...updates,
-      prisma.student.update({
-        where: { id: studentId },
-        data: { 
-          paidAmount: { increment: amount },
-          // If all remaining is used, clear any pending request
-          pendingPaymentAmount: null,
-          pendingPaymentType: null,
-          paymentRequestStatus: null
-        }
-      })
-    ]);
-
-    res.status(201).json(payment);
-  } catch (error) {
-    console.error('Payment error:', error);
-    res.status(400).json({ error: 'Failed to record payment' });
-  }
-});
-
-// --- Inventory API ---
-app.get('/api/inventory', async (req, res) => {
-  try {
-    const items = await prisma.inventoryItem.findMany();
-    res.json(items);
-  } catch (error) {
-    res.status(500).json({ error: 'Failed to fetch inventory' });
-  }
-});
-
-// --- Bus Routes API ---
-app.get('/api/bus-routes', async (req, res) => {
-  try {
-    const routes = await prisma.busRoute.findMany();
-    res.json(routes);
-  } catch (error) {
-    res.status(500).json({ error: 'Failed to fetch bus routes' });
-  }
-});
-
-app.post('/api/bus-routes', async (req, res) => {
-  console.log('🚌 محاولة إنشاء خط باص جديد:', req.body.name);
-  try {
-    const route = await prisma.busRoute.create({
-      data: req.body
-    });
-    console.log('✅ تم إنشاء الخط بنجاح:', route.id);
-    res.json(route);
-  } catch (error) {
-    console.error('❌ فشل إنشاء الخط:', error);
-    res.status(500).json({ error: 'Failed to create bus route' });
-  }
-});
-
-app.patch('/api/bus-routes/:id', async (req, res) => {
-  const { id } = req.params;
-  console.log(`📝 محاولة تعديل الخط: ${id}`, req.body);
-  try {
-    const route = await prisma.busRoute.update({
-      where: { id },
-      data: req.body
-    });
-    console.log('✅ تم التعديل بنجاح');
-    res.json(route);
-  } catch (error) {
-    console.error('❌ فشل التعديل:', error);
-    res.status(500).json({ error: 'Failed to update bus route' });
-  }
-});
-
-// --- Stage Fees API (Director) ---
-app.get('/api/stage-fees', async (req, res) => {
-  try {
-    const fees = await prisma.stageFee.findMany();
-    res.json(fees);
-  } catch (error) {
-    res.status(500).json({ error: 'Failed to fetch stage fees' });
-  }
-});
-
-app.post('/api/stage-fees', async (req, res) => {
-  console.log('📬 طلب إضافة رسوم جديد:', req.body);
-  const { stage, grade, track, academicYear, tuitionFees, booksFees, uniformFees, applicationFees, additionalFees } = req.body;
-  
-  if (!stage || !grade || !academicYear) {
-    return res.status(400).json({ error: 'بيانات غير مكتملة (المرحلة، الصف، السنة الدراسية مطلوبة)' });
-  }
-
-  try {
-    // Check if exists using findFirst instead of findUnique to avoid unique name issues
-    const existing = await prisma.stageFee.findFirst({
-      where: { stage, grade, track, academicYear }
-    });
-
-    if (existing) {
-      console.log('⚠️ الرسوم مسجلة بالفعل');
-      return res.status(409).json({ error: 'الرسوم مسجلة بالفعل لهذه المرحلة والسنة الدراسية' });
+  // Heartbeat - User sends signal every 30 seconds to prove they're still online
+  socket.on('heartbeat', () => {
+    try {
+      // userId comes from socket.data.user (JWT)
+      // Update the socket entry to keep it fresh
+      const existing = userSockets.get(socket.id);
+      if (existing) {
+        userSockets.set(socket.id, { ...existing, connectTime: new Date() });
+      }
+    } catch (error) {
+      console.error('❌ heartbeat error:', error);
     }
+  });
 
-    const fee = await prisma.stageFee.create({
-      data: { 
-        stage, grade, track, academicYear, 
-        tuitionFees, tuitionMandatory: req.body.tuitionMandatory,
-        booksFees, booksMandatory: req.body.booksMandatory,
-        uniformFees, uniformMandatory: req.body.uniformMandatory,
-        applicationFees, applicationMandatory: req.body.applicationMandatory,
-        additionalFees 
+  // When user explicitly logs out
+  socket.on('user-logout', async () => {
+    try {
+      // userId comes from socket.data.user (JWT)
+      userSockets.delete(socket.id);
+      console.log(`🔴 User offline (explicit logout): ${userId}`);
+
+      // Notify all connected clients
+      io.emit('user-status-changed', {
+        userId,
+        isOnline: false,
+        lastLogoutAt: new Date().toISOString()
+      });
+    } catch (error) {
+      console.error('❌ user-logout error:', error);
+    }
+  });
+
+  // When socket disconnects (network issue, page close, etc.)
+  socket.on('disconnect', () => {
+    try {
+      const user = userSockets.get(socket.id);
+      if (user) {
+        userSockets.delete(socket.id);
+        console.log(`🔴 Socket disconnected, marking user offline: ${user.userId}`);
+
+        // Notify all clients that user is offline
+        io.emit('user-status-changed', {
+          userId: user.userId,
+          isOnline: false,
+          lastLogoutAt: new Date().toISOString()
+        });
       }
-    });
-    console.log('✅ تم الحفظ في قاعدة البيانات:', fee);
-    res.status(201).json(fee);
-  } catch (error) {
-    console.error('❌ خطأ في قاعدة البيانات:', error);
-    res.status(400).json({ error: 'فشل الحفظ في قاعدة البيانات' });
-  }
+    } catch (error) {
+      console.error('❌ disconnect error:', error);
+    }
+  });
 });
 
-app.patch('/api/stage-fees/:id', async (req, res) => {
-  console.log('📬 طلب تعديل رسوم:', req.params.id, req.body);
-  const { id } = req.params;
-  try {
-    const fee = await prisma.stageFee.update({
-      where: { id },
-      data: req.body
-    });
-    console.log('✅ تم التعديل بنجاح');
-    res.json(fee);
-  } catch (error) {
-    console.error('❌ خطأ في التعديل:', error);
-    res.status(400).json({ error: 'فشل تعديل البيانات' });
-  }
-});
+export { app };
+export { httpServer };
 
-app.delete('/api/stage-fees/:id', async (req, res) => {
-  const { id } = req.params;
-  try {
-    await prisma.stageFee.delete({
-      where: { id }
-    });
-    res.json({ message: 'Deleted successfully' });
-  } catch (error) {
-    res.status(400).json({ error: 'Failed to delete' });
-  }
-});
-
-// --- Admission Workflow API ---
-
-// 1. Initial Application
-app.post('/api/admission/apply', async (req, res) => {
-  try {
-    const student = await prisma.student.create({
-      data: {
-        ...req.body,
-        status: 'applied'
-      }
-    });
-    res.status(201).json(student);
-  } catch (error) {
-    res.status(400).json({ error: 'Failed to apply' });
-  }
-});
-
-// 2. Set Test Result
-app.patch('/api/admission/test-result/:id', async (req, res) => {
-  const { id } = req.params;
-  const { result } = req.body;
-  try {
-    const student = await prisma.student.update({
-      where: { id },
-      data: {
-        testResult: result,
-        status: result === 'pass' ? 'fee_setup' : result === 'fail' ? 'failed' : 'under_testing'
-      }
-    });
-    res.json(student);
-  } catch (error) {
-    res.status(400).json({ error: 'Failed to update test result' });
-  }
-});
-
-// 3. Setup Fees & Discount
-app.patch('/api/admission/setup-fees/:id', async (req, res) => {
-  const { id } = req.params;
-  const { tuitionFees, tuitionMandatory, booksFees, booksMandatory, uniformFees, uniformMandatory, otherFees, discountAmount, discountApprovedBy, busFees, busRouteId, additionalFees } = req.body;
-  
-  const totalFees = Number(tuitionFees || 0) + Number(booksFees || 0) + Number(uniformFees || 0) + Number(busFees || 0) + Number(otherFees || 0) + (additionalFees || []).reduce((s: number, f: any) => s + (f.selected ? f.amount : 0), 0) - Number(discountAmount || 0);
-
-  try {
-    const student = await prisma.student.update({
-      where: { id },
-      data: {
-        tuitionFees, tuitionMandatory,
-        booksFees, booksMandatory,
-        uniformFees, uniformMandatory,
-        busFees, busRouteId, otherFees, discountAmount, discountApprovedBy,
-        totalFees,
-        additionalFees,
-        status: 'pending_approval'
-      }
-    });
-    res.json(student);
-  } catch (error) {
-    res.status(400).json({ error: 'Failed to setup fees' });
-  }
-});
-
-// 4. Final Approval
-app.patch('/api/admission/approve/:id', async (req, res) => {
-  const { id } = req.params;
-  try {
-    const student = await prisma.student.update({
-      where: { id },
-      data: {
-        status: 'admitted',
-        enrollmentDate: new Date().toISOString().split('T')[0]
-      }
-    });
-    res.json(student);
-  } catch (error) {
-    res.status(400).json({ error: 'Failed to approve' });
-  }
-});
-
-app.listen(Number(PORT), '0.0.0.0', () => {
-  console.log(`🚀 Server ready at: http://0.0.0.0:${PORT}`);
-});
+// Start server (only when not in test environment)
+if (process.env.NODE_ENV !== 'test') {
+  httpServer.listen(PORT, () => {
+    console.log(`🚀 Server running on http://localhost:${PORT}`);
+    console.log(`🔌 WebSocket ready on ws://localhost:${PORT}`);
+  });
+}
+// trigger restart

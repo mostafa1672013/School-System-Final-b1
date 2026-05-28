@@ -4,10 +4,21 @@ import path from "path";
 
 // https://vitejs.dev/config/
 export default defineConfig({
-  base: "/School-Education/",
+  base: "/",
   server: {
     host: "::",
     port: 8080,
+    allowedHosts: true,
+    proxy: {
+      '/api': {
+        target: 'http://127.0.0.1:4000',
+        changeOrigin: true,
+      },
+      '/socket.io': {
+        target: 'http://127.0.0.1:4000',
+        ws: true,
+      }
+    }
   },
   plugins: [
     react(),
@@ -15,6 +26,17 @@ export default defineConfig({
   resolve: {
     alias: {
       "@": path.resolve(__dirname, "./src"),
+    },
+  },
+  test: {
+    globals: true,
+    environment: 'happy-dom',
+    setupFiles: ['./src/__tests__/setup.ts'],
+    coverage: {
+      provider: 'v8',
+      reporter: ['text', 'lcov'],
+      include: ['src/**/*.{ts,tsx}'],
+      exclude: ['src/__tests__/**', 'src/main.tsx'],
     },
   },
 });

@@ -8,8 +8,10 @@ import { Label } from '@/components/ui/label';
 import { Badge } from '@/components/ui/badge';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { useStudentsStore } from '@/stores/studentsStore';
-import { formatCurrency, stageLabels, statusLabels } from '@/lib/utils';
+import { usePaymentsStore } from '@/stores/paymentsStore';
+import { formatCurrency, formatDateShort, stageLabels, statusLabels } from '@/lib/utils';
 import type { Stage, Student, StudentStatus } from '@/types';
 import StatCard from '@/components/features/StatCard';
 
@@ -35,10 +37,12 @@ const statusColors: Record<string, string> = {
 };
 
 export default function Students() {
-    const { students, isLoading, fetchStudents, addStudent, updateStudent, deleteStudent } = useStudentsStore();
+    const { students, isLoading, fetchStudents, updateStudent, deleteStudent } = useStudentsStore();
+    const { payments, fetchPayments } = usePaymentsStore();
+    const [activeTab, setActiveTab] = useState<'active' | 'archived'>('active');
     const [search, setSearch] = useState('');
     const [stageFilter, setStageFilter] = useState<string>('all');
-    const [addDialogOpen, setAddDialogOpen] = useState(false);
+    const [gradeFilter, setGradeFilter] = useState<string>('all');
     const [editDialogOpen, setEditDialogOpen] = useState(false);
     const [editingStudent, setEditingStudent] = useState<Student | null>(null);
 
@@ -46,46 +50,63 @@ export default function Students() {
         fetchStudents();
     }, [fetchStudents]);
 
+    useEffect(() => { fetchPayments(); }, [fetchPayments]);
+
     const [form, setForm] = useState({
         nationalId: '', name: '', stage: 'primary' as Stage, grade: '', className: '',
         guardianName: '', guardianPhone: '', address: '', totalFees: 0, status: 'active' as StudentStatus
     });
 
+    const enrolledStudents = useMemo(() => {
+        if (!Array.isArray(students)) return [];
+        return students.filter(s => s && ['active', 'admitted', 'inactive', 'graduated', 'transferred'].includes(s.status));
+    }, [students]);
+
+    const activeStudents = useMemo(() => enrolledStudents.filter(s => ['active', 'admitted'].includes(s.status)), [enrolledStudents]);
+    const archivedStudents = useMemo(() => enrolledStudents.filter(s => ['graduated', 'transferred', 'inactive'].includes(s.status)), [enrolledStudents]);
+
     const stats = useMemo(() => {
-        const validStudents = students.filter(s => s && s.id && s.name);
-        const active = validStudents.filter(s => s.status === 'active').length;
-        const totalFees = validStudents.reduce((sum, s) => sum + (s.totalFees || 0), 0);
-        const totalPaid = validStudents.reduce((sum, s) => sum + (s.paidAmount || 0), 0);
+        const validStudents = enrolledStudents.filter(s => s && s.id && s.name);
+        const active = validStudents.filter(s => s.status === 'active' || s.status === 'admitted').length;
+        const totalFees = validStudents.reduce((sum, s) => sum + Number(s.totalFees || 0), 0);
+        const totalPaid = validStudents.reduce((sum, s) => sum + Number(s.paidAmount || 0), 0);
         const debt = totalFees - totalPaid;
         return { active, totalFees, totalPaid, debt };
-    }, [students]);
+    }, [enrolledStudents]);
 
     const rejectedRequests = useMemo(() => {
-        return students.filter(s => s && s.paymentRequestStatus === 'rejected');
-    }, [students]);
+        return enrolledStudents.filter(s => s && s.paymentRequestStatus === 'rejected');
+    }, [enrolledStudents]);
 
     const filtered = useMemo(() => {
-        return students.filter((s) => {
+        const base = activeTab === 'active' ? activeStudents : archivedStudents;
+        return base.filter((s) => {
             if (!s || !s.name || !s.nationalId) return false;
-            const matchSearch = (s.name || '').toLowerCase().includes(search.toLowerCase()) || 
-                              (s.nationalId || '').includes(search) || 
+            const matchSearch = (s.name || '').toLowerCase().includes(search.toLowerCase()) ||
+                              (s.nationalId || '').includes(search) ||
                               (s.guardianPhone || '').includes(search);
             const matchStage = stageFilter === 'all' || s.stage === stageFilter;
-            return matchSearch && matchStage;
+            const matchGrade = gradeFilter === 'all' || s.grade === gradeFilter;
+            return matchSearch && matchStage && matchGrade;
         });
-    }, [students, search, stageFilter]);
+    }, [activeTab, activeStudents, archivedStudents, search, stageFilter, gradeFilter]);
 
-    const handleAdd = async (e: React.FormEvent) => {
-        e.preventDefault();
-        await addStudent({
-            ...form,
-            enrollmentDate: new Date().toISOString().split('T')[0],
-            paidAmount: 0,
-        });
-        toast.success('تم تسجيل الطالب بنجاح');
-        setAddDialogOpen(false);
-        resetForm();
-    };
+    const lastPaymentByStudent = useMemo(() => {
+        const map: Record<string, string> = {};
+        for (const p of payments) {
+            if (!p.studentId) continue;
+            if (!map[p.studentId] || p.date > map[p.studentId]) {
+                map[p.studentId] = p.date;
+            }
+        }
+        return map;
+    }, [payments]);
+
+    const gradeOptions = useMemo(() => {
+        const base = activeTab === 'active' ? activeStudents : archivedStudents;
+        const grades = [...new Set(base.map(s => s.grade).filter(Boolean))].sort();
+        return grades;
+    }, [activeTab, activeStudents, archivedStudents]);
 
     const handleEdit = async (e: React.FormEvent) => {
         e.preventDefault();
@@ -152,50 +173,54 @@ export default function Students() {
 
             {/* Stats */}
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-                <StatCard title="إجمالي الطلاب" value={students.length.toString()} icon={Users} colorClass="teal" />
+                <StatCard title="إجمالي الطلاب" value={enrolledStudents.length.toString()} icon={Users} colorClass="teal" />
                 <StatCard title="الطلاب النشطين" value={stats.active.toString()} icon={GraduationCap} colorClass="sky" />
                 <StatCard title="إجمالي المحصل" value={formatCurrency(stats.totalPaid)} icon={TrendingUp} colorClass="emerald" />
                 <StatCard title="المستحقات المتأخرة" value={formatCurrency(stats.debt)} icon={AlertCircle} colorClass="rose" />
             </div>
 
-            {/* Toolbar */}
-            <div className="flex flex-col sm:row gap-4 items-start sm:items-center justify-between bg-card p-4 rounded-lg border">
-                <div className="flex items-center gap-3 flex-1 w-full sm:w-auto">
-                    <div className="relative flex-1 max-w-sm">
-                        <Search className="absolute right-3 top-1/2 -translate-y-1/2 size-4 text-muted-foreground" />
-                        <Input placeholder="بحث بالاسم أو الرقم القومي..." value={search} onChange={(e) => setSearch(e.target.value)} className="pr-10" />
-                    </div>
-                    <Select value={stageFilter} onValueChange={setStageFilter}>
-                        <SelectTrigger className="w-44">
-                            <Filter className="size-4 ml-2" />
-                            <SelectValue placeholder="كل المراحل" />
-                        </SelectTrigger>
-                        <SelectContent>
-                            <SelectItem value="all">كل المراحل</SelectItem>
-                            {stageOptions.map((s) => (
-                                <SelectItem key={s.value} value={s.value}>{s.label}</SelectItem>
-                            ))}
-                        </SelectContent>
-                    </Select>
-                </div>
+            {/* Tabs */}
+            <Tabs value={activeTab} onValueChange={(v) => { setActiveTab(v as 'active' | 'archived'); setSearch(''); setStageFilter('all'); setGradeFilter('all'); }}>
+                <TabsList>
+                    <TabsTrigger value="active">الطلاب النشطون <span className="mr-1.5 bg-primary/10 text-primary text-[10px] px-1.5 rounded-full">{activeStudents.length}</span></TabsTrigger>
+                    <TabsTrigger value="archived">الأرشيف <span className="mr-1.5 bg-muted text-muted-foreground text-[10px] px-1.5 rounded-full">{archivedStudents.length}</span></TabsTrigger>
+                </TabsList>
+            </Tabs>
 
-                <div className="flex gap-2">
-                    <Dialog open={addDialogOpen} onOpenChange={setAddDialogOpen}>
-                        <DialogTrigger asChild>
-                            <Button onClick={resetForm}><Plus className="size-4 ml-2" />تسجيل طالب جديد</Button>
-                        </DialogTrigger>
-                        <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
-                            <DialogHeader><DialogTitle className="font-[Noto_Kufi_Arabic]">تسجيل طالب جديد</DialogTitle></DialogHeader>
-                            <form onSubmit={handleAdd} className="space-y-4">
-                                <StudentFormFields form={form} setForm={setForm} />
-                                <div className="flex justify-end gap-3 pt-2">
-                                    <Button type="button" variant="outline" onClick={() => setAddDialogOpen(false)}>إلغاء</Button>
-                                    <Button type="submit">تسجيل الطالب</Button>
-                                </div>
-                            </form>
-                        </DialogContent>
-                    </Dialog>
+            {/* Toolbar */}
+            <div className="flex flex-wrap gap-3 items-center bg-card p-4 rounded-lg border">
+                <div className="relative flex-1 min-w-[180px] max-w-sm">
+                    <Search className="absolute right-3 top-1/2 -translate-y-1/2 size-4 text-muted-foreground" />
+                    <Input placeholder="بحث بالاسم أو الرقم القومي..." value={search} onChange={(e) => setSearch(e.target.value)} className="pr-10" />
                 </div>
+                <Select value={stageFilter} onValueChange={setStageFilter}>
+                    <SelectTrigger className="w-44">
+                        <Filter className="size-4 ml-2" />
+                        <SelectValue placeholder="كل المراحل" />
+                    </SelectTrigger>
+                    <SelectContent>
+                        <SelectItem value="all">كل المراحل</SelectItem>
+                        {stageOptions.map((s) => (
+                            <SelectItem key={s.value} value={s.value}>{s.label}</SelectItem>
+                        ))}
+                    </SelectContent>
+                </Select>
+                <Select value={gradeFilter} onValueChange={setGradeFilter}>
+                    <SelectTrigger className="w-32">
+                        <SelectValue placeholder="كل الصفوف" />
+                    </SelectTrigger>
+                    <SelectContent>
+                        <SelectItem value="all">كل الصفوف</SelectItem>
+                        {gradeOptions.map(g => (
+                            <SelectItem key={g} value={g}>{g}</SelectItem>
+                        ))}
+                    </SelectContent>
+                </Select>
+                {(stageFilter !== 'all' || gradeFilter !== 'all') && (
+                    <Button variant="ghost" size="sm" onClick={() => { setStageFilter('all'); setGradeFilter('all'); }}>
+                        مسح الفلاتر ✕
+                    </Button>
+                )}
             </div>
 
             {/* Edit Dialog */}
@@ -222,6 +247,7 @@ export default function Students() {
                             <th className="text-right p-3 font-semibold">الصف / الفصل</th>
                             <th className="text-right p-3 font-semibold hidden lg:table-cell">ولي الأمر</th>
                             <th className="text-right p-3 font-semibold">التحصيل المالي</th>
+                            <th className="text-right p-3 font-semibold hidden xl:table-cell">آخر دفعة</th>
                             <th className="text-right p-3 font-semibold hidden sm:table-cell">الحالة</th>
                             <th className="text-right p-3 font-semibold w-24">إجراءات</th>
                         </tr>
@@ -235,7 +261,19 @@ export default function Students() {
                                 return (
                                     <tr key={s.id} className="border-b last:border-0 hover:bg-muted/20 transition-colors">
                                         <td className="p-3">
-                                            <p className="font-medium">{s.name}</p>
+                                            <div className="flex items-center gap-2 flex-wrap">
+                                                <p className="font-medium">{s.name}</p>
+                                                {s.badge && (
+                                                    <span
+                                                        className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-full text-[10px] font-bold text-white"
+                                                        style={{ backgroundColor: s.badge.color }}
+                                                        title={`${s.badge.name} — خصم ${s.badge.discountPercentage}%`}
+                                                    >
+                                                        {s.badge.icon && <span>{s.badge.icon}</span>}
+                                                        {s.badge.name}
+                                                    </span>
+                                                )}
+                                            </div>
                                             <p className="text-xs text-muted-foreground">{s.nationalId}</p>
                                         </td>
                                         <td className="p-3 hidden md:table-cell text-muted-foreground">{stageLabels[s.stage]}</td>
@@ -253,6 +291,9 @@ export default function Students() {
                                             </div>
                                             <p className="text-[10px] text-muted-foreground mt-0.5">{formatCurrency(s.paidAmount)} / {formatCurrency(s.totalFees)}</p>
                                         </td>
+                                        <td className="p-3 hidden xl:table-cell text-xs text-muted-foreground tabular-nums">
+                                            {lastPaymentByStudent[s.id] ? formatDateShort(lastPaymentByStudent[s.id]) : '—'}
+                                        </td>
                                         <td className="p-3 hidden sm:table-cell">
                                             <span className={`inline-flex px-2 py-1 rounded-full text-[10px] font-medium ${statusColors[s.status]}`}>
                                                 {statusLabels[s.status]}
@@ -263,8 +304,12 @@ export default function Students() {
                                                 <Link to={`/students/${s.id}`}>
                                                     <Button variant="ghost" size="icon" className="size-8" title="عرض"><Eye className="size-4" /></Button>
                                                 </Link>
-                                                <Button variant="ghost" size="icon" className="size-8" onClick={() => openEditDialog(s)} title="تعديل"><Edit className="size-4" /></Button>
-                                                <Button variant="ghost" size="icon" className="size-8 text-red-500 hover:text-red-600 hover:bg-red-50" onClick={() => handleDelete(s.id)} title="حذف"><Trash2 className="size-4" /></Button>
+                                                {activeTab === 'active' && (
+                                                    <>
+                                                        <Button variant="ghost" size="icon" className="size-8" onClick={() => openEditDialog(s)} title="تعديل"><Edit className="size-4" /></Button>
+                                                        <Button variant="ghost" size="icon" className="size-8 text-red-500 hover:text-red-600 hover:bg-red-50" onClick={() => handleDelete(s.id)} title="حذف"><Trash2 className="size-4" /></Button>
+                                                    </>
+                                                )}
                                             </div>
                                         </td>
                                     </tr>

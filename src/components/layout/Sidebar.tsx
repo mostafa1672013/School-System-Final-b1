@@ -1,3 +1,4 @@
+import { useState } from 'react';
 import { Link, useLocation } from 'react-router-dom';
 import {
   LayoutDashboard,
@@ -11,10 +12,26 @@ import {
   LogOut,
   ChevronRight,
   ChevronLeft,
+  ChevronDown,
   X,
   UserCheck,
   Settings,
   ShieldAlert,
+  ShieldCheck,
+  Plus,
+  BookOpen,
+  Receipt,
+  Wallet,
+  Coins,
+  History,
+  Vault,
+  Calendar,
+  FileText,
+  Database,
+  Tag,
+  ArrowRightLeft,
+  CalendarClock,
+  Activity,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { useAuthStore } from '@/stores/authStore';
@@ -28,31 +45,209 @@ interface SidebarProps {
 
 interface NavItem {
   label: string;
-  path: string;
+  path?: string;
   icon: React.ElementType;
   roles: UserRole[];
+  subItems?: {
+    label: string;
+    path: string;
+    icon: React.ElementType;
+    roles: UserRole[];
+  }[];
 }
 
 const navItems: NavItem[] = [
-  { label: 'لوحة التحكم', path: '/dashboard', icon: LayoutDashboard, roles: ['system_admin', 'school_director', 'head_accountant', 'accountant', 'warehouse_keeper', 'bus_supervisor'] },
-  { label: 'إدارة الطلاب', path: '/students', icon: GraduationCap, roles: ['system_admin', 'school_director', 'head_accountant', 'accountant'] },
-  { label: 'المدفوعات والخزينة', path: '/payments', icon: Banknote, roles: ['system_admin', 'school_director', 'head_accountant', 'accountant'] },
-  { label: 'المخزن', path: '/inventory', icon: Package, roles: ['system_admin', 'school_director', 'warehouse_keeper'] },
+  { label: 'لوحة التحكم', path: '/dashboard', icon: LayoutDashboard, roles: ['system_admin', 'school_director', 'head_accountant', 'accountant', 'treasury_accountant', 'warehouse_keeper', 'bus_supervisor'] },
+  {
+    label: 'إدارة الطلاب',
+    icon: GraduationCap,
+    roles: ['system_admin', 'school_director', 'head_accountant', 'accountant'],
+    subItems: [
+      { label: 'قائمة الطلاب', path: '/students', icon: GraduationCap, roles: ['system_admin', 'school_director', 'head_accountant', 'accountant'] },
+      { label: 'القبول والتسجيل', path: '/admission', icon: UserCheck, roles: ['system_admin', 'school_director', 'head_accountant', 'accountant'] },
+      { label: 'طلب التحاق جديد', path: '/admission/new', icon: UserCheck, roles: ['system_admin', 'school_director', 'head_accountant', 'accountant'] },
+      { label: 'نقل الطلاب', path: '/student-promotion', icon: ArrowRightLeft, roles: ['school_director', 'head_accountant'] },
+      { label: 'إدارة السنة الدراسية', path: '/year-management', icon: CalendarClock, roles: ['school_director', 'head_accountant'] },
+    ]
+  },
+  { 
+    label: 'المدفوعات والخزينة', 
+    icon: Banknote, 
+    roles: ['system_admin', 'school_director', 'head_accountant', 'accountant', 'treasury_accountant'],
+    subItems: [
+      { label: 'سجل المدفوعات', path: '/payments', icon: Banknote, roles: ['system_admin', 'school_director', 'head_accountant', 'accountant', 'treasury_accountant'] },
+      { label: 'إدارة الخزينة', path: '/treasury', icon: Vault, roles: ['system_admin', 'school_director', 'head_accountant', 'accountant', 'treasury_accountant'] },
+    ]
+  },
+  { 
+    label: 'المخازن والمشتريات', 
+    icon: Package, 
+    roles: ['system_admin', 'school_director', 'warehouse_keeper', 'head_accountant'],
+    subItems: [
+      { label: 'المخزن', path: '/inventory', icon: Package, roles: ['system_admin', 'school_director', 'warehouse_keeper'] },
+      { label: 'سجل الموردين', path: '/suppliers', icon: UserCheck, roles: ['system_admin', 'school_director', 'warehouse_keeper', 'head_accountant'] },
+      { label: 'دورة المشتريات', path: '/purchasing', icon: Receipt, roles: ['system_admin', 'school_director', 'warehouse_keeper', 'head_accountant'] },
+      { label: 'قوائم المستلزمات', path: '/grade-item-lists', icon: BookOpen, roles: ['system_admin', 'school_director', 'head_accountant', 'accountant'] },
+      { label: 'طلبات التسليم', path: '/delivery-orders', icon: Package, roles: ['system_admin', 'school_director', 'head_accountant', 'accountant', 'warehouse_keeper'] },
+      { label: 'تقارير التوزيع', path: '/inventory-distribution', icon: BarChart3, roles: ['system_admin', 'school_director', 'head_accountant', 'accountant', 'warehouse_keeper'] },
+    ]
+  },
   { label: 'الباصات', path: '/bus', icon: Bus, roles: ['system_admin', 'school_director', 'bus_supervisor'] },
   { label: 'التقارير', path: '/reports', icon: BarChart3, roles: ['system_admin', 'school_director', 'head_accountant'] },
-  { label: 'القبول والتسجيل', path: '/admission', icon: UserCheck, roles: ['system_admin', 'school_director', 'head_accountant', 'accountant'] },
-  { label: 'إعدادات الرسوم', path: '/stage-fees', icon: Settings, roles: ['system_admin', 'school_director'] },
-  { label: 'إعدادات صلاحيات الخصم', path: '/discount-settings', icon: UserCog, roles: ['system_admin', 'school_director'] },
-  { label: 'اعتمادات الخصومات', path: '/discount-approvals', icon: ShieldAlert, roles: ['system_admin', 'school_director', 'head_accountant', 'accountant'] },
+  { 
+    label: 'إعدادات الرسوم', 
+    icon: Settings, 
+    roles: ['system_admin', 'school_director'],
+    subItems: [
+      { label: 'سجل الهياكل المالية', path: '/stage-fees', icon: Settings, roles: ['system_admin', 'school_director'] },
+      { label: 'بناء هيكل جديد', path: '/stage-fees/new', icon: Plus, roles: ['system_admin', 'school_director'] },
+      { label: 'صلاحيات الخصم', path: '/discount-settings', icon: UserCog, roles: ['system_admin', 'school_director'] },
+      { label: 'إعدادات الشارات', path: '/badge-settings', icon: Tag, roles: ['system_admin', 'school_director'] },
+    ]
+  },
+  {
+    label: 'الاعتمادات',
+    icon: ShieldCheck,
+    roles: ['system_admin', 'school_director', 'head_accountant', 'accountant'],
+    subItems: [
+      { label: 'اعتمادات الخصومات', path: '/discount-approvals', icon: ShieldAlert, roles: ['system_admin', 'school_director', 'head_accountant', 'accountant'] },
+      { label: 'اعتمادات التحويلات', path: '/payment-approvals', icon: ShieldAlert, roles: ['system_admin', 'school_director'] },
+    ]
+  },
+  { 
+    label: 'المحاسبة والمصروفات', 
+    icon: Wallet, 
+    roles: ['system_admin', 'school_director', 'head_accountant', 'accountant'],
+    subItems: [
+      { label: 'شجرة الحسابات', path: '/accounts', icon: BookOpen, roles: ['system_admin', 'school_director', 'head_accountant'] },
+      { label: 'القيود المحاسبية', path: '/journal-entries', icon: FileText, roles: ['system_admin', 'school_director', 'head_accountant'] },
+      { label: 'التقارير المحاسبية', path: '/accounting-reports', icon: BarChart3, roles: ['system_admin', 'school_director', 'head_accountant'] },
+      { label: 'الفترات المحاسبية', path: '/accounting-periods', icon: Calendar, roles: ['system_admin', 'school_director', 'head_accountant'] },
+      { label: 'إدارة حدود الصرف', path: '/expense-permissions', icon: ShieldCheck, roles: ['system_admin', 'school_director'] },
+      { label: 'طلب صرف مصروف', path: '/expenses', icon: Receipt, roles: ['system_admin', 'school_director', 'head_accountant', 'accountant', 'treasury_accountant', 'warehouse_keeper', 'bus_supervisor'] },
+      { label: 'اعتماد المصروفات', path: '/expense-approvals', icon: UserCheck, roles: ['system_admin', 'school_director', 'head_accountant'] },
+    ]
+  },
   { label: 'المستخدمين', path: '/users', icon: UserCog, roles: ['system_admin'] },
-  { label: 'الملف الشخصي', path: '/profile', icon: User, roles: ['system_admin', 'school_director', 'head_accountant', 'accountant', 'warehouse_keeper', 'bus_supervisor'] },
+  { label: 'سجلات النظام', path: '/system-logs', icon: Activity, roles: ['system_admin'] },
+  { label: 'إدارة قاعدة البيانات', path: '/database', icon: Database, roles: ['system_admin'] },
+  { label: 'هجرة البيانات', path: '/data-migration', icon: ArrowRightLeft, roles: ['system_admin'] },
+  { label: 'الملف الشخصي', path: '/profile', icon: User, roles: ['system_admin', 'school_director', 'head_accountant', 'accountant', 'treasury_accountant', 'warehouse_keeper', 'bus_supervisor'] },
 ];
+
+function NavItemRenderer({ item, onClose, location }: { item: NavItem; onClose: () => void; location: any }) {
+  const hasSubItems = item.subItems && item.subItems.length > 0;
+  
+  const isChildActive = hasSubItems && item.subItems!.some(sub => location.pathname === sub.path || location.pathname.startsWith(sub.path + '/'));
+  const isSelfActive = item.path ? (location.pathname === item.path || location.pathname.startsWith(item.path + '/')) : false;
+  const isActive = isSelfActive || isChildActive;
+
+  const [isOpen, setIsOpen] = useState(isActive);
+
+  if (hasSubItems) {
+    return (
+      <div className="space-y-1">
+        <button
+          onClick={() => setIsOpen(!isOpen)}
+          className={cn(
+            'flex items-center gap-3 px-4 py-3 rounded-lg text-sm font-medium transition-colors w-full',
+            isActive && !isOpen
+              ? 'bg-sidebar-primary/10 text-sidebar-primary'
+              : 'text-sidebar-foreground/70 hover:bg-sidebar-accent hover:text-sidebar-foreground'
+          )}
+        >
+          <item.icon className="size-5 shrink-0" />
+          <span>{item.label}</span>
+          {isOpen ? <ChevronDown className="size-4 mr-auto" /> : <ChevronLeft className="size-4 mr-auto" />}
+        </button>
+        
+        {isOpen && (
+          <div className="pl-4 pr-6 space-y-1 mt-1 border-r-2 border-sidebar-border mr-2">
+            {item.subItems!.map(sub => {
+              const isSubActive = location.pathname === sub.path || location.pathname.startsWith(sub.path + '/');
+              return (
+                <Link
+                  key={sub.path}
+                  to={sub.path}
+                  onClick={onClose}
+                  className={cn(
+                    'flex items-center gap-3 px-4 py-2.5 rounded-lg text-sm font-medium transition-colors',
+                    isSubActive
+                      ? 'bg-sidebar-primary text-sidebar-primary-foreground'
+                      : 'text-sidebar-foreground/70 hover:bg-sidebar-accent hover:text-sidebar-foreground'
+                  )}
+                >
+                  <sub.icon className="size-4 shrink-0 opacity-70" />
+                  <span>{sub.label}</span>
+                </Link>
+              );
+            })}
+          </div>
+        )}
+      </div>
+    );
+  }
+
+  return (
+    <Link
+      to={item.path!}
+      onClick={onClose}
+      className={cn(
+        'flex items-center gap-3 px-4 py-3 rounded-lg text-sm font-medium transition-colors',
+        isActive
+          ? 'bg-sidebar-primary text-sidebar-primary-foreground'
+          : 'text-sidebar-foreground/70 hover:bg-sidebar-accent hover:text-sidebar-foreground'
+      )}
+    >
+      <item.icon className="size-5 shrink-0" />
+      <span>{item.label}</span>
+      {isActive && <ChevronLeft className="size-4 mr-auto" />}
+    </Link>
+  );
+}
 
 export default function Sidebar({ isOpen, onClose }: SidebarProps) {
   const location = useLocation();
   const { user, logout } = useAuthStore();
 
-  const filteredItems = navItems.filter((item) => user && item.roles.includes(user.role));
+  const hasAccess = (path?: string, roles: UserRole[] = []) => {
+    if (!user) return false;
+    
+    // If the user has explicit permissions set, use them
+    if (user.permissions && user.permissions.length > 0) {
+      if (!path) return true; // Parent menu without path
+      
+      // Extract the resource key from the path (e.g., '/student-promotion' -> 'student-promotion')
+      const resourceKey = path.split('/')[1] || path.replace('/', '');
+      
+      const perm = user.permissions.find(p => p.resource === resourceKey);
+      if (perm) {
+        return perm.canRead;
+      }
+      return false; // If explicitly using permissions, deny by default if not found
+    }
+
+    // Fallback to legacy role-based access
+    return roles.includes(user.role);
+  };
+
+  const filteredItems = navItems
+    .map(item => {
+      // If it has subItems, filter them
+      if (item.subItems) {
+        const filteredSubItems = item.subItems.filter(sub => hasAccess(sub.path, sub.roles));
+        return { ...item, subItems: filteredSubItems };
+      }
+      return item;
+    })
+    .filter(item => {
+      // If it has subItems, only show if there's at least one subItem visible
+      if (item.subItems) {
+        return item.subItems.length > 0;
+      }
+      // Otherwise check parent access
+      return hasAccess(item.path, item.roles);
+    });
 
   return (
     <>
@@ -75,26 +270,9 @@ export default function Sidebar({ isOpen, onClose }: SidebarProps) {
         </div>
 
         <nav className="flex-1 overflow-y-auto p-3 space-y-1">
-          {filteredItems.map((item) => {
-            const isActive = location.pathname === item.path || location.pathname.startsWith(item.path + '/');
-            return (
-              <Link
-                key={item.path}
-                to={item.path}
-                onClick={onClose}
-                className={cn(
-                  'flex items-center gap-3 px-4 py-3 rounded-lg text-sm font-medium transition-colors',
-                  isActive
-                    ? 'bg-sidebar-primary text-sidebar-primary-foreground'
-                    : 'text-sidebar-foreground/70 hover:bg-sidebar-accent hover:text-sidebar-foreground'
-                )}
-              >
-                <item.icon className="size-5 shrink-0" />
-                <span>{item.label}</span>
-                {isActive && <ChevronLeft className="size-4 mr-auto" />}
-              </Link>
-            );
-          })}
+          {filteredItems.map((item) => (
+            <NavItemRenderer key={item.label} item={item} onClose={onClose} location={location} />
+          ))}
         </nav>
 
         <div className="p-3 border-t border-sidebar-border">

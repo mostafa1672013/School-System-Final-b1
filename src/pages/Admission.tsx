@@ -1,5 +1,5 @@
 import { useState, useEffect, useMemo } from 'react';
-import { Search, Plus, Filter, FileText, CheckCircle2, Clock, CreditCard, UserCheck, GraduationCap, Upload, Image as ImageIcon, Users } from 'lucide-react';
+import { Search, Plus, Filter, FileText, CheckCircle2, Clock, CreditCard, UserCheck, GraduationCap, Upload, Image as ImageIcon, Users, Trash2 } from 'lucide-react';
 import { toast } from 'sonner';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -12,9 +12,11 @@ import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/com
 import { useAdmissionStore } from '@/stores/admissionStore';
 import { useStudentsStore } from '@/stores/studentsStore';
 import { useBusStore } from '@/stores/busStore';
-import { useAuthStore } from '@/stores/authStore';
-import { formatCurrency, stageLabels, statusLabels, trackLabels, gradeOptions, academicYears, currentAcademicYear, discountLimits } from '@/lib/utils';
+import { useAuthStore, getAuthHeaders } from '@/stores/authStore';
+import { Link } from 'react-router-dom';
+import { formatCurrency, stageLabels, statusLabels, trackLabels, gradeOptions, academicYears, currentAcademicYear, roleLabels } from '@/lib/utils';
 import type { Stage, Track, Student, StudentStatus } from '@/types';
+import StudentForm from '@/components/features/StudentForm';
 
 const statusConfig: Record<string, { label: string, color: string, icon: any }> = {
     applied: { label: 'متقدم جديد', color: 'bg-blue-100 text-blue-700', icon: FileText },
@@ -23,6 +25,7 @@ const statusConfig: Record<string, { label: string, color: string, icon: any }> 
     fee_setup: { label: 'إعداد الرسوم', color: 'bg-purple-100 text-purple-700', icon: CreditCard },
     pending_approval: { label: 'بانتظار الاعتماد', color: 'bg-orange-100 text-orange-700', icon: UserCheck },
     admitted: { label: 'تم القبول', color: 'bg-emerald-100 text-emerald-700', icon: CheckCircle2 },
+    pending_discount: { label: 'طلب خصم معلق', color: 'bg-indigo-100 text-indigo-700', icon: CreditCard },
 };
 
 export default function Admission() {
@@ -32,7 +35,6 @@ export default function Admission() {
     const [search, setSearch] = useState('');
     const [statusFilter, setStatusFilter] = useState<string>('all');
     const [selectedStudent, setSelectedStudent] = useState<Student | null>(null);
-    const [isApplyOpen, setIsApplyOpen] = useState(false);
 
     useEffect(() => {
         fetchStudents();
@@ -44,7 +46,7 @@ export default function Admission() {
         return students.filter(s => {
             const matchesSearch = s.name.includes(search) || s.nationalId.includes(search);
             const matchesStatus = statusFilter === 'all' || s.status === statusFilter;
-            const isAdmissionProcess = ['applied', 'under_testing', 'failed', 'fee_setup', 'pending_approval'].includes(s.status);
+            const isAdmissionProcess = ['applied', 'under_testing', 'failed', 'fee_setup', 'pending_discount', 'pending_approval'].includes(s.status);
             return matchesSearch && matchesStatus && (statusFilter !== 'all' || isAdmissionProcess);
         });
     }, [students, search, statusFilter]);
@@ -56,15 +58,9 @@ export default function Admission() {
                     <h1 className="text-2xl font-bold font-[Noto_Kufi_Arabic]">إدارة القبول والتسجيل</h1>
                     <p className="text-muted-foreground">متابعة طلبات الالتحاق والتحويل</p>
                 </div>
-                <Dialog open={isApplyOpen} onOpenChange={setIsApplyOpen}>
-                    <DialogTrigger asChild>
-                        <Button className="font-[Noto_Kufi_Arabic]"><Plus className="size-4 ml-2" /> طلب التحاق جديد</Button>
-                    </DialogTrigger>
-                    <DialogContent className="max-w-3xl max-h-[90vh] overflow-y-auto">
-                        <DialogHeader><DialogTitle className="font-[Noto_Kufi_Arabic]">تسجيل بيانات المتقدم</DialogTitle></DialogHeader>
-                        <StudentForm onSuccess={() => { setIsApplyOpen(false); fetchStudents(); }} />
-                    </DialogContent>
-                </Dialog>
+                <Link to="/admission/new">
+                    <Button className="font-[Noto_Kufi_Arabic]"><Plus className="size-4 ml-2" /> طلب التحاق جديد</Button>
+                </Link>
             </div>
 
             <div className="flex items-center gap-3 bg-card p-4 rounded-lg border">
@@ -142,146 +138,16 @@ export default function Admission() {
     );
 }
 
-function StudentForm({ student, onSuccess }: { student?: Student, onSuccess: () => void }) {
-    const { applyAdmission } = useAdmissionStore();
-    const { updateStudent } = useStudentsStore();
-    const [form, setForm] = useState<Partial<Student>>(student || {
-        name: '', 
-        nationalId: '', 
-        stage: 'kg', 
-        grade: gradeOptions['kg'][0], 
-        track: 'local', 
-        academicYear: currentAcademicYear,
-        guardianName: '', 
-        guardianPhone: '', 
-        hasSiblings: false, 
-        documents: {}
-    });
-
-    const handleSubmit = async (e: React.FormEvent) => {
-        e.preventDefault();
-        try {
-            if (student?.id) {
-                await updateStudent(student.id, form);
-                toast.success('تم تحديث البيانات بنجاح');
-            } else {
-                await applyAdmission(form);
-                toast.success('تم تسجيل طلب الالتحاق بنجاح');
-            }
-            onSuccess();
-        } catch (error) {
-            toast.error('حدث خطأ أثناء الحفظ');
-        }
-    };
-
-    return (
-        <form onSubmit={handleSubmit} className="space-y-6">
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                <div className="space-y-2">
-                    <Label>اسم الطالب رباعي</Label>
-                    <Input required value={form.name} onChange={e => setForm({...form, name: e.target.value})} />
-                </div>
-                <div className="space-y-2">
-                    <Label>الرقم القومي</Label>
-                    <Input required value={form.nationalId} onChange={e => setForm({...form, nationalId: e.target.value})} />
-                </div>
-                <div className="space-y-2">
-                    <Label>السنة الدراسية</Label>
-                    <Select value={form.academicYear} onValueChange={v => setForm({...form, academicYear: v})}>
-                        <SelectTrigger><SelectValue /></SelectTrigger>
-                        <SelectContent>
-                            {academicYears.map(y => <SelectItem key={y} value={y}>{y}</SelectItem>)}
-                        </SelectContent>
-                    </Select>
-                </div>
-                <div className="space-y-2">
-                    <Label>المرحلة</Label>
-                    <Select value={form.stage} onValueChange={v => {
-                        const stage = v as Stage;
-                        setForm({...form, stage, grade: gradeOptions[stage][0]});
-                    }}>
-                        <SelectTrigger><SelectValue /></SelectTrigger>
-                        <SelectContent>
-                            {Object.entries(stageLabels).map(([k, v]) => <SelectItem key={k} value={k}>{v}</SelectItem>)}
-                        </SelectContent>
-                    </Select>
-                </div>
-                <div className="space-y-2">
-                    <Label>الصف</Label>
-                    <Select value={form.grade} onValueChange={v => setForm({...form, grade: v})}>
-                        <SelectTrigger><SelectValue /></SelectTrigger>
-                        <SelectContent>
-                            {gradeOptions[form.stage!]?.map(g => <SelectItem key={g} value={g}>{g}</SelectItem>)}
-                        </SelectContent>
-                    </Select>
-                </div>
-                <div className="space-y-2">
-                    <Label>المسار</Label>
-                    <Select value={form.track} onValueChange={v => setForm({...form, track: v as Track})}>
-                        <SelectTrigger><SelectValue /></SelectTrigger>
-                        <SelectContent>
-                            {Object.entries(trackLabels).map(([k, v]) => <SelectItem key={k} value={k}>{v}</SelectItem>)}
-                        </SelectContent>
-                    </Select>
-                </div>
-                <div className="space-y-2">
-                    <Label>له إخوة بالمدرسة؟</Label>
-                    <Select value={form.hasSiblings ? 'yes' : 'no'} onValueChange={v => setForm({...form, hasSiblings: v === 'yes'})}>
-                        <SelectTrigger><SelectValue /></SelectTrigger>
-                        <SelectContent>
-                            <SelectItem value="yes">نعم</SelectItem>
-                            <SelectItem value="no">لا</SelectItem>
-                        </SelectContent>
-                    </Select>
-                </div>
-                <div className="space-y-2">
-                    <Label>اسم ولي الأمر</Label>
-                    <Input required value={form.guardianName} onChange={e => setForm({...form, guardianName: e.target.value})} />
-                </div>
-                <div className="space-y-2">
-                    <Label>هاتف ولي الأمر</Label>
-                    <Input required value={form.guardianPhone} onChange={e => setForm({...form, guardianPhone: e.target.value})} />
-                </div>
-            </div>
-
-            <div className="space-y-4">
-                <Label className="font-bold">المستندات المطلوبة</Label>
-                <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-                    <div className="p-4 border rounded-lg bg-muted/50 flex flex-col items-center gap-2 text-center">
-                        <ImageIcon className="size-6 text-muted-foreground" />
-                        <span className="text-xs">صورة شخصية</span>
-                        <Button type="button" variant="outline" size="sm" className="w-full mt-2"><Upload className="size-3 ml-1" /> رفع</Button>
-                    </div>
-                    <div className="p-4 border rounded-lg bg-muted/50 flex flex-col items-center gap-2 text-center">
-                        <FileText className="size-6 text-muted-foreground" />
-                        <span className="text-xs">شهادة الميلاد</span>
-                        <Button type="button" variant="outline" size="sm" className="w-full mt-2"><Upload className="size-3 ml-1" /> رفع</Button>
-                    </div>
-                    <div className="p-4 border rounded-lg bg-muted/50 flex flex-col items-center gap-2 text-center">
-                        <FileText className="size-6 text-muted-foreground" />
-                        <span className="text-xs">بطاقة ولي الأمر</span>
-                        <Button type="button" variant="outline" size="sm" className="w-full mt-2"><Upload className="size-3 ml-1" /> رفع</Button>
-                    </div>
-                </div>
-            </div>
-
-            <div className="flex justify-end gap-3 pt-4 border-t">
-                <Button type="submit" className="w-full sm:w-auto font-[Noto_Kufi_Arabic]">
-                    {student?.id ? 'حفظ التعديلات' : 'تسجيل الطلب والتوجه للخزينة'}
-                </Button>
-            </div>
-        </form>
-    );
-}
 
 function AdmissionDetails({ student, onUpdate }: { student: Student, onUpdate: () => void }) {
     const { setTestResult, setupFees, approveAdmission, stageFees } = useAdmissionStore();
+    const { user } = useAuthStore();
     const { routes } = useBusStore();
     const [isTestDialogOpen, setIsTestDialogOpen] = useState(false);
     const [isFeeDialogOpen, setIsFeeDialogOpen] = useState(false);
     const [isEditOpen, setIsEditOpen] = useState(false);
 
-    const stageConfig = stageFees.find(f => f.stage === student.stage && f.grade === student.grade && f.track === student.track && f.academicYear === student.academicYear);
+    const stageConfig = (stageFees || []).find(f => f.stage === student.stage && f.grade === student.grade && f.track === student.track && f.academicYear === student.academicYear);
 
     const handleTestResult = async (result: 'pass' | 'fail') => {
         await setTestResult(student.id, result);
@@ -296,9 +162,22 @@ function AdmissionDetails({ student, onUpdate }: { student: Student, onUpdate: (
     };
 
     const handleApprove = async () => {
-        await approveAdmission(student.id);
-        toast.success('تم قبول الطالب بنجاح وتحويله إلى جدول الطلاب');
-        onUpdate();
+        try {
+            const res = await fetch(`/api/admission/approve/${student.id}`, {
+                method: 'PATCH',
+                headers: getAuthHeaders(),
+                body: JSON.stringify({ approverId: user?.id })
+            });
+            if (!res.ok) {
+                const err = await res.json();
+                toast.error(err.error || 'فشل الاعتماد');
+                return;
+            }
+            toast.success('تم قبول الطالب بنجاح وتحويله إلى جدول الطلاب');
+            onUpdate();
+        } catch (error) {
+            toast.error('حدث خطأ أثناء الاعتماد');
+        }
     };
 
     return (
@@ -321,16 +200,55 @@ function AdmissionDetails({ student, onUpdate }: { student: Student, onUpdate: (
                 </div>
             </CardHeader>
             <CardContent className="p-5 space-y-6">
-                {/* Step 1: Payment Check */}
+                {/* Step 1: Payment Check & Documents */}
                 <div className={`p-4 rounded-lg border-2 ${student.status === 'applied' ? 'border-amber-200 bg-amber-50 shadow-sm' : 'border-emerald-100 bg-emerald-50/30'}`}>
                     <div className="flex items-center justify-between mb-2">
-                        <h4 className="font-bold flex items-center gap-2 text-sm"><CreditCard className="size-4" /> دفع رسوم الملف</h4>
+                        <h4 className="font-bold flex items-center gap-2 text-sm"><CreditCard className="size-4" /> دفع رسوم الملف والمستندات</h4>
                         {student.status !== 'applied' ? <Badge className="bg-emerald-500">تم الدفع</Badge> : <Badge variant="outline">بانتظار الدفع</Badge>}
                     </div>
-                    <p className="text-xs text-muted-foreground">يجب على ولي الأمر التوجه للخزينة لسحب الملف ودفع الرسوم الإدارية لبدء الاختبارات.</p>
+                    
+                    <div className="space-y-2 mt-3">
+                        <div className="flex items-center justify-between text-xs">
+                            <span className="text-muted-foreground flex items-center gap-1"><ImageIcon className="size-3" /> الصورة الشخصية:</span>
+                            {student.photoUrl ? <Badge variant="secondary" className="text-[10px] bg-emerald-100 text-emerald-700 border-emerald-200">مرفوعة</Badge> : <Badge variant="outline" className="text-[10px]">ناقصة</Badge>}
+                        </div>
+                        {Object.entries(student.documents || {}).map(([key, doc]: [string, any]) => (
+                            <div key={key} className="flex items-center justify-between text-xs">
+                                <span className="text-muted-foreground flex items-center gap-1"><FileText className="size-3" /> {doc.label || key}:</span>
+                                <Badge variant="secondary" className="text-[10px] bg-emerald-100 text-emerald-700 border-emerald-200">مرفوعة</Badge>
+                            </div>
+                        ))}
+                        {/* Show placeholders for missing required docs */}
+                        {! (student.documents as any)?.birth_cert && (
+                            <div className="flex items-center justify-between text-xs">
+                                <span className="text-muted-foreground flex items-center gap-1"><FileText className="size-3" /> شهادة الميلاد:</span>
+                                <Badge variant="outline" className="text-[10px]">ناقصة</Badge>
+                            </div>
+                        )}
+                        {! (student.documents as any)?.guardian_id && (
+                            <div className="flex items-center justify-between text-xs">
+                                <span className="text-muted-foreground flex items-center gap-1"><FileText className="size-3" /> بطاقة ولي الأمر:</span>
+                                <Badge variant="outline" className="text-[10px]">ناقصة</Badge>
+                            </div>
+                        )}
+                    </div>
+
+                    {/* Extra Fields Summary */}
+                    {(student as any).extraFields && (student as any).extraFields.length > 0 && (
+                        <div className="mt-4 pt-4 border-t space-y-2">
+                            <h5 className="text-[10px] font-bold text-muted-foreground uppercase">بيانات إضافية</h5>
+                            {(student as any).extraFields.map((f: any, i: number) => (
+                                <div key={i} className="flex justify-between text-xs bg-muted/30 p-2 rounded">
+                                    <span className="text-muted-foreground">{f.label}:</span>
+                                    <span className="font-medium">{f.value}</span>
+                                </div>
+                            ))}
+                        </div>
+                    )}
+
                     {student.status === 'applied' && (
-                        <div className="mt-3 p-2 bg-white rounded border text-xs flex justify-between items-center">
-                            <span>القيمة المطلوبة:</span>
+                        <div className="mt-4 p-2 bg-white rounded border text-xs flex justify-between items-center">
+                            <span>القيمة المطلوبة للملف:</span>
                             <span className="font-bold">{formatCurrency(stageConfig?.applicationFees || 500)}</span>
                         </div>
                     )}
@@ -351,10 +269,10 @@ function AdmissionDetails({ student, onUpdate }: { student: Student, onUpdate: (
                 </div>
 
                 {/* Step 3: Fee Setup */}
-                <div className={`p-4 rounded-lg border-2 ${student.status === 'fee_setup' ? 'border-amber-200 bg-amber-50 shadow-sm' : ['pending_approval', 'admitted'].includes(student.status) ? 'border-emerald-100 bg-emerald-50/30' : 'opacity-40 grayscale'}`}>
+                <div className={`p-4 rounded-lg border-2 ${student.status === 'fee_setup' ? 'border-amber-200 bg-amber-50 shadow-sm' : ['pending_discount', 'pending_approval', 'admitted'].includes(student.status) ? 'border-emerald-100 bg-emerald-50/30' : 'opacity-40 grayscale'}`}>
                     <div className="flex items-center justify-between mb-2">
                         <h4 className="font-bold flex items-center gap-2 text-sm"><CreditCard className="size-4" /> إعداد الرسوم والخصومات</h4>
-                        {['pending_approval', 'admitted'].includes(student.status) ? <Badge className="bg-emerald-500">تم الإعداد</Badge> : null}
+                        {['pending_discount', 'pending_approval', 'admitted'].includes(student.status) ? <Badge className="bg-emerald-500">تم الإعداد</Badge> : null}
                     </div>
                     {student.status === 'fee_setup' && (
                         <Dialog open={isFeeDialogOpen} onOpenChange={setIsFeeDialogOpen}>
@@ -372,25 +290,35 @@ function AdmissionDetails({ student, onUpdate }: { student: Student, onUpdate: (
                             </DialogContent>
                         </Dialog>
                     )}
-                    {student.status === 'pending_approval' && (
+                    {['pending_approval', 'pending_discount'].includes(student.status) && (
                         <div className="mt-2 text-xs space-y-1">
                             <div className="flex justify-between"><span>إجمالي الرسوم:</span><span className="font-bold">{formatCurrency(student.totalFees)}</span></div>
                             <div className="flex justify-between text-red-600"><span>الخصم المطبق:</span><span className="font-bold">-{formatCurrency(student.discountAmount)}</span></div>
+                            {(student.discountStatus === 'pending' || student.status === 'pending_discount') && (
+                                <div className="p-3 mt-2 bg-red-50 border-2 border-red-200 rounded text-xs text-red-700 font-bold">
+                                    ⚠ الملف مجمد مالياً — بانتظار اعتماد الخصم من الإدارة المالية
+                                </div>
+                            )}
                         </div>
                     )}
                 </div>
 
                 {/* Step 4: Final Approval */}
-                <div className={`p-4 rounded-lg border-2 ${student.status === 'pending_approval' ? 'border-amber-200 bg-amber-50 shadow-sm' : student.status === 'admitted' ? 'border-emerald-100 bg-emerald-50/30' : 'opacity-40 grayscale'}`}>
+                <div className={`p-4 rounded-lg border-2 ${(student.status === 'pending_approval' && student.discountStatus !== 'pending') ? 'border-amber-200 bg-amber-50 shadow-sm' : student.status === 'admitted' ? 'border-emerald-100 bg-emerald-50/30' : 'opacity-40 grayscale'}`}>
                     <div className="flex items-center justify-between mb-2">
                         <h4 className="font-bold flex items-center gap-2 text-sm"><UserCheck className="size-4" /> الاعتماد النهائي</h4>
-                        {student.status === 'admitted' ? <Badge className="bg-emerald-500">تم الاعتماد</Badge> : null}
+                        {student.status === 'admitted' ? <Badge className="bg-emerald-500">تم الاعتماد</Badge> : (student.discountStatus === 'pending' || student.status === 'pending_discount') ? <Badge className="bg-red-500">مجمد - خصم معلق</Badge> : null}
                     </div>
                     <p className="text-xs text-muted-foreground">مراجعة المحاسب والمدير للخصومات والاعتماد النهائي للملف.</p>
-                    {student.status === 'pending_approval' && (
+                    {student.status === 'pending_approval' && student.discountStatus !== 'pending' && (
                         <Button className="w-full mt-4 bg-emerald-600 hover:bg-emerald-700 font-[Noto_Kufi_Arabic]" onClick={handleApprove}>
                             اعتماد الطلب وتحويله لطالب نشط
                         </Button>
+                    )}
+                    {(student.discountStatus === 'pending' || student.status === 'pending_discount') && (
+                        <div className="p-3 mt-3 bg-red-50 border-2 border-red-200 rounded text-center">
+                            <p className="text-sm text-red-700 font-bold">لا يمكن الاعتماد حتى يتم البت في طلب الخصم المعلق</p>
+                        </div>
                     )}
                 </div>
             </CardContent>
@@ -400,57 +328,50 @@ function AdmissionDetails({ student, onUpdate }: { student: Student, onUpdate: (
 
 function FeeSetupForm({ student, config, routes, onSubmit }: { student: Student, config?: any, routes: any[], onSubmit: (data: any) => void }) {
     const { user } = useAuthStore();
+    const { fetchStageFees } = useAdmissionStore();
     const [data, setData] = useState({
         tuitionFees: config?.tuitionFees || 0,
-        tuitionSelected: true, // Tuition is almost always selected but flags follow config
+        tuitionSelected: true,
         tuitionMandatory: config?.tuitionMandatory ?? true,
-        
         booksFees: config?.booksFees || 0,
         booksSelected: config?.booksMandatory ?? true,
         booksMandatory: config?.booksMandatory ?? true,
-        
         uniformFees: config?.uniformFees || 0,
         uniformSelected: config?.uniformMandatory ?? true,
         uniformMandatory: config?.uniformMandatory ?? true,
-        
         busFees: 0,
         otherFees: 0,
         discountAmount: 0,
         discountPercentage: 0,
         discountApprovedBy: '',
         busRouteId: '',
-        additionalFees: (config?.additionalFees || []).map((f: any) => ({ ...f, selected: f.isMandatory })) as (AdditionalFee & { selected: boolean })[]
+        additionalFees: (Array.isArray(config?.additionalFees) ? config.additionalFees : []).map((f: any) => ({ 
+            name: f.name || 'رسوم',
+            amount: f.amount || 0,
+            isMandatory: !!f.isMandatory,
+            selected: !!f.isMandatory 
+        }))
     });
 
-    const userRole = user?.role || 'accountant';
-    const limit = discountLimits[userRole];
+    const [userLimit, setUserLimit] = useState(user?.discountLimitPercent || 0);
 
-    const handleDiscountChange = (val: number, type: 'amount' | 'percentage') => {
-        let amount = data.discountAmount;
-        let percentage = data.discountPercentage;
-
-        if (type === 'percentage') {
-            percentage = val;
-            amount = (data.tuitionFees * percentage) / 100;
-        } else {
-            amount = val;
-            percentage = (amount / data.tuitionFees) * 100;
+    useEffect(() => {
+        fetchStageFees();
+        // Fetch latest user limit from backend
+        if (user?.id) {
+            fetch(`/api/users/${user.id}`, { headers: getAuthHeaders() })
+                .then(res => res.ok ? res.json() : null)
+                .then(data => {
+                    if (data && typeof data === 'object' && !data.error) {
+                        setUserLimit(data.discountLimitPercent || 0);
+                    }
+                })
+                .catch(err => console.error('Failed to fetch user limit'));
         }
+    }, [fetchStageFees, user?.id]);
 
-        // Apply limits if they exist for the role
-        if (limit) {
-            const maxByPercentage = (data.tuitionFees * limit.maxPercentage) / 100;
-            const absoluteMax = Math.min(maxByPercentage, limit.maxAmount);
-            
-            if (amount > absoluteMax) {
-                amount = absoluteMax;
-                percentage = (amount / data.tuitionFees) * 100;
-                toast.warning(`تم تطبيق الحد الأقصى للخصم المسموح لك (${formatCurrency(absoluteMax)})`);
-            }
-        }
-
-        setData(prev => ({ ...prev, discountAmount: amount, discountPercentage: percentage }));
-    };
+    const userLimitPercent = userLimit;
+    const userRoleLabel = roleLabels[user?.role || 'accountant'] || user?.role;
 
     const additionalTotal = data.additionalFees.reduce((sum, f) => sum + (f.selected ? f.amount : 0), 0);
     const standardTotal = 
@@ -459,7 +380,59 @@ function FeeSetupForm({ student, config, routes, onSubmit }: { student: Student,
         (data.uniformSelected ? data.uniformFees : 0) + 
         data.busFees;
         
-    const total = standardTotal + additionalTotal - data.discountAmount;
+    const totalBeforeDiscount = standardTotal + additionalTotal;
+
+    const [allUsers, setAllUsers] = useState<any[]>([]);
+    const [needsApproval, setNeedsApproval] = useState(false);
+    const [selectedApprover, setSelectedApprover] = useState<string>('');
+
+    useEffect(() => {
+        fetch('/api/users', { headers: getAuthHeaders() })
+            .then(res => res.ok ? res.json() : [])
+            .then(data => {
+                if (Array.isArray(data)) {
+                    setAllUsers(data);
+                } else {
+                    console.error('Invalid users response format:', data);
+                    setAllUsers([]);
+                }
+            })
+            .catch(err => {
+                console.error('Failed to fetch users:', err);
+                setAllUsers([]);
+            });
+    }, []);
+
+    const handleDiscountChange = (val: number, type: 'amount' | 'percentage') => {
+        let amount = data.discountAmount;
+        let percentage = data.discountPercentage;
+        const baseAmount = totalBeforeDiscount || 1;
+
+        if (type === 'percentage') {
+            percentage = val;
+            amount = (baseAmount * percentage) / 100;
+        } else {
+            amount = val;
+            percentage = (amount / baseAmount) * 100;
+        }
+
+        const exceeding = percentage > userLimitPercent;
+        setNeedsApproval(exceeding);
+        if (exceeding) {
+            toast.info(`هذا الخصم (${percentage.toFixed(1)}%) يتجاوز حدك المسموح (${userLimitPercent}%). سيتم إرساله للاعتماد.`);
+        }
+
+        setData(prev => ({ 
+            ...prev, 
+            discountAmount: amount, 
+            discountPercentage: percentage,
+            discountApprovedBy: exceeding ? '' : userRoleLabel
+        }));
+    };
+
+    const potentialApprovers = allUsers.filter(u => u.discountLimitPercent >= data.discountPercentage && u.id !== user?.id);
+
+    const total = totalBeforeDiscount - data.discountAmount;
 
     const toggleStandardFee = (field: 'tuitionSelected' | 'booksSelected' | 'uniformSelected', mandatory: boolean) => {
         if (mandatory) return;
@@ -519,7 +492,11 @@ function FeeSetupForm({ student, config, routes, onSubmit }: { student: Student,
                     <SelectTrigger className="h-9 text-xs"><SelectValue placeholder="اختر الخط" /></SelectTrigger>
                     <SelectContent>
                         <SelectItem value="none">لا يوجد</SelectItem>
-                        {routes.map(r => <SelectItem key={r.id} value={r.id}>{r.name} ({formatCurrency(r.annualFee)})</SelectItem>)}
+                        {Array.isArray(routes) && routes.map(r => (
+                            <SelectItem key={r.id} value={r.id}>
+                                {r.name} ({formatCurrency(r.annualFee)})
+                            </SelectItem>
+                        ))}
                     </SelectContent>
                 </Select>
             </div>
@@ -552,9 +529,9 @@ function FeeSetupForm({ student, config, routes, onSubmit }: { student: Student,
             <div className="p-4 rounded-lg bg-red-50 border border-red-100 space-y-4">
                 <div className="flex items-center justify-between">
                     <h4 className="text-sm font-bold text-red-800">إدراج خصم خاص</h4>
-                    {limit && (
+                    {userLimitPercent > 0 && (
                         <Badge variant="outline" className="text-[10px] border-red-200 text-red-600">
-                            حدك الأقصى: {limit.maxPercentage}% أو {formatCurrency(limit.maxAmount)}
+                            حدك الأقصى: {userLimitPercent}%
                         </Badge>
                     )}
                 </div>
@@ -569,9 +546,36 @@ function FeeSetupForm({ student, config, routes, onSubmit }: { student: Student,
                     </div>
                     <div className="space-y-2">
                         <Label>بموافقة</Label>
-                        <Input value={data.discountApprovedBy} onChange={e => setData({...data, discountApprovedBy: e.target.value})} className="bg-white" placeholder="مثال: المدير" />
+                        {needsApproval ? (
+                            <Select value={selectedApprover} onValueChange={setSelectedApprover}>
+                                <SelectTrigger className="bg-white border-blue-200">
+                                    <SelectValue placeholder="اختر من يعتمد" />
+                                </SelectTrigger>
+                                <SelectContent>
+                                    {potentialApprovers.length > 0 ? (
+                                        potentialApprovers.map(u => (
+                                            <SelectItem key={u.id} value={u.id}>{u.name} ({u.discountLimitPercent}%)</SelectItem>
+                                        ))
+                                    ) : (
+                                        <SelectItem value="none" disabled>لا يوجد مستخدم بهذه الصلاحية</SelectItem>
+                                    )}
+                                </SelectContent>
+                            </Select>
+                        ) : (
+                            <Input 
+                                readOnly 
+                                value={data.discountApprovedBy} 
+                                className="bg-muted cursor-not-allowed" 
+                                placeholder="تحدد تلقائياً" 
+                            />
+                        )}
                     </div>
                 </div>
+                {needsApproval && (
+                    <p className="text-[10px] text-blue-600 mt-2 font-bold">
+                        * سيتم إرسال طلب الخصم للموظف المختار للموافقة عليه قبل إتمام العملية.
+                    </p>
+                )}
             </div>
 
             <div className="p-4 rounded-lg bg-primary/5 border text-center">
@@ -579,7 +583,18 @@ function FeeSetupForm({ student, config, routes, onSubmit }: { student: Student,
                 <p className="text-2xl font-bold text-primary font-mono">{formatCurrency(total)}</p>
             </div>
 
-            <Button className="w-full font-[Noto_Kufi_Arabic]" onClick={() => onSubmit(data)}>حفظ وتحويل للاعتماد</Button>
+            <Button 
+                className="w-full font-[Noto_Kufi_Arabic]" 
+                disabled={needsApproval && !selectedApprover}
+                onClick={() => onSubmit({ 
+                    ...data, 
+                    discountStatus: needsApproval ? 'pending' : 'approved',
+                    discountApproverId: selectedApprover || null,
+                    discountRequesterId: user?.id
+                })}
+            >
+                {needsApproval ? 'إرسال طلب الخصم للاعتماد' : 'حفظ وتحويل للاعتماد'}
+            </Button>
         </div>
     );
 }
