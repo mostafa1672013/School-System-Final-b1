@@ -29,6 +29,7 @@ export default tseslint.config(
       // grep on `eslint-warning` count over time and address incrementally.
       "@typescript-eslint/no-explicit-any": "warn",
       "@typescript-eslint/no-require-imports": "warn",
+      "@typescript-eslint/ban-ts-comment": "warn",
       "@typescript-eslint/no-empty-object-type": "warn",
       "@typescript-eslint/no-namespace": "warn",
       "@typescript-eslint/no-unused-expressions": "warn",
