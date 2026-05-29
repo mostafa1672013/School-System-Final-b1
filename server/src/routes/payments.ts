@@ -2,6 +2,8 @@ import express, { Router } from 'express';
 import { requireAuth } from '../middleware/auth';
 import { audit, getAuditContext } from '../middleware/audit';
 import { getActivePeriodId } from '../lib/accounting-helpers';
+import { paginate, buildPaginatedResult, LEGACY_CAP } from '../lib/pagination';
+import { invalidate } from '../lib/cache';
 
 const router = Router();
 import { prisma } from '../lib/prisma';
@@ -51,29 +53,22 @@ async function requireOpenTreasury(req: express.Request, res: express.Response, 
 
 router.get('/payments', async (req, res) => {
   try {
-    const {
-      page: pageRaw,
-      pageSize: pageSizeRaw,
-      studentId,
-      type,
-      academicYear,
-      sessionId,
-      from,
-      to,
-    } = req.query as Record<string, string | undefined>;
+    const { studentId, type, academicYear, sessionId, from, to, search } =
+      req.query as Record<string, string | undefined>;
 
-    const isPaginated = pageRaw !== undefined;
-    const page = Math.max(1, Number.parseInt(pageRaw ?? '1', 10) || 1);
-    const pageSize = Math.min(
-      500,
-      Math.max(1, Number.parseInt(pageSizeRaw ?? '100', 10) || 100),
-    );
+    const p = paginate(req);
 
     const where: Record<string, unknown> = { deletedAt: null };
     if (studentId) where.studentId = studentId;
     if (type) where.type = type;
     if (academicYear) where.academicYear = academicYear;
     if (sessionId) where.sessionId = sessionId;
+    if (search) {
+      where.OR = [
+        { studentName: { contains: search, mode: 'insensitive' } },
+        { receiptNumber: { contains: search, mode: 'insensitive' } },
+      ];
+    }
     if (from || to) {
       const range: Record<string, Date> = {};
       if (from) range.gte = new Date(from);
@@ -81,24 +76,24 @@ router.get('/payments', async (req, res) => {
       where.date = range;
     }
 
-    if (isPaginated) {
+    if (p.isPaginated) {
       const [items, total] = await prisma.$transaction([
         prisma.payment.findMany({
           where,
           orderBy: { date: 'desc' },
-          skip: (page - 1) * pageSize,
-          take: pageSize,
+          skip: p.skip,
+          take: p.take,
         }),
         prisma.payment.count({ where }),
       ]);
-      return res.json({ items, total, page, pageSize });
+      return res.json(buildPaginatedResult(items, total, p));
     }
 
-    // Legacy path — cap at 500 to avoid full-table loads.
+    // Legacy path — capped at LEGACY_CAP to avoid full-table loads.
     const payments = await prisma.payment.findMany({
       where,
       orderBy: { date: 'desc' },
-      take: 500,
+      take: p.take,
     });
     res.json(payments);
   } catch (error) {
@@ -256,6 +251,16 @@ router.post('/payments', requireOpenTreasury, async (req, res) => {
       null,
       { amount: String(payment.amount), type: payment.type, studentId: payment.studentId, method: payment.method },
     );
+
+    // Invalidate cached reports AFTER audit + transaction commit (T025, FR-009).
+    // Best-effort: cache invalidation must never block or fail a successful payment.
+    void Promise.all([
+      invalidate('report:reconciliation'),
+      ...(payment.studentId ? [invalidate(`report:student360:${payment.studentId}`)] : []),
+    ]).catch((err) =>
+      console.warn(JSON.stringify({ level: 'warn', kind: 'cache_invalidate_failed', message: String(err) }))
+    );
+
     res.status(201).json(payment);
   } catch (error: any) {
     console.error('Payment error:', error?.message || error);
@@ -267,9 +272,19 @@ router.post('/payments', requireOpenTreasury, async (req, res) => {
 
 router.get('/expenses', async (req, res) => {
   try {
+    const p = paginate(req);
+    if (p.isPaginated) {
+      const where = {};
+      const [items, total] = await prisma.$transaction([
+        prisma.expense.findMany({ where, include: { account: true }, orderBy: { createdAt: 'desc' }, skip: p.skip, take: p.take }),
+        prisma.expense.count({ where }),
+      ]);
+      return res.json(buildPaginatedResult(items, total, p));
+    }
     const expenses = await prisma.expense.findMany({
       include: { account: true },
-      orderBy: { createdAt: 'desc' }
+      orderBy: { createdAt: 'desc' },
+      take: LEGACY_CAP,
     });
     res.json(expenses);
   } catch (error) {

@@ -1,5 +1,6 @@
 import { useState, useMemo, useEffect } from 'react';
 import { useLocation } from 'react-router-dom';
+import { useQueryClient } from '@tanstack/react-query';
 import { toast } from 'sonner';
 import { Search, Plus, Banknote, Filter, Download, Printer, TrendingUp, Clock, CreditCard, ShieldCheck, Wallet, Coins, Receipt, CheckCircle, AlertCircle } from 'lucide-react';
 import { Button } from '@/components/ui/button';
@@ -11,11 +12,14 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import StatCard from '@/components/features/StatCard';
 import { usePaymentsStore } from '@/stores/paymentsStore';
+import { usePaginatedPayments } from '@/lib/api/lists';
+import { useDebounce } from '@/hooks/useDebounce';
+import PaginationControls from '@/components/common/PaginationControls';
 import { useStudentsStore } from '@/stores/studentsStore';
 import { useAdmissionStore } from '@/stores/admissionStore';
 import { useTreasuryStore } from '@/stores/treasuryStore';
 import { formatCurrency, formatDateShort, paymentTypeLabels, paymentMethodLabels, statusLabels } from '@/lib/utils';
-import type { PaymentType, PaymentMethod } from '@/types';
+import type { PaymentType, PaymentMethod, Payment } from '@/types';
 import { printPaymentReceipt } from '@/hooks/usePrintReceipt';
 import { useAuthStore, getAuthHeaders } from '@/stores/authStore';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
@@ -25,7 +29,8 @@ import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 
 export default function Payments() {
     const location = useLocation();
-    const { payments, addPayment, fetchPayments } = usePaymentsStore();
+    const queryClient = useQueryClient();
+    const { addPayment } = usePaymentsStore();
     const { students, addPaymentToStudent, fetchStudents } = useStudentsStore();
     const { user } = useAuthStore();
     const { expenses, fetchExpenses, payExpense, loading: accountingLoading } = useAccountingStore();
@@ -38,6 +43,26 @@ export default function Payments() {
     const [dialogOpen, setDialogOpen] = useState(false);
     const [activeTab, setActiveTab] = useState('income');
     const [isAuthorized, setIsAuthorized] = useState(false);
+    const [page, setPage] = useState(1);
+    const [pageSize, setPageSize] = useState(50);
+
+    const debouncedSearch = useDebounce(search, 350);
+
+    useEffect(() => { setPage(1); }, [debouncedSearch, typeFilter, pageSize]);
+
+    const { data: pageData, isLoading: paymentsLoading } = usePaginatedPayments({
+        page,
+        pageSize,
+        type: typeFilter !== 'all' ? typeFilter : undefined,
+        search: debouncedSearch || undefined,
+    });
+    const rows = useMemo(() => (pageData?.data as Payment[] | undefined) ?? [], [pageData]);
+    const total = pageData?.total ?? 0;
+    const totalPages = pageData?.totalPages ?? 1;
+
+    const refetchPayments = () => {
+        void queryClient.invalidateQueries({ queryKey: ['payments', 'paginated'] });
+    };
     
     const [form, setForm] = useState({
         studentId: '', amount: 0, type: 'tuition' as PaymentType, method: 'cash' as PaymentMethod, notes: '', walletPhoneNumber: ''
@@ -63,11 +88,10 @@ export default function Payments() {
 
     useEffect(() => {
         fetchStudents();
-        fetchPayments();
         fetchExpenses();
         fetchTreasuryStatus();
         fetchStageFees();
-    }, [fetchStudents, fetchPayments, fetchExpenses, fetchTreasuryStatus, fetchStageFees]);
+    }, [fetchStudents, fetchExpenses, fetchTreasuryStatus, fetchStageFees]);
 
     // التحقق من تفويض المستخدم: هل هو من فتح الخزينة؟
     useEffect(() => {
@@ -108,25 +132,14 @@ export default function Payments() {
         return students.filter(s => s.paymentRequestStatus === 'pending_treasury' && s.pendingPaymentAmount && s.pendingPaymentAmount > 0);
     }, [students]);
 
-    const filteredPayments = useMemo(() => {
-        return payments.filter((p) => {
-            if (!p) return false;
-            const studentName = p.studentName || '';
-            const receiptNumber = p.receiptNumber || '';
-            const matchSearch = studentName.includes(search) || receiptNumber.includes(search);
-            const matchType = typeFilter === 'all' || p.type === typeFilter;
-            return matchSearch && matchType;
-        });
-    }, [payments, search, typeFilter]);
-
+    // Page-scoped figures (the visible page only; totals across all rows use `total`).
     const stats = useMemo(() => {
         const today = new Date().toISOString().split('T')[0];
-        const validPayments = payments.filter(p => p != null);
-        const todayPayments = validPayments.filter((p) => p.date === today);
-        const totalCollected = validPayments.reduce((s, p) => s + Number(p.amount), 0);
+        const todayPayments = rows.filter((p) => p.date === today);
+        const pageCollected = rows.reduce((s, p) => s + Number(p.amount), 0);
         const todayTotal = todayPayments.reduce((s, p) => s + Number(p.amount), 0);
-        return { totalCollected, todayTotal, todayCount: todayPayments.length, totalCount: validPayments.length };
-    }, [payments]);
+        return { pageCollected, todayTotal, todayCount: todayPayments.length };
+    }, [rows]);
 
     const handleAddPayment = async (e: React.FormEvent) => {
         e.preventDefault();
@@ -210,6 +223,7 @@ export default function Payments() {
             printPaymentReceipt({ id: paymentId || '', ...newPayment }, { grade: student.grade, guardianName: student.guardianName });
             
             fetchStudents();
+            refetchPayments();
             setIsSubmitting(false);
             setDialogOpen(false);
             setForm({ studentId: '', amount: 0, type: 'tuition', method: 'cash', notes: '', walletPhoneNumber: '' });
@@ -288,10 +302,10 @@ export default function Payments() {
             )}
 
             <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-4">
-                <StatCard title="إجمالي المحصّل" value={formatCurrency(stats.totalCollected)} icon={TrendingUp} colorClass="emerald" />
-                <StatCard title="تحصيل اليوم" value={formatCurrency(stats.todayTotal)} icon={Banknote} colorClass="teal" />
-                <StatCard title="عمليات اليوم" value={stats.todayCount.toString()} icon={CreditCard} colorClass="sky" />
-                <StatCard title="إجمالي العمليات" value={stats.totalCount.toString()} icon={Clock} colorClass="purple" />
+                <StatCard title="المحصّل (هذه الصفحة)" value={formatCurrency(stats.pageCollected)} icon={TrendingUp} colorClass="emerald" />
+                <StatCard title="تحصيل اليوم (هذه الصفحة)" value={formatCurrency(stats.todayTotal)} icon={Banknote} colorClass="teal" />
+                <StatCard title="عمليات اليوم (هذه الصفحة)" value={stats.todayCount.toLocaleString('ar-EG')} icon={CreditCard} colorClass="sky" />
+                <StatCard title="إجمالي العمليات" value={total.toLocaleString('ar-EG')} icon={Clock} colorClass="purple" />
             </div>
 
             <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
@@ -399,7 +413,9 @@ export default function Payments() {
                         <table className="w-full text-sm text-right">
                             <thead><tr className="border-b bg-slate-50 text-slate-600"><th className="p-3">رقم الإيصال</th><th className="p-3">الطالب</th><th className="p-3">المبلغ</th><th className="p-3">النوع</th><th className="p-3">التاريخ</th><th className="p-3 w-16">طباعة</th></tr></thead>
                             <tbody>
-                                {filteredPayments.map((p) => (
+                                {paymentsLoading ? (
+                                    <tr><td colSpan={6} className="p-12 text-center text-slate-400">جاري التحميل...</td></tr>
+                                ) : rows.map((p) => (
                                     <tr key={p.id} className="border-b last:border-0 hover:bg-slate-50">
                                         <td className="p-3 font-mono text-xs">{p.receiptNumber}</td>
                                         <td className="p-3 font-medium">{p.studentName}</td>
@@ -409,9 +425,20 @@ export default function Payments() {
                                         <td className="p-3"><Button variant="ghost" size="icon" onClick={() => printPaymentReceipt(p)}><Printer className="size-4" /></Button></td>
                                     </tr>
                                 ))}
-                                {filteredPayments.length === 0 && <tr><td colSpan={6} className="p-12 text-center text-slate-400">لا يوجد سجلات دفع مطابقة</td></tr>}
+                                {!paymentsLoading && rows.length === 0 && <tr><td colSpan={6} className="p-12 text-center text-slate-400">لا يوجد سجلات دفع مطابقة</td></tr>}
                             </tbody>
                         </table>
+                        {total > 0 && (
+                            <PaginationControls
+                                page={page}
+                                pageSize={pageSize}
+                                total={total}
+                                totalPages={totalPages}
+                                onPageChange={setPage}
+                                onPageSizeChange={setPageSize}
+                                isLoading={paymentsLoading}
+                            />
+                        )}
                     </div>
                 </TabsContent>
 

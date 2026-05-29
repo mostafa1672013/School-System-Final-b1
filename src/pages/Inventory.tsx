@@ -1,4 +1,5 @@
 import { useState, useMemo, useEffect } from 'react';
+import { useQueryClient } from '@tanstack/react-query';
 import { toast } from 'sonner';
 import { Search, Plus, Package, AlertTriangle, ArrowDownToLine, ArrowUpFromLine, Loader2, Trash2, Pencil, Eye, Printer, Settings } from 'lucide-react';
 import { Button } from '@/components/ui/button';
@@ -13,6 +14,8 @@ import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, 
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from '@/components/ui/sheet';
 import { Progress } from '@/components/ui/progress';
 import { useInventoryStore } from '@/stores/inventoryStore';
+import { usePaginatedInventoryTx } from '@/lib/api/lists';
+import PaginationControls from '@/components/common/PaginationControls';
 import { useStudentsStore } from '@/stores/studentsStore';
 import { useAuthStore } from '@/stores/authStore';
 import { usePrintInventoryReport } from '@/hooks/usePrintInventoryReport';
@@ -34,6 +37,9 @@ export default function Inventory() {
     const { students } = useStudentsStore();
     const { user } = useAuthStore();
     const { printReport } = usePrintInventoryReport();
+    const queryClient = useQueryClient();
+
+    type InventoryTx = (typeof transactions)[number];
 
     useEffect(() => {
         fetchItems();
@@ -46,6 +52,8 @@ export default function Inventory() {
     const [activeTab, setActiveTab] = useState('all');
     const [txTypeFilter, setTxTypeFilter] = useState('all');
     const [txItemFilter, setTxItemFilter] = useState('all');
+    const [txPage, setTxPage] = useState(1);
+    const [txPageSize, setTxPageSize] = useState(25);
 
     // Add Item
     const [addDialogOpen, setAddDialogOpen] = useState(false);
@@ -153,11 +161,23 @@ export default function Inventory() {
     const lowStockItems = items.filter((i) => i.quantity <= i.minQuantity);
     const totalValue = items.reduce((s, i) => s + Number(i.quantity) * Number(i.unitCost), 0);
 
-    const filteredTransactions = useMemo(() => {
-        return transactions
-            .filter(tx => txTypeFilter === 'all' || tx.subType === txTypeFilter)
-            .filter(tx => txItemFilter === 'all' || tx.itemId === txItemFilter);
-    }, [transactions, txTypeFilter, txItemFilter]);
+    // Reset to page 1 when transaction filters change.
+    useEffect(() => { setTxPage(1); }, [txTypeFilter, txItemFilter, txPageSize]);
+
+    // Server-paginated transactions ledger (filters applied across ALL rows).
+    const { data: txData, isLoading: txLoading } = usePaginatedInventoryTx({
+        page: txPage,
+        pageSize: txPageSize,
+        subType: txTypeFilter !== 'all' ? txTypeFilter : undefined,
+        itemId: txItemFilter !== 'all' ? txItemFilter : undefined,
+    });
+    const txRows = useMemo(() => (txData?.data as InventoryTx[] | undefined) ?? [], [txData]);
+    const txTotal = txData?.total ?? 0;
+    const txTotalPages = txData?.totalPages ?? 1;
+
+    const refetchTx = () => {
+        void queryClient.invalidateQueries({ queryKey: ['inventory', 'transactions', 'paginated'] });
+    };
 
     const sheetTransactions = useMemo(() => {
         if (!sheetItem) return [];
@@ -298,6 +318,7 @@ export default function Inventory() {
             toast.success('تم استلام الكمية بنجاح');
             setReceiveDialogOpen(false);
             resetTxForm();
+            refetchTx();
         } else {
             toast.error('فشل استلام الكمية');
         }
@@ -340,6 +361,7 @@ export default function Inventory() {
             toast.success('تم صرف الكمية بنجاح');
             setIssueDialogOpen(false);
             resetTxForm();
+            refetchTx();
         } else {
             toast.error('فشل صرف الكمية');
         }
@@ -905,16 +927,16 @@ export default function Inventory() {
                             </tr>
                         </thead>
                         <tbody>
-                            {loading ? (
+                            {txLoading ? (
                                 <tr>
                                     <td colSpan={7} className="py-8 text-center text-muted-foreground">جاري التحميل...</td>
                                 </tr>
-                            ) : filteredTransactions.length === 0 ? (
+                            ) : txRows.length === 0 ? (
                                 <tr>
                                     <td colSpan={7} className="py-8 text-center text-muted-foreground">لا توجد حركات حتى الآن</td>
                                 </tr>
                             ) : (
-                                filteredTransactions.slice(0, 20).map((tx) => (
+                                txRows.map((tx) => (
                                     <tr key={tx.id} className="border-b last:border-0 hover:bg-muted/20">
                                         <td className="p-3 font-medium">{tx.item?.name || tx.itemName || 'غير محدد'}</td>
                                         <td className="p-3">
@@ -932,6 +954,17 @@ export default function Inventory() {
                             )}
                         </tbody>
                     </table>
+                    {txTotal > 0 && (
+                        <PaginationControls
+                            page={txPage}
+                            pageSize={txPageSize}
+                            total={txTotal}
+                            totalPages={txTotalPages}
+                            onPageChange={setTxPage}
+                            onPageSizeChange={setTxPageSize}
+                            isLoading={txLoading}
+                        />
+                    )}
                 </div>
             </div>
 

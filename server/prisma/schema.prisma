@@ -183,6 +183,7 @@ model InventoryItem {
   @@index([category])
   @@index([grade])
   @@index([itemType])
+  @@index([createdAt])
 }
 
 model InventoryTransaction {
@@ -949,6 +950,7 @@ model DeliveryOrder {
   @@index([studentId])
   @@index([status])
   @@index([academicYear, term])
+  @@index([createdAt])
 }
 
 model DeliveryOrderItem {

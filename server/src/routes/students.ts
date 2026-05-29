@@ -2,6 +2,7 @@ import { Router } from 'express';
 import { requireAuth, requireRoles, managementRoles } from '../middleware/auth';
 import { audit, getAuditContext } from '../middleware/audit';
 import { encryptNationalId, decryptNationalId, hashNationalId } from '../lib/crypto';
+import { paginate, buildPaginatedResult } from '../lib/pagination';
 
 const router = Router();
 import { prisma } from '../lib/prisma';
@@ -9,32 +10,28 @@ import { prisma } from '../lib/prisma';
 // ===== STUDENTS =====
 
 // Get all students (paginated + filterable)
-// Backward-compatible: if no `page` query param, returns first 100 in legacy array shape.
-// Otherwise returns { items, total, page, pageSize }.
+// Paginated mode (page param present): returns PaginatedResult { data, page, pageSize, total, totalPages }
+// Legacy mode (no page param): returns array capped at LEGACY_CAP (500) for back-compat.
 router.get('/', async (req, res) => {
   try {
-    const {
-      page: pageRaw,
-      pageSize: pageSizeRaw,
-      status,
-      stage,
-      grade,
-      academicYear,
-      search,
-    } = req.query as Record<string, string | undefined>;
+    const { status, statuses, stage, grade, academicYear, search, paymentRequestStatus } =
+      req.query as Record<string, string | undefined>;
 
-    const isPaginated = pageRaw !== undefined;
-    const page = Math.max(1, Number.parseInt(pageRaw ?? '1', 10) || 1);
-    const pageSize = Math.min(
-      500,
-      Math.max(1, Number.parseInt(pageSizeRaw ?? '100', 10) || 100),
-    );
+    const p = paginate(req);
 
     const where: Record<string, unknown> = { deletedAt: null };
-    if (status) where.status = status;
+    // `statuses` (comma-separated) takes precedence and filters via `in`;
+    // single `status` retained for back-compat.
+    if (statuses) {
+      const list = statuses.split(',').map((s) => s.trim()).filter(Boolean);
+      if (list.length) where.status = { in: list };
+    } else if (status) {
+      where.status = status;
+    }
     if (stage) where.stage = stage;
     if (grade) where.grade = grade;
     if (academicYear) where.academicYear = academicYear;
+    if (paymentRequestStatus) where.paymentRequestStatus = paymentRequestStatus;
     if (search) {
       where.OR = [
         { name: { contains: search, mode: 'insensitive' } },
@@ -43,7 +40,7 @@ router.get('/', async (req, res) => {
       ];
     }
 
-    if (isPaginated) {
+    if (p.isPaginated) {
       const [items, total] = await prisma.$transaction([
         prisma.student.findMany({
           where,
@@ -52,8 +49,8 @@ router.get('/', async (req, res) => {
             badge: true,
           },
           orderBy: { createdAt: 'desc' },
-          skip: (page - 1) * pageSize,
-          take: pageSize,
+          skip: p.skip,
+          take: p.take,
         }),
         prisma.student.count({ where }),
       ]);
@@ -61,10 +58,10 @@ router.get('/', async (req, res) => {
         ...s,
         nationalId: decryptNationalId(s.nationalId),
       }));
-      return res.json({ items: safeItems, total, page, pageSize });
+      return res.json(buildPaginatedResult(safeItems, total, p));
     }
 
-    // Legacy path — capped at 100 to prevent accidental full-table loads.
+    // Legacy path — capped at LEGACY_CAP to prevent accidental full-table loads.
     const students = await prisma.student.findMany({
       where,
       include: {
@@ -72,7 +69,7 @@ router.get('/', async (req, res) => {
         badge: true,
       },
       orderBy: { createdAt: 'desc' },
-      take: pageSize,
+      take: p.take,
     });
     const safeStudents = students.map((s) => ({
       ...s,

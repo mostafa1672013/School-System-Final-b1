@@ -20,15 +20,23 @@ export function perfLogger(req: Request, res: Response, next: NextFunction) {
   res.on('finish', () => {
     const ms = Number(process.hrtime.bigint() - start) / 1_000_000;
     if (ms > SLOW_REQUEST_MS) {
-      // Skip query strings — they can contain PII or secrets.
+      // Prefer the mounted route pattern (e.g. "/api/students") over the raw
+      // path so logs aggregate by endpoint, not by id. Skip query strings —
+      // they can contain PII or secrets.
+      const route =
+        (req as any).route?.path ?? req.baseUrl ?? req.path ?? '';
+      const durationMs = Math.round(ms);
       console.warn(
         JSON.stringify({
+          ts: new Date().toISOString(),
           level: 'warn',
           kind: 'slow_request',
           method: req.method,
+          route,
           path: req.path,
           status: res.statusCode,
-          ms: Math.round(ms),
+          durationMs,
+          ms: durationMs, // kept for back-compat with existing log consumers
           userId: (req as any).user?.userId,
         }),
       );

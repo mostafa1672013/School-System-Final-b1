@@ -1,6 +1,7 @@
 import { Router } from 'express';
 import { randomUUID } from 'crypto';
 import { requireAuth, warehouseRoles, accountingAndWarehouse } from '../middleware/auth';
+import { paginate, buildPaginatedResult } from '../lib/pagination';
 
 const router = Router();
 import { prisma } from '../lib/prisma';
@@ -86,21 +87,10 @@ router.delete('/categories/:id', async (req, res) => {
 
 router.get('/', async (req, res) => {
   try {
-    const {
-      page: pageRaw,
-      pageSize: pageSizeRaw,
-      category,
-      grade,
-      itemType,
-      search,
-    } = req.query as Record<string, string | undefined>;
+    const { category, grade, itemType, search } =
+      req.query as Record<string, string | undefined>;
 
-    const isPaginated = pageRaw !== undefined;
-    const page = Math.max(1, Number.parseInt(pageRaw ?? '1', 10) || 1);
-    const pageSize = Math.min(
-      500,
-      Math.max(1, Number.parseInt(pageSizeRaw ?? '200', 10) || 200),
-    );
+    const p = paginate(req);
 
     const where: Record<string, unknown> = {};
     if (category) where.category = category;
@@ -108,23 +98,23 @@ router.get('/', async (req, res) => {
     if (itemType) where.itemType = itemType;
     if (search) where.name = { contains: search, mode: 'insensitive' };
 
-    if (isPaginated) {
+    if (p.isPaginated) {
       const [items, total] = await prisma.$transaction([
         prisma.inventoryItem.findMany({
           where,
           orderBy: { createdAt: 'desc' },
-          skip: (page - 1) * pageSize,
-          take: pageSize,
+          skip: p.skip,
+          take: p.take,
         }),
         prisma.inventoryItem.count({ where }),
       ]);
-      return res.json({ items, total, page, pageSize });
+      return res.json(buildPaginatedResult(items, total, p));
     }
 
     const items = await prisma.inventoryItem.findMany({
       where,
       orderBy: { createdAt: 'desc' },
-      take: pageSize,
+      take: p.take,
     });
     res.json(items);
   } catch (error) {
@@ -234,26 +224,15 @@ router.get('/low-stock', async (req, res) => {
 // GET: All inventory transactions
 router.get('/transactions', async (req, res) => {
   try {
-    const {
-      itemId,
-      type,
-      studentId,
-      from,
-      to,
-      page: pageRaw,
-      pageSize: pageSizeRaw,
-    } = req.query as Record<string, string | undefined>;
+    const { itemId, type, subType, studentId, from, to } =
+      req.query as Record<string, string | undefined>;
 
-    const isPaginated = pageRaw !== undefined;
-    const page = Math.max(1, Number.parseInt(pageRaw ?? '1', 10) || 1);
-    const pageSize = Math.min(
-      500,
-      Math.max(1, Number.parseInt(pageSizeRaw ?? '100', 10) || 100),
-    );
+    const p = paginate(req);
 
     const where: Record<string, unknown> = {};
     if (itemId) where.itemId = itemId;
     if (type) where.type = type;
+    if (subType) where.subType = subType;
     if (studentId) where.studentId = studentId;
     if (from || to) {
       const range: Record<string, Date> = {};
@@ -262,25 +241,25 @@ router.get('/transactions', async (req, res) => {
       where.date = range;
     }
 
-    if (isPaginated) {
+    if (p.isPaginated) {
       const [items, total] = await prisma.$transaction([
         prisma.inventoryTransaction.findMany({
           where,
           include: { item: true },
           orderBy: { date: 'desc' },
-          skip: (page - 1) * pageSize,
-          take: pageSize,
+          skip: p.skip,
+          take: p.take,
         }),
         prisma.inventoryTransaction.count({ where }),
       ]);
-      return res.json({ items, total, page, pageSize });
+      return res.json(buildPaginatedResult(items, total, p));
     }
 
     const transactions = await prisma.inventoryTransaction.findMany({
       where,
       include: { item: true },
       orderBy: { date: 'desc' },
-      take: 500,
+      take: p.take,
     });
     res.json(transactions);
   } catch (error: any) {

@@ -1,6 +1,7 @@
 import { Router } from 'express';
 import { randomUUID } from 'crypto';
 import { requireAuth, accountantRoles, warehouseRoles, accountingAndWarehouse } from '../middleware/auth';
+import { paginate, buildPaginatedResult } from '../lib/pagination';
 
 const router = Router();
 import { prisma } from '../lib/prisma';
@@ -14,21 +15,10 @@ async function generateDeliveryCode(tx: any): Promise<string> {
 // GET list with filters
 router.get('/', requireAuth, accountingAndWarehouse, async (req, res) => {
   try {
-    const {
-      status,
-      studentId,
-      academicYear,
-      term,
-      page: pageRaw,
-      pageSize: pageSizeRaw,
-    } = req.query as Record<string, string | undefined>;
+    const { status, studentId, academicYear, term } =
+      req.query as Record<string, string | undefined>;
 
-    const isPaginated = pageRaw !== undefined;
-    const page = Math.max(1, Number.parseInt(pageRaw ?? '1', 10) || 1);
-    const pageSize = Math.min(
-      500,
-      Math.max(1, Number.parseInt(pageSizeRaw ?? '100', 10) || 100),
-    );
+    const p = paginate(req);
 
     const where: Record<string, unknown> = {};
     if (status) where.status = status;
@@ -55,25 +45,25 @@ router.get('/', requireAuth, accountingAndWarehouse, async (req, res) => {
       },
     } as const;
 
-    if (isPaginated) {
+    if (p.isPaginated) {
       const [items, total] = await prisma.$transaction([
         prisma.deliveryOrder.findMany({
           where,
           include: includeShape,
           orderBy: { createdAt: 'desc' },
-          skip: (page - 1) * pageSize,
-          take: pageSize,
+          skip: p.skip,
+          take: p.take,
         }),
         prisma.deliveryOrder.count({ where }),
       ]);
-      return res.json({ items, total, page, pageSize });
+      return res.json(buildPaginatedResult(items, total, p));
     }
 
     const orders = await prisma.deliveryOrder.findMany({
       where,
       include: includeShape,
       orderBy: { createdAt: 'desc' },
-      take: 500,
+      take: p.take,
     });
     res.json(orders);
   } catch (error) {

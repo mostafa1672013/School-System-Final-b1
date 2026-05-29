@@ -1,5 +1,6 @@
 import express from 'express';
 import { requireAuth, requireRoles, adminOnly, accountantRoles } from './middleware/auth';
+import { paginate, buildPaginatedResult, LEGACY_CAP } from './lib/pagination';
 
 import { prisma } from './lib/prisma';
 const router = express.Router();
@@ -219,13 +220,32 @@ router.get('/journal-entries', async (req, res) => {
     if (referenceType) where.referenceType = referenceType;
     if (referenceId) where.referenceId = referenceId;
 
+    const p = paginate(req);
+    if (p.isPaginated) {
+      const [items, total] = await prisma.$transaction([
+        prisma.journalEntry.findMany({
+          where,
+          include: {
+            lines: { include: { account: true, costCenter: true }, orderBy: { lineNumber: 'asc' } },
+            period: true,
+          },
+          orderBy: { createdAt: 'desc' },
+          skip: p.skip,
+          take: p.take,
+        }),
+        prisma.journalEntry.count({ where }),
+      ]);
+      return res.json(buildPaginatedResult(items, total, p));
+    }
+
     const entries = await prisma.journalEntry.findMany({
       where,
       include: {
         lines: { include: { account: true, costCenter: true }, orderBy: { lineNumber: 'asc' } },
         period: true
       },
-      orderBy: { createdAt: 'desc' }
+      orderBy: { createdAt: 'desc' },
+      take: LEGACY_CAP,
     });
     res.json(entries);
   } catch (error) {

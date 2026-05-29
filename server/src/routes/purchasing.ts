@@ -1,6 +1,7 @@
 import { Router } from 'express';
 import { requireAuth } from '../middleware/auth';
 import { getActivePeriodId } from '../lib/accounting-helpers';
+import { LEGACY_CAP } from '../lib/pagination';
 
 const router = Router();
 import { prisma } from '../lib/prisma';
@@ -12,7 +13,8 @@ import { prisma } from '../lib/prisma';
 router.get('/suppliers', requireAuth, async (req, res) => {
   try {
     const suppliers = await prisma.supplier.findMany({
-      orderBy: { name: 'asc' }
+      orderBy: { name: 'asc' },
+      take: LEGACY_CAP,
     });
     res.json(suppliers);
   } catch (error) {
@@ -40,7 +42,8 @@ router.get('/requests', requireAuth, async (req, res) => {
   try {
     const requests = await prisma.purchaseRequest.findMany({
       include: { items: true, supplier: true },
-      orderBy: { date: 'desc' }
+      orderBy: { date: 'desc' },
+      take: LEGACY_CAP,
     });
     res.json(requests);
   } catch (error) {
@@ -83,7 +86,8 @@ router.get('/orders', requireAuth, async (req, res) => {
   try {
     const orders = await prisma.purchaseOrder.findMany({
       include: { items: true, supplier: true },
-      orderBy: { date: 'desc' }
+      orderBy: { date: 'desc' },
+      take: LEGACY_CAP,
     });
     res.json(orders);
   } catch (error) {
@@ -139,7 +143,8 @@ router.get('/receipts', requireAuth, async (req, res) => {
   try {
     const receipts = await prisma.goodsReceipt.findMany({
       include: { items: true, supplier: true, order: true },
-      orderBy: { date: 'desc' }
+      orderBy: { date: 'desc' },
+      take: LEGACY_CAP,
     });
     res.json(receipts);
   } catch (error) {
@@ -251,7 +256,8 @@ router.get('/invoices', requireAuth, async (req, res) => {
   try {
     const invoices = await prisma.purchaseInvoice.findMany({
       include: { supplier: true, receipt: true },
-      orderBy: { date: 'desc' }
+      orderBy: { date: 'desc' },
+      take: LEGACY_CAP,
     });
     res.json(invoices);
   } catch (error) {
@@ -332,7 +338,8 @@ router.get('/payments', requireAuth, async (req, res) => {
   try {
     const payments = await prisma.supplierPayment.findMany({
       include: { supplier: true, invoice: true },
-      orderBy: { date: 'desc' }
+      orderBy: { date: 'desc' },
+      take: LEGACY_CAP,
     });
     res.json(payments);
   } catch (error) {

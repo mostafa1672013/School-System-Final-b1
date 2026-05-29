@@ -25,10 +25,18 @@ import migrationRouter from './routes/migration';
 import gradeItemListsRouter from './routes/grade-item-lists';
 import deliveryOrdersRouter from './routes/delivery-orders';
 import distributionReportRouter from './routes/distribution-report';
+import reportsRouter from './routes/reports';
 
 dotenv.config();
 
 import { prisma } from './lib/prisma';
+import { getRedis } from './lib/cache';
+
+// Initialize the shared Redis client once at startup. getRedis() attaches
+// 'ready'/'error' listeners that log connection state. A downed Redis never
+// blocks boot — the cache falls back to direct DB queries (FR-009).
+getRedis();
+
 const app = express();
 const PORT = process.env.PORT || 3000;
 
@@ -173,6 +181,9 @@ app.use('/api/delivery-orders', deliveryOrdersRouter);
 
 // Distribution reports (grade-summary + per-student status)
 app.use('/api/distribution', distributionReportRouter);
+
+// Cached reports: student-360, reconciliation
+app.use('/api/reports', reportsRouter);
 
 // Health check endpoint
 app.get('/health', (_req, res) => {
