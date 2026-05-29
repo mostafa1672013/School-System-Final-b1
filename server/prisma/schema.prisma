@@ -1,0 +1,303 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model Student {
+  id                   String                 @id @default(uuid())
+  nationalId           String                 @unique
+  name                 String
+  photoUrl             String?
+  stage                String
+  grade                String
+  track                String                 @default("local")
+  academicYear         String                 @default("2024-2025")
+  className            String?
+  guardianName         String
+  guardianPhone        String
+  address              String?
+  enrollmentDate       String?
+  status               String                 @default("applied")
+  hasSiblings          Boolean                @default(false)
+  testResult           String?
+  tuitionFees          Float                  @default(0)
+  tuitionMandatory     Boolean                @default(true)
+  booksFees            Float                  @default(0)
+  booksMandatory       Boolean                @default(true)
+  uniformFees          Float                  @default(0)
+  uniformMandatory     Boolean                @default(true)
+  busFees              Float                  @default(0)
+  otherFees            Float                  @default(0)
+  totalFees            Float                  @default(0)
+  paidAmount           Float                  @default(0)
+  pendingPaymentAmount Float?
+  pendingPaymentType   String?
+  paymentRequestStatus String?
+  discountAmount       Float                  @default(0)
+  discountApprovedBy   String?
+  busRouteId           String?
+  documents            Json?
+  additionalFees       Json?
+  createdAt            DateTime               @default(now())
+  updatedAt            DateTime               @updatedAt
+  payments             Payment[]
+  yearlyFinance        StudentYearlyFinance[]
+}
+
+model StageFee {
+  id                   String   @id @default(uuid())
+  stage                String
+  grade                String
+  track                String   @default("local")
+  academicYear         String
+  tuitionFees          Float
+  tuitionMandatory     Boolean  @default(true)
+  booksFees            Float
+  booksMandatory       Boolean  @default(true)
+  uniformFees          Float
+  uniformMandatory     Boolean  @default(true)
+  applicationFees      Float
+  applicationMandatory Boolean  @default(true)
+  additionalFees       Json?
+  createdAt            DateTime @default(now())
+  updatedAt            DateTime @updatedAt
+
+  @@unique([stage, grade, track, academicYear])
+}
+
+model Payment {
+  id            String   @id @default(uuid())
+  studentId     String
+  studentName   String
+  amount        Float
+  type          String
+  method        String
+  date          String
+  receiptNumber String   @unique
+  collectedBy   String
+  academicYear  String?
+  createdAt     DateTime @default(now())
+  notes         String?
+  student       Student  @relation(fields: [studentId], references: [id], onDelete: Cascade)
+}
+
+model StudentYearlyFinance {
+  id           String  @id @default(uuid())
+  studentId    String
+  academicYear String
+  grade        String
+  stage        String
+  tuitionFees  Float   @default(0)
+  booksFees    Float   @default(0)
+  uniformFees  Float   @default(0)
+  busFees      Float   @default(0)
+  otherFees    Float   @default(0)
+  totalFees    Float   @default(0)
+  paidAmount   Float   @default(0)
+  student      Student @relation(fields: [studentId], references: [id], onDelete: Cascade)
+
+  @@unique([studentId, academicYear])
+}
+
+model InventoryItem {
+  id          String  @id @default(uuid())
+  name        String
+  category    String
+  quantity    Int     @default(0)
+  minQuantity Int     @default(5)
+  unit        String  @default("قطعة")
+  unitPrice   Float   @default(0)
+  grade       String?
+  description String?
+  lastUpdated String
+}
+
+model BusRoute {
+  id          String   @id @default(uuid())
+  name        String
+  driverName  String
+  driverPhone String
+  busNumber   String
+  capacity    Int
+  monthlyFee  Float
+  annualFee   Float
+  stops       String[] @default([])
+  employees   Employee[]
+}
+
+model User {
+  id                   String   @id @default(uuid())
+  name                 String
+  email                String   @unique
+  password             String
+  role                 String
+  avatar               String?
+  active               Boolean  @default(true)
+  discountLimitPercent Float    @default(0)
+  createdAt            DateTime @default(now())
+}
+
+model Employee {
+  id                  Int          @id @default(autoincrement())
+  employeeCode        Int          @unique @map("employee_code")
+  fullName            String       @map("full_name")
+  nationalId          String       @unique @map("national_id")
+  dateOfBirth         String       @map("date_of_birth")
+  gender              String
+  phoneNumber         String       @map("phone_number")
+  address             String
+  governorate         String
+  department          String
+  operations          String
+  shiftId             Int          @map("shift_id")
+  shift               Shift        @relation(fields: [shiftId], references: [id])
+  joinDate            String       @map("join_date")
+  contractStartDate   String       @map("contract_start_date")
+  contractDuration    Float        @map("contract_duration")
+  contractEndDate     String       @map("contract_end_date")
+  contractType        String?      @map("contract_type")
+  baseSalary          Float        @map("base_salary")
+  paymentMethod       String       @map("payment_method")
+  iban                String?
+  reducedHourPosition String?      @map("reduced_hour_position")
+  totalAllowedRegular Int          @default(21) @map("total_allowed_regular")
+  totalAllowedCasual  Int          @default(3) @map("total_allowed_casual")
+  createdAt           DateTime     @default(now()) @map("created_at")
+  updatedAt           DateTime     @updatedAt @map("updated_at")
+  active              Boolean      @default(true)
+  status              String       @default("ACTIVE")
+  jobTitle            String?      @map("job_title")
+  avatar              String?      @map("avatar")
+  nationalIdImage     String?      @map("national_id_image")
+  contractPdf         String?      @map("contract_pdf")
+  isBusSubscribed     Boolean      @default(false) @map("is_bus_subscribed")
+  busSubscriptionType String?      @map("bus_subscription_type")
+  busRouteId          String?      @map("bus_route_id")
+  busRoute            BusRoute?    @relation(fields: [busRouteId], references: [id])
+  attendance          Attendance[]
+  leaveBalances       LeaveBalance[]
+  leaveRequests       LeavePermissionRequest[]
+  deductions          Deduction[]
+
+  @@map("employees")
+}
+
+model LeaveBalance {
+  id               Int      @id @default(autoincrement())
+  employeeCode     Int      @map("employee_code")
+  employee         Employee @relation(fields: [employeeCode], references: [employeeCode], onDelete: Cascade)
+  academicYear     String   @map("academic_year")
+  totalCasualUsed  Int      @default(0) @map("total_casual_used")
+  totalRegularUsed Int      @default(0) @map("total_regular_used")
+
+  @@unique([employeeCode, academicYear])
+  @@map("leave_balances")
+}
+
+model LeavePermissionRequest {
+  id              String   @id @default(uuid())
+  employeeCode    Int      @map("employee_code")
+  employee        Employee @relation(fields: [employeeCode], references: [employeeCode], onDelete: Cascade)
+  type            String   // CASUAL, ANNUAL, AM_PERMISSION, PM_PERMISSION
+  date            String   // YYYY-MM-DD
+  status          String   @default("PENDING") // PENDING, APPROVED_FREE, APPROVED_WITH_DEDUCTION, REJECTED
+  deductedFrom    String?  @map("deducted_from") // CASUAL, ANNUAL, EXCEPTION
+  durationDays    Int      @default(1) @map("duration_days")
+  endDate         String?  @map("end_date") // YYYY-MM-DD calculated end date
+  createdAt       DateTime @default(now()) @map("created_at")
+
+  @@map("leave_permission_requests")
+}
+
+model PublicHoliday {
+  id           String   @id @default(uuid())
+  startDate    String   @map("start_date") // YYYY-MM-DD
+  endDate      String   @map("end_date") // YYYY-MM-DD
+  name         String
+  status       String   @default("PENDING")
+  academicYear String   @default("") @map("academic_year")
+  createdAt    DateTime @default(now()) @map("created_at")
+
+  @@map("public_holidays")
+}
+
+model Attendance {
+  id                 String   @id @default(uuid())
+  employeeCode       Int      @map("employee_code")
+  employee           Employee @relation(fields: [employeeCode], references: [employeeCode], onDelete: Cascade)
+  date               String   // بصيغة YYYY-MM-DD
+  checkIn            String?  @map("check_in") // بصيغة HH:mm:ss
+  checkOut           String?  @map("check_out") // بصيغة HH:mm:ss
+  delayMinutes       Int      @default(0) @map("delay_minutes")
+  earlyDeparture     Int      @default(0) @map("early_departure")
+  shiftId            Int      @default(1) @map("shift_id")
+  shift              Shift    @relation(fields: [shiftId], references: [id])
+  status             String   @default("present") // present, absent, late, etc.
+  isManual           Boolean  @default(false) @map("is_manual")
+  createdAt          DateTime @default(now()) @map("created_at")
+
+  @@unique([employeeCode, date])
+  @@map("attendance")
+}
+
+model AuditLog {
+  id         String   @id @default(uuid())
+  employeeId Int      @map("employee_id")
+  action     String
+  changedBy  String   @map("changed_by")
+  oldData    Json?    @map("old_data")
+  newData    Json?    @map("new_data")
+  createdAt  DateTime @default(now()) @map("created_at")
+
+  @@map("audit_logs")
+}
+
+model Deduction {
+  id           Int      @id @default(autoincrement())
+  employeeCode Int      @map("employee_code")
+  employee     Employee @relation(fields: [employeeCode], references: [employeeCode], onDelete: Cascade)
+  type         String   // BUS_SUBSCRIPTION, LATE_ARRIVAL, EARLY_LEAVE, ABSENT, MANUAL_PENALTY
+  amount       Float
+  isRecurring  Boolean  @default(false) @map("is_recurring")
+  status       String   @default("ACTIVE") // ACTIVE, INACTIVE
+  date         String?  // YYYY-MM-DD
+  notes        String?
+  createdAt    DateTime @default(now()) @map("created_at")
+  updatedAt    DateTime @updatedAt @map("updated_at")
+
+  @@map("deductions")
+}
+
+model Shift {
+  id                   Int      @id @default(autoincrement())
+  shiftName            String   @map("shift_name")
+  startTime            String   @map("start_time")
+  endTime              String   @map("end_time")
+  
+  gracePeriodIn        Int      @default(0) @map("grace_period_in")
+  gracePeriodOut       Int      @default(0) @map("grace_period_out")
+  checkInStart         String   @default("00:00") @map("check_in_start")
+  checkInEnd           String   @default("23:59") @map("check_in_end")
+  checkOutStart        String   @default("00:00") @map("check_out_start")
+  checkOutEnd          String   @default("23:59") @map("check_out_end")
+
+  weekends             String[]
+
+  employees            Employee[]
+  attendance           Attendance[]
+
+  @@map("shifts")
+}
+
+model DeviceSetting {
+  id                 String   @id @default(uuid())
+  timeOffsetMinutes  Int      @default(0) @map("time_offset_minutes")
+  createdAt          DateTime @default(now()) @map("created_at")
+  updatedAt          DateTime @updatedAt @map("updated_at")
+
+  @@map("device_settings")
+}
