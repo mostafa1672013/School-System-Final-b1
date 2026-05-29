@@ -1,7 +1,6 @@
-import { PrismaClient } from '@prisma/client';
+import { prisma } from '../src/lib/prisma';
 import bcrypt from 'bcrypt';
 
-const prisma = new PrismaClient();
 const SALT_ROUNDS = 12;
 
 async function migratePasswords() {

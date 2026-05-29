@@ -1,9 +1,8 @@
-import { PrismaClient } from '@prisma/client';
+import { prisma } from './lib/prisma';
 import { encryptNationalId, hashNationalId } from './lib/crypto';
 import * as dotenv from 'dotenv';
 dotenv.config();
 
-const prisma = new PrismaClient();
 
 async function main() {
   const students = await prisma.student.findMany({

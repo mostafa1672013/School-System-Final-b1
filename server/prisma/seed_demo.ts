@@ -1,7 +1,6 @@
-import { PrismaClient } from '@prisma/client';
+import { prisma } from '../src/lib/prisma';
 import bcrypt from 'bcrypt';
 
-const prisma = new PrismaClient();
 
 async function seedUsers() {
   console.log('👤 جاري إضافة المستخدمين...');

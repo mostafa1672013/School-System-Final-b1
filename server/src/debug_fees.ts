@@ -1,5 +1,4 @@
-import { PrismaClient } from '@prisma/client';
-const prisma = new PrismaClient();
+import { prisma } from './lib/prisma';
 
 async function main() {
   const fees = await prisma.stageFee.findMany();

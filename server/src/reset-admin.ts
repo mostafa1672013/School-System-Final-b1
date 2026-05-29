@@ -1,7 +1,6 @@
-import { PrismaClient } from '@prisma/client';
+import { prisma } from './lib/prisma';
 import bcrypt from 'bcrypt';
 
-const prisma = new PrismaClient();
 
 async function resetAdmin() {
   const email = 'admin@school.com';

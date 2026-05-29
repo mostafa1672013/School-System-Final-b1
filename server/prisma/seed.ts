@@ -1,6 +1,5 @@
-import { PrismaClient } from '@prisma/client';
+import { prisma } from '../src/lib/prisma';
 
-const prisma = new PrismaClient();
 
 async function main() {
   const academicYear = "2024-2025";
