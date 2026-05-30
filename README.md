@@ -1,59 +1,162 @@
+# School Management System — نظام إدارة المدرسة
 
-**Use your preferred IDE**
+A full-stack web application for comprehensive school administration — covering student admissions, payments, fees, expenses, inventory, bus routes, and reporting.
 
-If you want to work locally using your own IDE, you can clone this repo and push changes. Pushed changes will also be reflected in OnSpace.
+---
 
-The only requirement is having Node.js & npm installed - [install with nvm](https://github.com/nvm-sh/nvm#installing-and-updating)
+## Features
 
-Follow these steps:
+### Completed
+- Student management (registration, profiles, status tracking)
+- Admission workflow (applied → under testing → fee setup → pending approval → admitted)
+- Payment recording and receipt printing
+- Stage fee configuration per track (local/international)
+- Discount management and approval workflows
+- Bus route and stop management
+- Inventory tracking
+- User management with role-based access control
+- PDF receipt and report generation
+- HR / Employee management (Shifts, attendance, leaves, deductions)
 
-## التشغيل والتطوير (Local Development)
+### In Progress
+- Expense management and accounting
+- Advanced analytics dashboard
+- Comprehensive reporting module
+- Stripe payment integration
 
-### 1. تشغيل قاعدة البيانات (PostgreSQL 16)
-تأكد من وجود Docker ثم قم بتشغيل الأمر التالي:
+---
+
+## Tech Stack
+
+### Frontend
+| Library | Version | Purpose |
+|---------|---------|---------|
+| React | 19.2.6 | UI framework |
+| Vite | 5.4.1 | Build tool & dev server |
+| TypeScript | 5.5.3 | Type safety |
+| Tailwind CSS | 3.4.11 | Styling |
+| Shadcn UI | latest | Component library |
+| React Router | 6.26.2 | Client-side routing |
+| Redux Toolkit | 2.9.0 | Global state management |
+| Zustand | 5.0.8 | Lightweight store |
+| React Query | 5.56.2 | Server state & caching |
+| React Hook Form | 7.53.0 | Form management |
+| Zod | 3.23.8 | Schema validation |
+
+### Backend
+| Library | Version | Purpose |
+|---------|---------|---------|
+| Express | 5.2.1 | HTTP server |
+| Prisma | 6.19.3 | ORM |
+| PostgreSQL | 16 | Database |
+| Socket.IO | 4.8.3 | Real-time events |
+
+---
+
+## Prerequisites
+
+- [Node.js & npm](https://github.com/nvm-sh/nvm#installing-and-updating) (via nvm recommended)
+- [Docker](https://www.docker.com/) — for running PostgreSQL
+
+---
+
+## Getting Started
+
+### 1. Start the database
+
 ```bash
 docker compose up -d
 ```
 
-### 2. تنصيب المكتبات
+This spins up PostgreSQL 16 in a container.
+
+### 2. Install dependencies
+
 ```bash
 npm install
-
 ```
 
-### 3. تشغيل وضع التطوير
+### 3. Start development mode
+
 ```bash
 npm run dev
 ```
 
+This runs the frontend and backend concurrently:
+- **Frontend (Vite):** http://localhost:5173
+- **Backend (Express):** http://localhost:4000
+
 ---
 
-## النشر (Deployment)
+## Available Scripts
 
-### النشر على GitHub Pages
-المشروع معد مسبقاً للنشر على GitHub Pages. بمجرد الانتهاء من التعديلات، استخدم هذا الأمر:
 ```bash
-npm run deploy
+npm run dev          # Start frontend + backend together
+npm run client       # Start frontend only (Vite on :5173)
+npm run server       # Start backend only (Express on :4000)
+npm run build        # Production build
+npm run build:dev    # Development build
+npm run preview      # Preview production build locally
+npm run lint         # Run ESLint
+npm run test         # Run tests (Vitest)
+npm run test:watch   # Watch mode tests
+npm run test:coverage # Test coverage report
+npm run deploy       # Build and deploy to GitHub Pages
 ```
 
 ---
 
-## التقنيات المستخدمة
-- **Frontend:** React + Vite + TypeScript
-- **Styling:** Tailwind CSS + Shadcn UI
-- **Database:** PostgreSQL 16 (via Docker)
-- **Deployment:** GitHub Pages
+## Project Structure
 
-**Edit a file directly in GitHub**
+```
+project/
+├── src/                          # Frontend (React + Vite)
+│   ├── pages/                    # Page components
+│   ├── components/
+│   │   ├── layout/               # AppLayout, Sidebar, Header, ProtectedRoute
+│   │   ├── features/             # Domain-specific components
+│   │   └── ui/                   # Shadcn UI primitives
+│   ├── stores/                   # Zustand/Redux stores
+│   ├── hooks/                    # Custom React hooks
+│   ├── lib/                      # Utility functions
+│   └── types/                    # TypeScript type definitions
+├── server/                       # Backend (Express + Node.js)
+│   ├── src/
+│   │   ├── index.ts              # Server entry point & API routes
+│   │   ├── accounting-api.ts     # Accounting endpoints
+│   │   └── seed-accounts.ts      # Database seed data
+│   └── prisma/
+│       └── schema.prisma         # Database schema
+├── docker-compose.yml
+├── vite.config.ts
+└── package.json
+```
 
-- Navigate to the desired file(s).
-- Click the "Edit" button (pencil icon) at the top right of the file view.
-- Make your changes and commit the changes.
+---
 
-**Use GitHub Codespaces**
+## Deployment
 
-- Navigate to the main page of your repository.
-- Click on the "Code" button (green button near the top right.
-- Select the "Codespaces" tab.
-- Click on "New codespace" to launch a new Codespace environment.
-- Edit files directly within the Codespace and commit and push your changes once you're done.
+The project is pre-configured for GitHub Pages:
+
+```bash
+npm run deploy
+```
+
+This builds the app and pushes the `dist/` folder to the `gh-pages` branch.
+
+---
+
+## Development Standards
+
+- Strict TypeScript throughout
+- Tailwind CSS + Shadcn UI for all UI components
+- RTL (Right-to-Left) support for Arabic text
+- Error Boundaries on all page-level components
+- Lazy loading for route-level code splitting
+- Vitest for unit and integration tests
+
+---
+
+## License
+
+ISC

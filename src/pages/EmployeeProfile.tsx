@@ -14,8 +14,19 @@ import { Label } from '@/components/ui/label';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { cn } from '@/lib/utils';
 
-const API_BASE = "http://localhost:4000/api";
+import { useAuthStore } from '@/stores/authStore';
+
+const API_BASE = "/api";
 const getFileUrl = (path: string | null | undefined) => path ? `http://localhost:4000${path}` : '';
+
+const fetch = (url: RequestInfo | URL, options: RequestInit = {}) => {
+  const token = useAuthStore.getState().token;
+  const headers = {
+    ...options.headers,
+    ...(token ? { 'Authorization': `Bearer ${token}` } : {}),
+  };
+  return window.fetch(url, { ...options, headers });
+};
 
 export default function EmployeeProfile() {
   const { id } = useParams();

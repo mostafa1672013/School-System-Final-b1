@@ -50,7 +50,18 @@ import {
 import { toast } from "sonner"
 import { cn } from "@/lib/utils"
 
-const API_BASE = "http://localhost:4000/api"
+import { useAuthStore } from '@/stores/authStore'
+
+const API_BASE = "/api"
+
+const fetch = (url: RequestInfo | URL, options: RequestInit = {}) => {
+  const token = useAuthStore.getState().token;
+  const headers = {
+    ...options.headers,
+    ...(token ? { 'Authorization': `Bearer ${token}` } : {}),
+  };
+  return window.fetch(url, { ...options, headers });
+};
 
 const govCodes: Record<string, string> = {
   "01": "القاهرة", "02": "الإسكندرية", "03": "بورسعيد", "04": "السويس",

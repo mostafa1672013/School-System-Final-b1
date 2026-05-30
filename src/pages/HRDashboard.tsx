@@ -22,8 +22,18 @@ import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
 import { toast } from 'sonner';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
+import { useAuthStore } from '@/stores/authStore';
 
-const API_BASE = import.meta.env.VITE_API_URL || 'http://localhost:4000/api';
+const API_BASE = "/api";
+
+const fetch = (url: RequestInfo | URL, options: RequestInit = {}) => {
+  const token = useAuthStore.getState().token;
+  const headers = {
+    ...options.headers,
+    ...(token ? { 'Authorization': `Bearer ${token}` } : {}),
+  };
+  return window.fetch(url, { ...options, headers });
+};
 
 // Helper to format today's date as YYYY-MM-DD
 const getTodayString = (d = new Date()) => {

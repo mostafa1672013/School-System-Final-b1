@@ -1,3 +1,4 @@
+import { getAuthHeaders } from './authStore';
 import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
 import type { Student, StageFee } from '@/types';
@@ -16,13 +17,13 @@ interface AdmissionState {
 
 export const useAdmissionStore = create<AdmissionState>()(
   persist(
-    (set, get) => ({
+    (set) => ({
       stageFees: [],
       isLoading: false,
       fetchStageFees: async () => {
         set({ isLoading: true });
         try {
-          const response = await fetch('http://localhost:4000/api/stage-fees');
+          const response = await fetch('/api/stage-fees', { headers: getAuthHeaders() });
           const data = await response.json();
           set({ stageFees: data, isLoading: false });
         } catch (error) {
@@ -33,13 +34,13 @@ export const useAdmissionStore = create<AdmissionState>()(
       saveStageFee: async (feeData) => {
         try {
           const isUpdate = 'id' in feeData && (feeData as any).id;
-          const url = isUpdate 
-            ? `http://localhost:4000/api/stage-fees/${(feeData as any).id}` 
-            : 'http://localhost:4000/api/stage-fees';
-          
+          const url = isUpdate
+            ? `/api/stage-fees/${(feeData as any).id}`
+            : '/api/stage-fees';
+
           const response = await fetch(url, {
             method: isUpdate ? 'PATCH' : 'POST',
-            headers: { 'Content-Type': 'application/json' },
+            headers: getAuthHeaders(),
             body: JSON.stringify(feeData),
           });
 
@@ -47,7 +48,6 @@ export const useAdmissionStore = create<AdmissionState>()(
             const err = await response.json();
             throw new Error(err.error);
           }
-
           if (!response.ok) throw new Error('Failed to save');
 
           const savedFee = await response.json();
@@ -66,39 +66,45 @@ export const useAdmissionStore = create<AdmissionState>()(
         }
       },
       applyAdmission: async (studentData) => {
-        const response = await fetch('http://localhost:4000/api/admission/apply', {
+        const response = await fetch('/api/admission/apply', {
           method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
+          headers: getAuthHeaders(),
           body: JSON.stringify(studentData),
         });
+        if (!response.ok) {
+          const err = await response.json();
+          throw new Error(err.error || 'Failed to apply');
+        }
         return await response.json();
       },
       setTestResult: async (id, result) => {
-        await fetch(`http://localhost:4000/api/admission/test-result/${id}`, {
+        await fetch(`/api/admission/test-result/${id}`, {
           method: 'PATCH',
-          headers: { 'Content-Type': 'application/json' },
+          headers: getAuthHeaders(),
           body: JSON.stringify({ result }),
         });
       },
       setupFees: async (id, fees) => {
-        await fetch(`http://localhost:4000/api/admission/setup-fees/${id}`, {
+        await fetch(`/api/admission/setup-fees/${id}`, {
           method: 'PATCH',
-          headers: { 'Content-Type': 'application/json' },
+          headers: getAuthHeaders(),
           body: JSON.stringify(fees),
         });
       },
       approveAdmission: async (id) => {
-        await fetch(`http://localhost:4000/api/admission/approve/${id}`, {
+        await fetch(`/api/admission/approve/${id}`, {
           method: 'PATCH',
+          headers: getAuthHeaders(),
         });
       },
       deleteStageFee: async (id) => {
-        const response = await fetch(`http://localhost:4000/api/stage-fees/${id}`, {
+        const response = await fetch(`/api/stage-fees/${id}`, {
           method: 'DELETE',
+          headers: getAuthHeaders(),
         });
         if (!response.ok) throw new Error('Failed to delete');
         set((state) => ({
-          stageFees: state.stageFees.filter(f => f.id !== id)
+          stageFees: state.stageFees.filter(f => f.id !== id),
         }));
       },
     }),

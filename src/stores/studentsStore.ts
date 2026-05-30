@@ -1,8 +1,7 @@
+import { getAuthHeaders } from './authStore';
 import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
-import type { Student } from '@/types';
-import { mockStudents } from '@/constants/mockData';
-import { generateId } from '@/lib/utils';
+import type { Student, Stage } from '@/types';
 
 interface StudentsState {
   students: Student[];
@@ -12,7 +11,38 @@ interface StudentsState {
   updateStudent: (id: string, data: Partial<Student>) => void;
   deleteStudent: (id: string) => void;
   getStudent: (id: string) => Student | undefined;
-  addPaymentToStudent: (id: string, amount: number) => void;
+  addPaymentToStudent: (id: string, amount: number, paymentType?: string) => void;
+  promoteStudent: (id: string, data: {
+    toStage: Stage;
+    toGrade: string;
+    toAcademicYear: string;
+    tuitionFees: number;
+    booksFees: number;
+    uniformFees: number;
+    busFees: number;
+    otherFees: number;
+    arrearsFees: number;
+    discountAmount: number;
+    discountPercentage: number;
+    totalFees: number;
+    status: import('@/types').StudentStatus;
+  }) => Promise<void>;
+  bulkPromoteStudents: (promotions: Array<{
+    studentId: string;
+    toStage: Stage;
+    toGrade: string;
+    toAcademicYear: string;
+    tuitionFees: number;
+    booksFees: number;
+    uniformFees: number;
+    busFees: number;
+    otherFees: number;
+    arrearsFees: number;
+    discountAmount: number;
+    discountPercentage: number;
+    totalFees: number;
+    status: import('@/types').StudentStatus;
+  }>) => Promise<{ succeeded: number; failed: number }>;
 }
 
 export const useStudentsStore = create<StudentsState>()(
@@ -23,9 +53,19 @@ export const useStudentsStore = create<StudentsState>()(
       fetchStudents: async () => {
         set({ isLoading: true });
         try {
-          const response = await fetch('http://localhost:4000/api/students');
+          const response = await fetch('/api/students', { headers: getAuthHeaders() });
+          if (!response.ok) {
+            console.error('Failed to fetch students:', response.status);
+            set({ isLoading: false });
+            return;
+          }
           const data = await response.json();
-          set({ students: data, isLoading: false });
+          if (Array.isArray(data)) {
+            set({ students: data, isLoading: false });
+          } else {
+            console.error('Expected array of students but got:', data);
+            set({ isLoading: false });
+          }
         } catch (error) {
           console.error('Fetch students error:', error);
           set({ isLoading: false });
@@ -33,9 +73,9 @@ export const useStudentsStore = create<StudentsState>()(
       },
       addStudent: async (student) => {
         try {
-          const response = await fetch('http://localhost:4000/api/students', {
+          const response = await fetch('/api/students', {
             method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
+            headers: getAuthHeaders(),
             body: JSON.stringify(student),
           });
           const newStudent = await response.json();
@@ -46,9 +86,9 @@ export const useStudentsStore = create<StudentsState>()(
       },
       updateStudent: async (id, data) => {
         try {
-          const response = await fetch(`http://localhost:4000/api/students/${id}`, {
+          const response = await fetch(`/api/students/${id}`, {
             method: 'PATCH',
-            headers: { 'Content-Type': 'application/json' },
+            headers: getAuthHeaders(),
             body: JSON.stringify(data),
           });
           if (!response.ok) throw new Error('Failed to update student on server');
@@ -58,13 +98,14 @@ export const useStudentsStore = create<StudentsState>()(
           }));
         } catch (error) {
           console.error('Update student error:', error);
-          throw error; // Rethrow to let the UI know it failed
+          throw error;
         }
       },
       deleteStudent: async (id) => {
         try {
-          await fetch(`http://localhost:4000/api/students/${id}`, {
+          await fetch(`/api/students/${id}`, {
             method: 'DELETE',
+            headers: getAuthHeaders(),
           });
           set((state) => ({
             students: state.students.filter((s) => s.id !== id),
@@ -74,11 +115,65 @@ export const useStudentsStore = create<StudentsState>()(
         }
       },
       getStudent: (id) => get().students.find((s) => s.id === id),
-      addPaymentToStudent: (id, amount) => set((state) => ({
+      addPaymentToStudent: (id, amount, paymentType) => set((state) => ({
         students: state.students.map((s) =>
-          s.id === id ? { ...s, paidAmount: s.paidAmount + amount } : s
+          s.id === id
+            ? {
+                ...s,
+                paidAmount: paymentType !== 'application_fee' ? s.paidAmount + amount : s.paidAmount,
+                ...(paymentType === 'application_fee' && { status: 'under_testing' as const }),
+              }
+            : s
         ),
       })),
+      promoteStudent: async (id, data) => {
+        let response: Response;
+        try {
+          response = await fetch(`/api/students/${id}/promote`, {
+            method: 'POST',
+            headers: getAuthHeaders(),
+            body: JSON.stringify({
+              stage: data.toStage,
+              grade: data.toGrade,
+              academicYear: data.toAcademicYear,
+              tuitionFees: data.tuitionFees,
+              booksFees: data.booksFees,
+              uniformFees: data.uniformFees,
+              busFees: data.busFees,
+              otherFees: data.otherFees,
+              arrearsFees: data.arrearsFees,
+              discountAmount: data.discountAmount,
+              discountPercentage: data.discountPercentage,
+              totalFees: data.totalFees,
+              status: data.status,
+            }),
+          });
+        } catch {
+          throw new Error('خطأ في الاتصال بالخادم');
+        }
+        if (!response.ok) {
+          const err = await response.json();
+          throw new Error(err.error || 'فشل النقل');
+        }
+        const updated = await response.json();
+        set((state) => ({
+          students: state.students.map((s) => (s.id === id ? updated : s)),
+        }));
+      },
+      bulkPromoteStudents: async (promotions) => {
+        let succeeded = 0;
+        let failed = 0;
+        for (const p of promotions) {
+          try {
+            await get().promoteStudent(p.studentId, p);
+            succeeded++;
+          } catch (err) {
+            console.error(`Bulk promote failed for student ${p.studentId}:`, err);
+            failed++;
+          }
+        }
+        return { succeeded, failed };
+      },
     }),
     { name: 'school-students' }
   )

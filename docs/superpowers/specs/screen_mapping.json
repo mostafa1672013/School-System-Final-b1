@@ -1,0 +1,198 @@
+[
+  {
+    "arabicLabel": "لوحة التحكم",
+    "pageFile": "src/pages/Dashboard.tsx",
+    "primaryStore": ["studentsStore", "paymentsStore", "inventoryStore", "busStore"],
+    "mainBackendEndpoints": ["/api/students", "/api/payments", "/api/inventory", "/api/bus-routes"],
+    "keyFunctionality": "عرض ملخص عام لإحصائيات الطلاب والمدفوعات والمخزون وحافلات المدرسة."
+  },
+  {
+    "arabicLabel": "قائمة الطلاب",
+    "pageFile": "src/pages/Students.tsx",
+    "primaryStore": ["studentsStore"],
+    "mainBackendEndpoints": ["/api/students"],
+    "keyFunctionality": "إدارة بيانات الطلاب والبحث عنهم وتحديث حالاتهم."
+  },
+  {
+    "arabicLabel": "تفاصيل الطالب",
+    "pageFile": "src/pages/StudentDetail.tsx",
+    "primaryStore": ["studentsStore", "paymentsStore", "busStore"],
+    "mainBackendEndpoints": ["/api/students/:id"],
+    "keyFunctionality": "الملف الشخصي الكامل للطالب مع السجل المالي والأكاديمي."
+  },
+  {
+    "arabicLabel": "نقل الطلاب",
+    "pageFile": "src/pages/StudentPromotion.tsx",
+    "primaryStore": ["studentsStore"],
+    "mainBackendEndpoints": ["/api/students/promote"],
+    "keyFunctionality": "ترفيع الطلاب للمراحل الدراسية التالية."
+  },
+  {
+    "arabicLabel": "المدفوعات والخزينة",
+    "pageFile": "src/pages/Payments.tsx",
+    "primaryStore": ["paymentsStore", "studentsStore"],
+    "mainBackendEndpoints": ["/api/payments"],
+    "keyFunctionality": "تسجيل تحصيل الرسوم الدراسية وإصدار الإيصالات."
+  },
+  {
+    "arabicLabel": "اعتمادات التحويلات",
+    "pageFile": "src/pages/PaymentApprovals.tsx",
+    "primaryStore": ["paymentsStore"],
+    "mainBackendEndpoints": ["/api/payments/approvals"],
+    "keyFunctionality": "مراجعة واعتماد عمليات التحويل المالي."
+  },
+  {
+    "arabicLabel": "الخزينة",
+    "pageFile": "src/pages/Treasury.tsx",
+    "primaryStore": ["treasuryStore"],
+    "mainBackendEndpoints": ["/api/treasury"],
+    "keyFunctionality": "إدارة التدفقات النقدية اليومية وعهدة الخزينة."
+  },
+  {
+    "arabicLabel": "المخزن",
+    "pageFile": "src/pages/Inventory.tsx",
+    "primaryStore": ["inventoryStore"],
+    "mainBackendEndpoints": ["/api/inventory"],
+    "keyFunctionality": "إدارة الكتب والزي المدرسي والأصناف المخزنية."
+  },
+  {
+    "arabicLabel": "الباصات",
+    "pageFile": "src/pages/BusManagement.tsx",
+    "primaryStore": ["busStore"],
+    "mainBackendEndpoints": ["/api/bus"],
+    "keyFunctionality": "إدارة خطوط الحافلات واشتراكات الطلاب."
+  },
+  {
+    "arabicLabel": "التقارير",
+    "pageFile": "src/pages/Reports.tsx",
+    "primaryStore": ["studentsStore", "paymentsStore"],
+    "mainBackendEndpoints": ["/api/reports"],
+    "keyFunctionality": "توليد تقارير إحصائية ومالية شاملة."
+  },
+  {
+    "arabicLabel": "المستخدمين",
+    "pageFile": "src/pages/Users.tsx",
+    "primaryStore": ["usersStore"],
+    "mainBackendEndpoints": ["/api/users"],
+    "keyFunctionality": "إدارة حسابات النظام وتوزيع الصلاحيات."
+  },
+  {
+    "arabicLabel": "إدارة قاعدة البيانات",
+    "pageFile": "src/pages/DatabaseManagement.tsx",
+    "primaryStore": [],
+    "mainBackendEndpoints": ["/api/database"],
+    "keyFunctionality": "صيانة النظام والنسخ الاحتياطي."
+  },
+  {
+    "arabicLabel": "القبول والتسجيل",
+    "pageFile": "src/pages/Admission.tsx",
+    "primaryStore": ["admissionStore"],
+    "mainBackendEndpoints": ["/api/admission"],
+    "keyFunctionality": "متابعة طلبات الالتحاق للمتقدمين الجدد."
+  },
+  {
+    "arabicLabel": "طلب التحاق جديد",
+    "pageFile": "src/pages/NewAdmission.tsx",
+    "primaryStore": ["admissionStore"],
+    "mainBackendEndpoints": ["/api/admission/new"],
+    "keyFunctionality": "تسجيل بيانات المتقدمين الجدد ورفع المستندات."
+  },
+  {
+    "arabicLabel": "سجل الهياكل المالية",
+    "pageFile": "src/pages/StageFeeManagement.tsx",
+    "primaryStore": ["admissionStore"],
+    "mainBackendEndpoints": ["/api/stage-fees"],
+    "keyFunctionality": "إدارة رسوم المراحل الدراسية والصفوف."
+  },
+  {
+    "arabicLabel": "بناء هيكل جديد",
+    "pageFile": "src/pages/NewStageFee.tsx",
+    "primaryStore": ["admissionStore"],
+    "mainBackendEndpoints": ["/api/stage-fees/new"],
+    "keyFunctionality": "إنشاء تعريف جديد للرسوم الدراسية."
+  },
+  {
+    "arabicLabel": "اعتمادات الخصومات",
+    "pageFile": "src/pages/DiscountApprovals.tsx",
+    "primaryStore": ["paymentsStore"],
+    "mainBackendEndpoints": ["/api/discounts/approvals"],
+    "keyFunctionality": "مراجعة واعتماد طلبات الخصم المالي."
+  },
+  {
+    "arabicLabel": "صلاحيات الخصم",
+    "pageFile": "src/pages/DiscountSettings.tsx",
+    "primaryStore": ["usersStore"],
+    "mainBackendEndpoints": ["/api/discounts/settings"],
+    "keyFunctionality": "تحديد سقف الخصم المسموح لكل رتبة إدارية."
+  },
+  {
+    "arabicLabel": "إعدادات الشارات",
+    "pageFile": "src/pages/BadgeSettings.tsx",
+    "primaryStore": ["usersStore"],
+    "mainBackendEndpoints": ["/api/badges"],
+    "keyFunctionality": "إدارة المسميات الوظيفية والشارات."
+  },
+  {
+    "arabicLabel": "شجرة الحسابات",
+    "pageFile": "src/pages/ChartOfAccounts.tsx",
+    "primaryStore": ["accountingStore"],
+    "mainBackendEndpoints": ["/api/accounts"],
+    "keyFunctionality": "إدارة الدليل المحاسبي وشجرة الحسابات."
+  },
+  {
+    "arabicLabel": "القيود المحاسبية",
+    "pageFile": "src/pages/JournalEntries.tsx",
+    "primaryStore": ["accountingStore"],
+    "mainBackendEndpoints": ["/api/journal-entries"],
+    "keyFunctionality": "تسجيل القيود اليومية اليدوية والتسويات."
+  },
+  {
+    "arabicLabel": "الفترات المحاسبية",
+    "pageFile": "src/pages/AccountingPeriods.tsx",
+    "primaryStore": ["accountingStore"],
+    "mainBackendEndpoints": ["/api/accounting-periods"],
+    "keyFunctionality": "إدارة السنوات المالية وفتح وإغلاق الفترات."
+  },
+  {
+    "arabicLabel": "التقارير المحاسبية",
+    "pageFile": "src/pages/AccountingReports.tsx",
+    "primaryStore": ["accountingStore"],
+    "mainBackendEndpoints": ["/api/accounting-reports"],
+    "keyFunctionality": "توليد ميزان المراجعة والقوائم المالية."
+  },
+  {
+    "arabicLabel": "طلب صرف مصروف",
+    "pageFile": "src/pages/Expenses.tsx",
+    "primaryStore": ["accountingStore"],
+    "mainBackendEndpoints": ["/api/expenses"],
+    "keyFunctionality": "إنشاء طلبات صرف مصروفات تشغيلية."
+  },
+  {
+    "arabicLabel": "اعتماد المصروفات",
+    "pageFile": "src/pages/ExpenseApprovals.tsx",
+    "primaryStore": ["accountingStore"],
+    "mainBackendEndpoints": ["/api/expenses/approvals"],
+    "keyFunctionality": "اعتماد طلبات الصرف من قبل الإدارة."
+  },
+  {
+    "arabicLabel": "إدارة حدود الصرف",
+    "pageFile": "src/pages/ExpensePermissions.tsx",
+    "primaryStore": ["accountingStore"],
+    "mainBackendEndpoints": ["/api/expenses/permissions"],
+    "keyFunctionality": "تحديد صلاحيات وحدود الصرف المالي."
+  },
+  {
+    "arabicLabel": "الملف الشخصي",
+    "pageFile": "src/pages/Profile.tsx",
+    "primaryStore": ["authStore"],
+    "mainBackendEndpoints": ["/api/auth/me"],
+    "keyFunctionality": "تحديث بيانات المستخدم وكلمة المرور."
+  },
+  {
+    "arabicLabel": "تسجيل الدخول",
+    "pageFile": "src/pages/Login.tsx",
+    "primaryStore": ["authStore"],
+    "mainBackendEndpoints": ["/api/auth/login"],
+    "keyFunctionality": "واجهة الدخول الموحدة للنظام."
+  }
+]

@@ -43,9 +43,19 @@ import {
   TableRow,
 } from "@/components/ui/table"
 import { toast } from "sonner"
-import { cn } from "@/lib/utils"
+import { cn } from "@/lib/utils";
+import { useAuthStore } from '@/stores/authStore';
 
-const API_BASE = `http://${window.location.hostname}:4000/api`
+const API_BASE = "/api"
+
+const fetch = (url: RequestInfo | URL, options: RequestInit = {}) => {
+  const token = useAuthStore.getState().token;
+  const headers = {
+    ...options.headers,
+    ...(token ? { 'Authorization': `Bearer ${token}` } : {}),
+  };
+  return window.fetch(url, { ...options, headers });
+};
 
 const DAYS_OF_WEEK = [
   { id: 'Sunday', label: 'الأحد' },

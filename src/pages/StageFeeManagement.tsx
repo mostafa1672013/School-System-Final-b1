@@ -1,337 +1,201 @@
-import { useState, useEffect } from 'react';
-import { Settings, Plus, Save, Trash2, GraduationCap, Lock } from 'lucide-react';
+import { useEffect, useMemo } from 'react';
+import { useNavigate } from 'react-router-dom';
+import { Plus, Trash2, Lock, Building, DollarSign, Calendar, Edit } from 'lucide-react';
 import { toast } from 'sonner';
 import { Button } from '@/components/ui/button';
-import { Input } from '@/components/ui/input';
-import { Label } from '@/components/ui/label';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
+import { Badge } from '@/components/ui/badge';
 import { useAdmissionStore } from '@/stores/admissionStore';
-import { stageLabels, trackLabels, formatCurrency, gradeOptions, academicYears, currentAcademicYear } from '@/lib/utils';
-import type { Stage, Track } from '@/types';
+import { stageLabels, trackLabels, formatCurrency } from '@/lib/utils';
+import { useSettingsStore } from '@/stores/settingsStore';
+import StatCard from '@/components/features/StatCard';
 
 export default function StageFeeManagement() {
-    const { stageFees, fetchStageFees, saveStageFee, deleteStageFee } = useAdmissionStore();
-    const [form, setForm] = useState<Partial<StageFee>>({
-        stage: 'kg' as Stage,
-        grade: '',
-        track: 'local' as Track,
-        academicYear: currentAcademicYear,
-        tuitionFees: 0,
-        tuitionMandatory: true,
-        booksFees: 0,
-        booksMandatory: true,
-        uniformFees: 0,
-        uniformMandatory: true,
-        applicationFees: 500,
-        applicationMandatory: true,
-        additionalFees: [],
-    });
+    const { activeAcademicYear: currentAcademicYear } = useSettingsStore();
+    const navigate = useNavigate();
+    const { stageFees, fetchStageFees, deleteStageFee } = useAdmissionStore();
 
     useEffect(() => {
         fetchStageFees();
     }, [fetchStageFees]);
 
-    useEffect(() => {
-        // Reset grade when stage changes
-        setForm(prev => ({ ...prev, grade: gradeOptions[prev.stage][0] }));
-    }, [form.stage]);
-
-    const handleSave = async () => {
-        if (!form.grade) {
-            toast.error('يرجى اختيار الصف');
-            return;
-        }
-        try {
-            await saveStageFee(form);
-            toast.success('تم حفظ إعدادات الرسوم بنجاح');
-            // Reset numerical fields but keep academic year, stage, track
-            setForm(prev => ({
-                ...prev,
-                id: undefined,
-                tuitionFees: 0,
-                booksFees: 0,
-                uniformFees: 0,
-            } as any));
-        } catch (error: any) {
-            toast.error(error.message || 'حدث خطأ أثناء الحفظ');
-        }
-    };
-
     const handleNew = () => {
-        setForm({
-            stage: 'kg' as Stage,
-            grade: gradeOptions['kg'][0],
-            track: 'local' as Track,
-            academicYear: currentAcademicYear,
-            tuitionFees: 0,
-            tuitionMandatory: true,
-            booksFees: 0,
-            booksMandatory: true,
-            uniformFees: 0,
-            uniformMandatory: true,
-            applicationFees: 500,
-            applicationMandatory: true,
-            additionalFees: [],
-        });
+        navigate('/stage-fees/new');
     };
 
-    const addAdditionalFee = () => {
-        setForm(prev => ({
-            ...prev,
-            additionalFees: [...(prev.additionalFees || []), { name: '', amount: 0, isMandatory: true }]
-        }));
-    };
-
-    const removeAdditionalFee = (index: number) => {
-        setForm(prev => ({
-            ...prev,
-            additionalFees: (prev.additionalFees || []).filter((_, i) => i !== index)
-        }));
-    };
-
-    const updateAdditionalFee = (index: number, field: string, value: any) => {
-        setForm(prev => {
-            const fees = [...(prev.additionalFees || [])];
-            fees[index] = { ...fees[index], [field]: value };
-            return { ...prev, additionalFees: fees };
-        });
-    };
+    // Statistics calculations
+    const stats = useMemo(() => {
+        const currentYearConfigs = stageFees.filter(f => f.academicYear === currentAcademicYear);
+        return {
+            totalConfigs: stageFees.length,
+            currentYearConfigs: currentYearConfigs.length,
+            avgTuition: currentYearConfigs.length > 0 
+                ? currentYearConfigs.reduce((sum, f) => sum + Number(f.tuitionFees), 0) / currentYearConfigs.length
+                : 0
+        };
+    }, [stageFees, currentAcademicYear]);
 
     return (
-        <div className="space-y-6">
-            <div>
-                <h1 className="text-2xl font-bold font-[Noto_Kufi_Arabic]">إعدادات رسوم المراحل</h1>
-                <p className="text-muted-foreground">تحديد الرسوم الدراسية لكل مرحلة وصف دراسي لكل سنة أكاديمية</p>
+        <div className="space-y-6 max-w-[1600px] mx-auto pb-10">
+            {/* Header Section */}
+            <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 bg-white p-6 rounded-2xl border shadow-sm relative overflow-hidden">
+                <div className="absolute top-0 right-0 w-32 h-32 bg-primary/5 rounded-full blur-3xl -mr-10 -mt-10 pointer-events-none"></div>
+                <div className="relative z-10">
+                    <h1 className="text-3xl font-bold font-[Noto_Kufi_Arabic] text-slate-800 tracking-tight">سجل الهياكل المالية</h1>
+                    <p className="text-slate-500 mt-1">إدارة واعتماد الهياكل المالية لكل صف دراسي باحترافية</p>
+                </div>
+                <Button onClick={handleNew} className="relative z-10 shadow-lg shadow-primary/20 transition-all hover:scale-105 active:scale-95">
+                    <Plus className="size-5 ml-2" /> إعداد هيكل رسوم جديد
+                </Button>
             </div>
 
-            <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-                <Card className="lg:col-span-1">
-                    <CardHeader className="flex flex-row items-center justify-between space-y-0">
-                        <div>
-                            <CardTitle className="text-lg font-bold font-[Noto_Kufi_Arabic]">
-                                {'id' in form ? 'تعديل الرسوم' : 'إضافة رسوم جديدة'}
-                            </CardTitle>
-                            <CardDescription>أدخل تفاصيل الرسوم للمرحلة المختارة</CardDescription>
-                        </div>
-                        <Button variant="outline" size="sm" onClick={handleNew}>
-                            <Plus className="size-4 ml-1" /> جديد
-                        </Button>
-                    </CardHeader>
-                    <CardContent className="space-y-4">
-                        <div className="space-y-2">
-                            <Label>السنة الدراسية</Label>
-                            <Select value={form.academicYear} onValueChange={v => setForm({...form, academicYear: v})}>
-                                <SelectTrigger><SelectValue /></SelectTrigger>
-                                <SelectContent>
-                                    {academicYears.map(y => <SelectItem key={y} value={y}>{y}</SelectItem>)}
-                                </SelectContent>
-                            </Select>
-                        </div>
-                        <div className="space-y-2">
-                            <Label>المرحلة</Label>
-                            <Select value={form.stage} onValueChange={v => setForm({...form, stage: v as Stage})}>
-                                <SelectTrigger><SelectValue /></SelectTrigger>
-                                <SelectContent>
-                                    {Object.entries(stageLabels).map(([k, v]) => <SelectItem key={k} value={k}>{v}</SelectItem>)}
-                                </SelectContent>
-                            </Select>
-                        </div>
-                        <div className="space-y-2">
-                            <Label>الصف</Label>
-                            <Select value={form.grade} onValueChange={v => setForm({...form, grade: v})}>
-                                <SelectTrigger><SelectValue /></SelectTrigger>
-                                <SelectContent>
-                                    {gradeOptions[form.stage].map(g => <SelectItem key={g} value={g}>{g}</SelectItem>)}
-                                </SelectContent>
-                            </Select>
-                        </div>
-                        <div className="space-y-2">
-                            <Label>المسار</Label>
-                            <Select value={form.track} onValueChange={v => setForm({...form, track: v as Track})}>
-                                <SelectTrigger><SelectValue /></SelectTrigger>
-                                <SelectContent>
-                                    {Object.entries(trackLabels).map(([k, v]) => <SelectItem key={k} value={k}>{v}</SelectItem>)}
-                                </SelectContent>
-                            </Select>
-                        </div>
-                        <div className="grid grid-cols-3 gap-2 items-end">
-                            <div className="col-span-2 space-y-2">
-                                <Label>رسوم التعليم</Label>
-                                <Input type="number" value={form.tuitionFees} onChange={e => setForm({...form, tuitionFees: Number(e.target.value)})} />
-                            </div>
-                            <Select value={form.tuitionMandatory ? 'm' : 'o'} onValueChange={v => setForm({...form, tuitionMandatory: v === 'm'})}>
-                                <SelectTrigger className="h-10 text-xs"><SelectValue /></SelectTrigger>
-                                <SelectContent><SelectItem value="m">إجباري</SelectItem><SelectItem value="o">اختياري</SelectItem></SelectContent>
-                            </Select>
-                        </div>
+            {/* Summary Statistics */}
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                <StatCard 
+                    title="إجمالي الهياكل المعتمدة" 
+                    value={stats.totalConfigs.toString()} 
+                    icon={Building} 
+                    colorClass="indigo" 
+                    trend="تاريخياً" 
+                />
+                <StatCard 
+                    title="هياكل العام الحالي" 
+                    value={stats.currentYearConfigs.toString()} 
+                    icon={Calendar} 
+                    colorClass="teal" 
+                    trend={currentAcademicYear} 
+                />
+                <StatCard 
+                    title="متوسط رسوم التعليم للعام الحالي" 
+                    value={formatCurrency(stats.avgTuition)} 
+                    icon={DollarSign} 
+                    colorClass="sky" 
+                />
+            </div>
 
-                        <div className="grid grid-cols-3 gap-2 items-end">
-                            <div className="col-span-2 space-y-2">
-                                <Label>رسوم الكتب</Label>
-                                <Input type="number" value={form.booksFees} onChange={e => setForm({...form, booksFees: Number(e.target.value)})} />
-                            </div>
-                            <Select value={form.booksMandatory ? 'm' : 'o'} onValueChange={v => setForm({...form, booksMandatory: v === 'm'})}>
-                                <SelectTrigger className="h-10 text-xs"><SelectValue /></SelectTrigger>
-                                <SelectContent><SelectItem value="m">إجباري</SelectItem><SelectItem value="o">اختياري</SelectItem></SelectContent>
-                            </Select>
-                        </div>
-
-                        <div className="grid grid-cols-3 gap-2 items-end">
-                            <div className="col-span-2 space-y-2">
-                                <Label>رسوم الزي</Label>
-                                <Input type="number" value={form.uniformFees} onChange={e => setForm({...form, uniformFees: Number(e.target.value)})} />
-                            </div>
-                            <Select value={form.uniformMandatory ? 'm' : 'o'} onValueChange={v => setForm({...form, uniformMandatory: v === 'm'})}>
-                                <SelectTrigger className="h-10 text-xs"><SelectValue /></SelectTrigger>
-                                <SelectContent><SelectItem value="m">إجباري</SelectItem><SelectItem value="o">اختياري</SelectItem></SelectContent>
-                            </Select>
-                        </div>
-
-                        <div className="grid grid-cols-3 gap-2 items-end">
-                            <div className="col-span-2 space-y-2">
-                                <Label>رسوم فتح الملف (الأبلكيشن)</Label>
-                                <Input type="number" value={form.applicationFees} onChange={e => setForm({...form, applicationFees: Number(e.target.value)})} />
-                            </div>
-                            <Select value={form.applicationMandatory ? 'm' : 'o'} onValueChange={v => setForm({...form, applicationMandatory: v === 'm'})}>
-                                <SelectTrigger className="h-10 text-xs"><SelectValue /></SelectTrigger>
-                                <SelectContent><SelectItem value="m">إجباري</SelectItem><SelectItem value="o">اختياري</SelectItem></SelectContent>
-                            </Select>
-                        </div>
-
-                        <div className="space-y-3 pt-2 border-t">
-                            <div className="flex items-center justify-between">
-                                <Label className="font-bold">رسوم إضافية</Label>
-                                <Button type="button" variant="outline" size="sm" className="h-7 text-xs" onClick={addAdditionalFee}>
-                                    <Plus className="size-3 ml-1" /> إضافة نوع
-                                </Button>
-                            </div>
-                            
-                            {(form.additionalFees || []).map((fee, idx) => (
-                                <div key={idx} className="p-3 border rounded-lg bg-muted/30 space-y-2">
-                                    <div className="flex gap-2">
-                                        <Input 
-                                            placeholder="اسم الرسوم (مثال: نشاط صيفي)" 
-                                            value={fee.name} 
-                                            onChange={e => updateAdditionalFee(idx, 'name', e.target.value)}
-                                            className="text-xs h-8"
-                                        />
-                                        <Button variant="ghost" size="icon" className="h-8 w-8 text-red-500" onClick={() => removeAdditionalFee(idx)}>
-                                            <Trash2 className="size-3" />
-                                        </Button>
-                                    </div>
-                                    <div className="flex gap-2 items-center">
-                                        <Input 
-                                            type="number" 
-                                            placeholder="المبلغ" 
-                                            value={fee.amount} 
-                                            onChange={e => updateAdditionalFee(idx, 'amount', Number(e.target.value))}
-                                            className="text-xs h-8 w-24"
-                                        />
-                                        <Select 
-                                            value={fee.isMandatory ? 'mandatory' : 'optional'} 
-                                            onValueChange={v => updateAdditionalFee(idx, 'isMandatory', v === 'mandatory')}
-                                        >
-                                            <SelectTrigger className="h-8 text-[10px]">
-                                                <SelectValue />
-                                            </SelectTrigger>
-                                            <SelectContent>
-                                                <SelectItem value="mandatory">إجباري</SelectItem>
-                                                <SelectItem value="optional">اختياري</SelectItem>
-                                            </SelectContent>
-                                        </Select>
-                                    </div>
-                                </div>
-                            ))}
-                        </div>
-                        
-                        {form.academicYear < currentAcademicYear ? (
-                            <div className="p-3 bg-amber-50 border border-amber-200 rounded-lg text-amber-800 text-xs flex items-center gap-2">
-                                <Lock className="size-4 shrink-0" /> لا يمكن تعديل رسوم سنوات سابقة
-                            </div>
-                        ) : (
-                            <Button className="w-full font-[Noto_Kufi_Arabic]" onClick={handleSave}>
-                                <Save className="size-4 ml-2" /> حفظ الإعدادات
-                            </Button>
-                        )}
-                    </CardContent>
-                </Card>
-
-                <Card className="lg:col-span-2">
-                    <CardHeader>
-                        <CardTitle className="text-lg font-bold font-[Noto_Kufi_Arabic]">قائمة الرسوم الحالية</CardTitle>
-                    </CardHeader>
-                    <CardContent>
-                        <div className="rounded-md border">
-                            <Table>
-                                <TableHeader>
-                                    <TableRow>
-                                        <TableHead>السنة</TableHead>
-                                        <TableHead>المرحلة / الصف</TableHead>
-                                        <TableHead>المسار</TableHead>
-                                        <TableHead>التعليم</TableHead>
-                                        <TableHead>الكتب</TableHead>
-                                        <TableHead>الزي</TableHead>
-                                        <TableHead>الإجراءات</TableHead>
-                                    </TableRow>
-                                </TableHeader>
-                                <TableBody>
-                                    {stageFees.map((fee) => {
-                                        const isOldYear = fee.academicYear < currentAcademicYear;
-                                        return (
-                                            <TableRow key={fee.id} className={isOldYear ? 'opacity-60 bg-muted/20' : ''}>
-                                                <TableCell className="font-mono text-xs">{fee.academicYear || '-'}</TableCell>
-                                                <TableCell className="font-medium text-xs">
-                                                    {fee.stage ? stageLabels[fee.stage] : 'غير محدد'} - {fee.grade || 'غير محدد'}
-                                                </TableCell>
-                                                <TableCell className="text-xs">{fee.track ? trackLabels[fee.track] : 'ناشونال'}</TableCell>
-                                                <TableCell className="text-xs">{formatCurrency(fee.tuitionFees)}</TableCell>
-                                                <TableCell className="text-xs">{formatCurrency(fee.booksFees)}</TableCell>
-                                                <TableCell className="text-xs">{formatCurrency(fee.uniformFees)}</TableCell>
-                                                <TableCell>
-                                                    <div className="flex gap-2">
+            {/* Table Section */}
+            <Card className="border-slate-200 shadow-sm flex flex-col overflow-hidden">
+                <CardHeader className="bg-slate-50/80 border-b p-5 flex flex-row items-center justify-between">
+                    <div>
+                        <CardTitle className="text-lg font-bold">جدول الهياكل المالية</CardTitle>
+                        <CardDescription className="mt-1">استعراض وتعديل كافة رسوم المراحل المعتمدة</CardDescription>
+                    </div>
+                    <Badge variant="secondary" className="bg-white text-slate-700 border-slate-200 pointer-events-none px-3 py-1 text-sm font-medium shadow-sm">
+                        إجمالي: {stageFees.length}
+                    </Badge>
+                </CardHeader>
+                <CardContent className="p-0 overflow-auto">
+                    <div className="min-w-max">
+                        <Table>
+                            <TableHeader className="bg-slate-50/50 sticky top-0 z-10 backdrop-blur-sm">
+                                <TableRow className="hover:bg-transparent">
+                                    <TableHead className="w-24 text-center font-bold text-slate-700">السنة</TableHead>
+                                    <TableHead className="font-bold text-slate-700">المرحلة / الصف / المسار</TableHead>
+                                    <TableHead className="text-center font-bold text-slate-700">التعليم</TableHead>
+                                    <TableHead className="text-center font-bold text-slate-700">الكتب</TableHead>
+                                    <TableHead className="text-center font-bold text-slate-700">الزي</TableHead>
+                                    <TableHead className="text-center font-bold text-slate-700">إضافية / أخرى</TableHead>
+                                    <TableHead className="w-28 text-center font-bold text-slate-700">الإجراءات</TableHead>
+                                </TableRow>
+                            </TableHeader>
+                            <TableBody>
+                                {stageFees.map((fee) => {
+                                    const isOldYear = fee.academicYear < currentAcademicYear;
+                                    const additionalSum = (fee.additionalFees || []).reduce((acc, curr) => acc + curr.amount, 0);
+                                    
+                                    return (
+                                        <TableRow key={fee.id} className={`transition-colors group ${isOldYear ? 'bg-slate-50/50' : 'hover:bg-slate-50/80'}`}>
+                                            <TableCell className="text-center">
+                                                <Badge variant="outline" className={`font-mono text-xs px-2 py-0.5 border ${isOldYear ? 'text-slate-400 bg-slate-100 border-slate-200' : 'text-indigo-700 bg-indigo-50 border-indigo-200'}`}>
+                                                    {fee.academicYear || '-'}
+                                                </Badge>
+                                            </TableCell>
+                                            <TableCell>
+                                                <div className="flex flex-col gap-1.5">
+                                                    <div className="flex items-center gap-2">
+                                                        <span className="font-bold text-sm text-slate-800">
+                                                            {fee.grade || 'غير محدد'}
+                                                        </span>
+                                                        <Badge variant="secondary" className="text-[10px] px-1.5 py-0 bg-slate-100 text-slate-600 font-medium">
+                                                            {fee.stage ? stageLabels[fee.stage] : 'غير محدد'}
+                                                        </Badge>
+                                                    </div>
+                                                    <div className="flex items-center gap-1.5">
+                                                        <span className={`inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-bold ${fee.track === 'international' ? 'bg-purple-100 text-purple-700' : 'bg-emerald-100 text-emerald-700'}`}>
+                                                            {fee.track ? trackLabels[fee.track] : 'ناشونال'}
+                                                        </span>
+                                                    </div>
+                                                </div>
+                                            </TableCell>
+                                            <TableCell className="text-center">
+                                                <span className="font-semibold text-slate-700">{formatCurrency(fee.tuitionFees)}</span>
+                                            </TableCell>
+                                            <TableCell className="text-center">
+                                                <span className="font-medium text-slate-600">{formatCurrency(fee.booksFees)}</span>
+                                            </TableCell>
+                                            <TableCell className="text-center">
+                                                <span className="font-medium text-slate-600">{formatCurrency(fee.uniformFees)}</span>
+                                            </TableCell>
+                                            <TableCell className="text-center">
+                                                <div className="flex flex-col items-center justify-center gap-0.5">
+                                                    <span className="font-medium text-slate-600">{formatCurrency(additionalSum)}</span>
+                                                    {fee.additionalFees && fee.additionalFees.length > 0 && (
+                                                        <span className="text-[10px] text-slate-400 bg-slate-100 px-1.5 rounded flex items-center gap-1">
+                                                            <Plus className="size-3" /> {fee.additionalFees.length} بنود إضافية
+                                                        </span>
+                                                    )}
+                                                </div>
+                                            </TableCell>
+                                            <TableCell className="text-center">
+                                                <div className="flex justify-center items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                                                    <Button 
+                                                        variant="ghost" 
+                                                        size="icon" 
+                                                        className={`size-8 rounded-lg ${isOldYear ? 'hover:bg-slate-200' : 'hover:bg-blue-50 text-blue-600'}`}
+                                                        onClick={() => navigate('/stage-fees/new', { state: { fee } })}
+                                                        title={isOldYear ? "عرض التفاصيل" : "تعديل"}
+                                                    >
+                                                        {isOldYear ? <Lock className="size-4 text-slate-400" /> : <Edit className="size-4" />}
+                                                    </Button>
+                                                    {!isOldYear && (
                                                         <Button 
                                                             variant="ghost" 
                                                             size="icon" 
-                                                            disabled={isOldYear}
-                                                            onClick={() => setForm(fee)}
+                                                            className="size-8 rounded-lg text-rose-500 hover:text-rose-700 hover:bg-rose-50"
+                                                            onClick={async () => {
+                                                                if (confirm('هل أنت متأكد من حذف هذه الرسوم نهائياً؟')) {
+                                                                    await deleteStageFee(fee.id);
+                                                                    toast.success('تم الحذف بنجاح');
+                                                                }
+                                                            }}
+                                                            title="حذف"
                                                         >
-                                                            {isOldYear ? <Lock className="size-4 text-muted-foreground" /> : <Settings className="size-4" />}
+                                                            <Trash2 className="size-4" />
                                                         </Button>
-                                                        {!isOldYear && (
-                                                            <Button 
-                                                                variant="ghost" 
-                                                                size="icon" 
-                                                                className="text-red-500"
-                                                                onClick={async () => {
-                                                                    if (confirm('هل أنت متأكد من حذف هذه الرسوم؟')) {
-                                                                        await deleteStageFee(fee.id);
-                                                                        toast.success('تم الحذف بنجاح');
-                                                                    }
-                                                                }}
-                                                            >
-                                                                <Trash2 className="size-4" />
-                                                            </Button>
-                                                        )}
-                                                    </div>
-                                                </TableCell>
-                                            </TableRow>
-                                        );
-                                    })}
-                                    {stageFees.length === 0 && (
-                                        <TableRow>
-                                            <TableCell colSpan={7} className="text-center py-10 text-muted-foreground">
-                                                لا توجد إعدادات رسوم حالية
+                                                    )}
+                                                </div>
+                                                <div className="group-hover:hidden text-[10px] text-slate-400 font-medium">إجراءات</div>
                                             </TableCell>
                                         </TableRow>
-                                    )}
-                                </TableBody>
-                            </Table>
-                        </div>
-                    </CardContent>
-                </Card>
-            </div>
+                                    );
+                                })}
+                                {stageFees.length === 0 && (
+                                    <TableRow>
+                                        <TableCell colSpan={7}>
+                                            <div className="flex flex-col items-center justify-center py-16 text-slate-400">
+                                                <Building className="size-12 mb-4 opacity-20" />
+                                                <p className="text-sm font-medium">لم يتم اعتماد أي هياكل مالية بعد</p>
+                                                <Button variant="link" onClick={handleNew} className="text-primary mt-2 h-auto p-0">إضافة الهيكل الأول الآن</Button>
+                                            </div>
+                                        </TableCell>
+                                    </TableRow>
+                                )}
+                            </TableBody>
+                        </Table>
+                    </div>
+                </CardContent>
+            </Card>
         </div>
     );
 }

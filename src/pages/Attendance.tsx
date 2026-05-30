@@ -28,7 +28,16 @@ import { ar } from "date-fns/locale";
 import { cn } from "@/lib/utils";
 import { useAuthStore } from "@/stores/authStore";
 
-const API_BASE = "http://localhost:4000/api";
+const API_BASE = "/api";
+
+const fetch = (url: RequestInfo | URL, options: RequestInit = {}) => {
+  const token = useAuthStore.getState().token;
+  const headers = {
+    ...options.headers,
+    ...(token ? { 'Authorization': `Bearer ${token}` } : {}),
+  };
+  return window.fetch(url, { ...options, headers });
+};
 
 const PendingRequestCard = ({ req, isApproving, onApprove }: { req: any, isApproving: string | null, onApprove: (id: string, decision: string, days?: number, type?: string) => void }) => {
   const [approvalDays, setApprovalDays] = useState(req.durationDays || 1);

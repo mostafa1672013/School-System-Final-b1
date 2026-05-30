@@ -7,7 +7,7 @@ export function cn(...inputs: ClassValue[]) {
 
 export function formatCurrency(amount: number | undefined | null): string {
   if (amount === undefined || amount === null) return '0 ج.م.';
-  const value = typeof amount === 'number' ? amount : 0;
+  const value = Number(amount);
   if (isNaN(value)) return '0 ج.م.';
   
   return new Intl.NumberFormat('ar-EG', {
@@ -18,20 +18,28 @@ export function formatCurrency(amount: number | undefined | null): string {
   }).format(value);
 }
 
-export function formatDate(dateStr: string): string {
+export function formatDate(dateStr: string | undefined | null): string {
+  if (!dateStr) return '-';
+  const date = new Date(dateStr);
+  if (isNaN(date.getTime())) return '-';
+  
   return new Intl.DateTimeFormat('ar-EG', {
     year: 'numeric',
     month: 'long',
     day: 'numeric',
-  }).format(new Date(dateStr));
+  }).format(date);
 }
 
-export function formatDateShort(dateStr: string): string {
+export function formatDateShort(dateStr: string | undefined | null): string {
+  if (!dateStr) return '-';
+  const date = new Date(dateStr);
+  if (isNaN(date.getTime())) return '-';
+
   return new Intl.DateTimeFormat('ar-EG', {
     year: 'numeric',
     month: '2-digit',
     day: '2-digit',
-  }).format(new Date(dateStr));
+  }).format(date);
 }
 
 export function generateId(): string {
@@ -43,8 +51,10 @@ export const roleLabels: Record<string, string> = {
   school_director: 'مدير المدرسة',
   head_accountant: 'رئيس الحسابات',
   accountant: 'محاسب',
+  treasury_accountant: 'محاسب الخزنة',
   warehouse_keeper: 'أمين المخزن',
   bus_supervisor: 'مشرف الباصات',
+  student_affairs: 'شؤون الطلاب',
 };
 
 export const paymentTypeLabels: Record<string, string> = {
@@ -54,12 +64,15 @@ export const paymentTypeLabels: Record<string, string> = {
   bus: 'باص',
   activities: 'أنشطة',
   other: 'أخرى',
+  arrears: 'سداد متأخرات',
+  application_fee: 'رسوم ملف',
 };
 
 export const paymentMethodLabels: Record<string, string> = {
   cash: 'نقدي',
   bank_transfer: 'تحويل بنكي',
   check: 'شيك',
+  wallet: 'محفظة إلكترونية',
 };
 
 export const categoryLabels: Record<string, string> = {
@@ -89,6 +102,7 @@ export const statusLabels: Record<string, string> = {
   fee_setup: 'إعداد الرسوم',
   pending_approval: 'بانتظار الاعتماد',
   admitted: 'مقبول / طالب نشط',
+  pending_discount: 'طلب خصم معلق',
   inactive: 'غير نشط',
   graduated: 'متخرج',
   transferred: 'منقول',
